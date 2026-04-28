@@ -37,11 +37,14 @@ const appStyleVars = computed(() => ({
     <n-message-provider>
       <n-global-style />
       <div class="app-shell" :style="appStyleVars">
-        <Transition name="view-fade" mode="out-in">
-          <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
-          <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
-          <WorkbenchPage v-else key="workbench" />
-        </Transition>
+        <div class="app-titlebar arc-drag-region"></div>
+        <div class="app-content">
+          <Transition name="view-fade" mode="out-in">
+            <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
+            <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
+            <WorkbenchPage v-else key="workbench" />
+          </Transition>
+        </div>
       </div>
     </n-message-provider>
   </n-config-provider>

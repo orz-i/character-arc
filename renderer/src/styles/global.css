@@ -61,6 +61,23 @@ input {
   background: var(--arc-bg-body);
 }
 
+/* A dedicated global drag strip is more reliable than relying on page headers. */
+.app-titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  height: calc(var(--arc-titlebar-height) + 10px);
+}
+
+.app-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .arc-drag-region {
   -webkit-app-region: drag;
   app-region: drag;
