@@ -31,6 +31,10 @@ export default defineConfig({
   },
   renderer: {
     root: 'renderer',
+    server: {
+      host: '127.0.0.1',
+      port: 3000
+    },
     build: {
       outDir: '../dist',
       rollupOptions: {
