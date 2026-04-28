@@ -17,9 +17,7 @@ import OverviewPanel from '@/components/OverviewPanel.vue'
 import WorldviewPanel from '@/components/WorldviewPanel.vue'
 import CharactersPanel from '@/components/CharactersPanel.vue'
 import OutlinePanel from '@/components/OutlinePanel.vue'
-import ChaptersPanel from '@/components/ChaptersPanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
-import AiAssistantPanel from '@/components/AiAssistantPanel.vue'
 import SearchResultsPanel from '@/components/SearchResultsPanel.vue'
 import type { PanelName } from '@/types/app'
 
@@ -50,7 +48,6 @@ const activePanelLabel = computed(
 const normalizedSearch = computed(() => searchKeyword.value.trim())
 const isSearchMode = computed(() => normalizedSearch.value.length > 0)
 const activeViewLabel = computed(() => (isSearchMode.value ? '项目搜索' : activePanelLabel.value))
-const shouldShowAssistant = computed(() => appStore.activePanel === 'chapters' && appStore.aiVisible && !isSearchMode.value)
 
 const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
 const shouldRenderSidebarLabels = computed(() => isSidebarOpen.value && !isCompactSidebar.value)
@@ -183,12 +180,10 @@ watch(searchKeyword, (value) => {
           <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
           <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
           <OutlinePanel v-else-if="appStore.activePanel === 'outline'" key="outline" :search-query="normalizedSearch" />
-          <ChaptersPanel v-else-if="appStore.activePanel === 'chapters'" key="chapters" :search-query="normalizedSearch" />
           <SettingsPanel v-else key="settings" />
         </Transition>
       </div>
     </main>
-    <AiAssistantPanel v-if="shouldShowAssistant" />
   </section>
 </template>
 

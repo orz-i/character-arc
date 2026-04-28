@@ -215,8 +215,8 @@ watch(
 <style scoped>
 .assistant-shell {
   display: flex;
-  width: clamp(300px, 26vw, 380px);
-  min-width: 300px;
+  width: clamp(260px, 20vw, 320px);
+  min-width: 260px;
   flex-shrink: 0;
   flex-direction: column;
   border-left: 1px solid rgba(229, 231, 235, 0.82);
@@ -419,10 +419,17 @@ watch(
   box-shadow: none;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1500px) {
   .assistant-shell {
-    width: 320px;
-    min-width: 320px;
+    width: 280px;
+    min-width: 280px;
+  }
+}
+
+@media (max-width: 1320px) {
+  .assistant-shell {
+    width: 260px;
+    min-width: 260px;
   }
 }
 </style>

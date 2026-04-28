@@ -6,6 +6,7 @@ import { createNaiveThemeOverrides } from '@/theme/presets'
 import ProjectCenter from '@/pages/ProjectCenter.vue'
 import ProjectWizardPage from '@/pages/ProjectWizardPage.vue'
 import WorkbenchPage from '@/pages/WorkbenchPage.vue'
+import ChapterStudioPage from '@/pages/ChapterStudioPage.vue'
 
 const appStore = useAppStore()
 const platform = window.characterArc?.platform ?? 'unknown'
@@ -51,6 +52,7 @@ const appStyleVars = computed(() => ({
             <Transition v-else name="view-fade" mode="out-in">
               <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
               <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
+              <ChapterStudioPage v-else-if="appStore.currentView === 'chapter-studio'" key="chapter-studio" />
               <WorkbenchPage v-else key="workbench" />
             </Transition>
           </div>

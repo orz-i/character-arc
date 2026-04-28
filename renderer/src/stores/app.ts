@@ -195,8 +195,9 @@ export const useAppStore = defineStore('app', () => {
   const persistenceError = ref<string | null>(null)
   let saveTimer: number | null = null
   const scheduledPersistAt = ref<number | null>(null)
-  const currentView = ref<'projects' | 'wizard' | 'workbench'>('projects')
+  const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio'>('projects')
   const activePanel = ref<PanelName>('world')
+  const lastWorkbenchPanel = ref<Exclude<PanelName, 'chapters'>>('world')
   const aiVisible = ref(true)
   const theme = ref<ThemeName>(stored.theme)
   const selectedProjectId = ref(stored.selectedProjectId)
@@ -390,6 +391,25 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
+  function openChapterStudio(chapterId?: string): void {
+    if (chapterId) {
+      selectedChapterId.value = chapterId
+    } else if (!selectedChapterId.value) {
+      syncSelectedChapter()
+    }
+
+    chapterSelection.value = null
+    activePanel.value = 'chapters'
+    currentView.value = 'chapter-studio'
+  }
+
+  function backToWorkbench(): void {
+    currentView.value = 'workbench'
+    if (activePanel.value === 'chapters') {
+      activePanel.value = lastWorkbenchPanel.value
+    }
+  }
+
   function openProject(projectId: string): void {
     const project = projects.value.find((item) => item.id === projectId)
     if (!project) {
@@ -401,6 +421,7 @@ export const useAppStore = defineStore('app', () => {
     chapterSelection.value = null
     currentView.value = 'workbench'
     activePanel.value = 'world'
+    lastWorkbenchPanel.value = 'world'
     syncSelectedChapter(projectId)
     schedulePersist('fast')
   }
@@ -624,13 +645,21 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function setPanel(panel: PanelName): void {
+    if (panel === 'chapters') {
+      openChapterStudio()
+      return
+    }
+
+    lastWorkbenchPanel.value = panel
     activePanel.value = panel
+    currentView.value = 'workbench'
   }
 
   function selectChapter(chapterId: string): void {
     selectedChapterId.value = chapterId
     chapterSelection.value = null
     activePanel.value = 'chapters'
+    currentView.value = 'chapter-studio'
   }
 
   function createChapter(volumeId = selectedChapter.value?.volumeId): void {
@@ -993,6 +1022,7 @@ export const useAppStore = defineStore('app', () => {
     aiVisible,
     appSettings,
     backToProjects,
+    backToWorkbench,
     chapterVersions,
     chapters,
     characters,
@@ -1024,6 +1054,7 @@ export const useAppStore = defineStore('app', () => {
     messages,
     moveChapter,
     openAiAssistant,
+    openChapterStudio,
     openProject,
     openWizard,
     outlineItems,

@@ -109,6 +109,28 @@ const currentVolumeLabel = computed(() => {
 const chapterCountLabel = computed(() => `${appStore.chapters.length} 个章节`)
 const volumeCountLabel = computed(() => `${appStore.outlineVolumes.length} 个分卷`)
 const versionCountLabel = computed(() => `${currentChapterVersions.value.length} 个版本`)
+const selectedVolumeChapterCount = computed(() => {
+  const selectedVolumeId = appStore.selectedChapter?.volumeId
+  return selectedVolumeId ? appStore.chapters.filter((chapter) => chapter.volumeId === selectedVolumeId).length : 0
+})
+const currentTargetWordCount = computed(() => {
+  const wordTarget = appStore.selectedChapter?.wordTarget ?? ''
+  const wanMatch = wordTarget.match(/(\d+(?:\.\d+)?)\s*万/)
+  if (wanMatch) {
+    return Math.round(Number(wanMatch[1]) * 10000)
+  }
+
+  const digitMatch = wordTarget.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/)
+  return digitMatch ? Math.round(Number(digitMatch[1])) : 0
+})
+const currentProgressPercent = computed(() => {
+  if (!currentTargetWordCount.value) {
+    return 0
+  }
+
+  return Math.min(100, Math.max(0, Math.round((currentWordCount.value / currentTargetWordCount.value) * 100)))
+})
+const currentSummaryText = computed(() => appStore.selectedChapter?.summary?.trim() || '待补充章节摘要')
 const saveStatusText = computed(() => {
   if (saveState.value === 'typing') {
     return '正在整理草稿...'
@@ -391,6 +413,16 @@ onBeforeUnmount(() => {
           <span>当前第 {{ selectedChapterIndex }} 章</span>
         </div>
 
+        <div class="chapter-side-spotlight">
+          <span class="spotlight-label">当前写作焦点</span>
+          <strong>{{ appStore.selectedChapter?.title || '未命名章节' }}</strong>
+          <p>{{ currentSummaryText }}</p>
+          <div class="spotlight-meta">
+            <span>{{ currentVolumeLabel }}</span>
+            <span>本卷 {{ selectedVolumeChapterCount }} 章</span>
+          </div>
+        </div>
+
         <div class="chapter-groups arc-scrollbar">
           <section v-for="group in filteredChapterGroups" :key="group.volume.id" class="chapter-group">
             <div class="chapter-group-head">
@@ -527,51 +559,80 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="editor-manuscript">
-          <div class="editor-manuscript-head">
-            <div class="editor-meta-stack">
-              <div class="chapter-meta-strip">
-                <span class="meta-chip" :class="currentChapterStatusTone">{{ currentChapterStatusLabel }}</span>
-                <span class="meta-chip neutral">{{ appStore.selectedChapter?.wordTarget }}</span>
-                <span class="meta-chip neutral">{{ currentVolumeLabel }}</span>
-                <span class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+        <div class="editor-ribbon">
+          <div class="editor-ribbon-main">
+            <span class="ribbon-chip strong">{{ currentVolumeLabel }}</span>
+            <span class="ribbon-chip">{{ currentChapterStatusLabel }}</span>
+            <span class="ribbon-chip">{{ appStore.selectedChapter?.wordTarget }}</span>
+            <span class="ribbon-chip">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+            <span class="ribbon-chip">全书第 {{ selectedChapterIndex }} 章</span>
+          </div>
+          <div class="editor-progress">
+            <div class="editor-progress-meta">
+              <span>当前字数 {{ currentWordCount }}</span>
+              <span v-if="currentTargetWordCount">目标 {{ currentTargetWordCount }}</span>
+              <strong>{{ currentProgressPercent }}%</strong>
+            </div>
+            <div class="editor-progress-track">
+              <span :style="{ width: `${currentProgressPercent}%` }"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="editor-stage">
+          <div class="editor-manuscript">
+            <div class="editor-manuscript-head">
+              <div class="editor-meta-stack">
+                <div class="chapter-meta-strip">
+                  <span class="meta-chip" :class="currentChapterStatusTone">{{ currentChapterStatusLabel }}</span>
+                  <span class="meta-chip neutral">{{ appStore.selectedChapter?.wordTarget }}</span>
+                  <span class="meta-chip neutral">{{ currentVolumeLabel }}</span>
+                  <span class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+                </div>
+
+                <div class="manuscript-heading">
+                  <span class="manuscript-overline">Chapter {{ selectedChapterIndexInVolume }}</span>
+                  <input
+                    class="chapter-title"
+                    :value="appStore.selectedChapter?.title"
+                    @input="appStore.updateChapterTitle(($event.target as HTMLInputElement).value)"
+                  />
+                </div>
               </div>
 
-              <input
-                class="chapter-title"
-                :value="appStore.selectedChapter?.title"
-                @input="appStore.updateChapterTitle(($event.target as HTMLInputElement).value)"
-              />
+              <div class="summary-card">
+                <span class="summary-card-label">本章定位</span>
+                <p>{{ currentSummaryText }}</p>
+              </div>
             </div>
 
-            <div class="summary-card">
-              <span class="summary-card-label">本章定位</span>
-              <p>{{ appStore.selectedChapter?.summary || '待补充章节摘要' }}</p>
-            </div>
-          </div>
+            <div class="manuscript-divider"></div>
 
-          <div class="editor-body">
-            <textarea
-              class="chapter-editor"
-              :value="appStore.selectedChapter?.content"
-              placeholder="从这里开始创作..."
-              @input="appStore.updateChapterContent(($event.target as HTMLTextAreaElement).value)"
-              @click="syncEditorSelection"
-              @keyup="syncEditorSelection"
-              @select="syncEditorSelection"
-            ></textarea>
-          </div>
-
-          <div class="editor-status">
-            <div class="editor-status-group">
-              <span class="status-metric">{{ currentWordCount }} 字</span>
-              <span class="status-metric">{{ currentChapterVersions.length }} 个历史版本</span>
-              <span class="status-metric">全书第 {{ selectedChapterIndex }} 章</span>
+            <div class="editor-body">
+              <div class="editor-column">
+                <textarea
+                  class="chapter-editor"
+                  :value="appStore.selectedChapter?.content"
+                  placeholder="从这里开始创作..."
+                  @input="appStore.updateChapterContent(($event.target as HTMLTextAreaElement).value)"
+                  @click="syncEditorSelection"
+                  @keyup="syncEditorSelection"
+                  @select="syncEditorSelection"
+                ></textarea>
+              </div>
             </div>
-            <span class="status-pill">
-              <PenTool :size="12" />
-              {{ saveStatusText }}
-            </span>
+
+            <div class="editor-status">
+              <div class="editor-status-group">
+                <span class="status-metric">{{ currentWordCount }} 字</span>
+                <span class="status-metric">{{ currentChapterVersions.length }} 个历史版本</span>
+                <span class="status-metric">全书第 {{ selectedChapterIndex }} 章</span>
+              </div>
+              <span class="status-pill">
+                <PenTool :size="12" />
+                {{ saveStatusText }}
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -673,7 +734,8 @@ onBeforeUnmount(() => {
   --chapter-border: rgba(226, 232, 240, 0.72);
   --chapter-surface: rgba(255, 255, 255, 0.88);
   --chapter-muted: #6b7280;
-  max-width: 1320px;
+  max-width: none;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -746,9 +808,9 @@ onBeforeUnmount(() => {
 
 .chapters-shell {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: clamp(18px, 2vw, 24px);
-  min-height: clamp(560px, 64vh, 720px);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: clamp(20px, 2vw, 28px);
+  min-height: clamp(600px, 68vh, 780px);
   align-items: stretch;
 }
 
@@ -760,7 +822,7 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.86)),
     radial-gradient(circle at top left, color-mix(in srgb, var(--arc-primary) 8%, white), transparent 36%);
-  padding: 18px;
+  padding: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -822,6 +884,63 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.chapter-side-spotlight {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--arc-primary) 12%, white);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.88), transparent 42%);
+  padding: 16px 16px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.spotlight-label {
+  color: color-mix(in srgb, var(--arc-primary) 76%, white);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.chapter-side-spotlight strong {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.chapter-side-spotlight p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: #5b6473;
+  font-size: 13px;
+  line-height: 1.75;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.spotlight-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spotlight-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #5c6678;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
 .chapter-groups {
   display: flex;
   flex: 1;
@@ -835,7 +954,9 @@ onBeforeUnmount(() => {
 .chapter-group {
   border: 1px solid rgba(226, 232, 240, 0.84);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.72)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.88), transparent 40%);
   padding: 12px;
 }
 
@@ -851,6 +972,7 @@ onBeforeUnmount(() => {
   display: block;
   color: #111827;
   font-size: 14px;
+  line-height: 1.45;
 }
 
 .chapter-group-head p {
@@ -924,7 +1046,7 @@ onBeforeUnmount(() => {
   background: white;
   color: var(--arc-primary);
   box-shadow:
-    0 14px 32px rgba(15, 23, 42, 0.06),
+    0 18px 32px rgba(15, 23, 42, 0.08),
     0 0 0 1px color-mix(in srgb, var(--arc-primary) 10%, transparent);
 }
 
@@ -995,12 +1117,13 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex-direction: column;
   border: 1px solid var(--chapter-border);
-  border-radius: 34px;
+  border-radius: 36px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
-    radial-gradient(circle at top left, rgba(255, 248, 240, 0.9), transparent 30%);
+    radial-gradient(circle at top left, rgba(255, 248, 240, 0.95), transparent 28%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 8%, white), transparent 24%);
   box-shadow:
-    0 18px 48px rgba(15, 23, 42, 0.06),
+    0 20px 54px rgba(15, 23, 42, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   padding: 18px;
   overflow: hidden;
@@ -1051,6 +1174,84 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.editor-ribbon {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 18px;
+  align-items: center;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 14px 16px;
+  margin: 0 8px 18px;
+}
+
+.editor-ribbon-main {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ribbon-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.96);
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.ribbon-chip.strong {
+  background: color-mix(in srgb, var(--arc-primary) 10%, white);
+  color: var(--arc-primary);
+}
+
+.editor-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-progress-meta strong {
+  color: var(--arc-primary);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.editor-progress-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+  overflow: hidden;
+}
+
+.editor-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--arc-primary), color-mix(in srgb, var(--arc-primary) 55%, #f59e0b));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--arc-primary) 26%, transparent);
+}
+
+.editor-stage {
+  display: flex;
+  min-height: 0;
+  flex: 1;
 }
 
 .tool-badge {
@@ -1107,11 +1308,11 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   border: 1px solid rgba(241, 245, 249, 0.96);
-  border-radius: 28px;
+  border-radius: 30px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 252, 251, 1)),
     repeating-linear-gradient(to bottom, transparent 0, transparent 37px, rgba(226, 232, 240, 0.36) 38px);
-  padding: clamp(22px, 3vw, 34px);
+  padding: clamp(24px, 3vw, 36px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96);
 }
 
@@ -1125,6 +1326,20 @@ onBeforeUnmount(() => {
 
 .editor-meta-stack {
   min-width: 0;
+}
+
+.manuscript-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manuscript-overline {
+  color: #a0a9b7;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
 .chapter-title {
@@ -1187,9 +1402,11 @@ onBeforeUnmount(() => {
 
 .summary-card {
   border: 1px solid rgba(226, 232, 240, 0.88);
-  border-radius: 22px;
-  background: rgba(248, 250, 252, 0.88);
-  padding: 16px 16px 14px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(255, 255, 255, 0.96)),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 8%, white), transparent 42%);
+  padding: 18px 18px 16px;
 }
 
 .summary-card-label {
@@ -1208,27 +1425,38 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
+.manuscript-divider {
+  height: 1px;
+  margin: 2px 0 14px;
+  background: linear-gradient(90deg, rgba(203, 213, 225, 0.12), rgba(148, 163, 184, 0.72), rgba(203, 213, 225, 0.12));
+}
+
 .editor-body {
   display: flex;
   flex: 1;
   min-height: 0;
-  padding-top: 10px;
+  padding-top: 8px;
+}
+
+.editor-column {
+  width: min(100%, 860px);
+  margin: 0 auto;
 }
 
 .chapter-editor {
   flex: 1;
   width: 100%;
-  min-height: clamp(320px, 46vh, 520px);
+  min-height: clamp(360px, 48vh, 560px);
   border: none;
   resize: none;
   background: transparent;
   color: #333336;
   font-family: 'Georgia', 'Noto Serif SC', serif;
-  font-size: clamp(17px, 2vw, 19px);
-  line-height: 2.02;
-  letter-spacing: 0.01em;
+  font-size: clamp(18px, 2vw, 20px);
+  line-height: 2.08;
+  letter-spacing: 0.015em;
   outline: none;
-  padding-right: clamp(8px, 1.6vw, 18px);
+  padding: 4px clamp(6px, 1vw, 12px) 0;
 }
 
 .editor-status {
@@ -1340,14 +1568,18 @@ onBeforeUnmount(() => {
   min-height: 220px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1500px) {
   .chapters-shell {
     grid-template-columns: minmax(0, 1fr);
     min-height: auto;
   }
 
   .chapter-groups {
-    max-height: 320px;
+    max-height: 280px;
+  }
+
+  .editor-ribbon {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .editor-manuscript-head {
@@ -1367,6 +1599,11 @@ onBeforeUnmount(() => {
   }
 
   .editor-shell {
+    padding: 14px;
+  }
+
+  .editor-ribbon {
+    margin-inline: 0;
     padding: 14px;
   }
 
