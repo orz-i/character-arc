@@ -222,6 +222,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 .world-panel {
   max-width: 1180px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .section-head {
@@ -251,6 +252,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .soft-button,
@@ -299,8 +301,8 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 
 .world-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: clamp(16px, 2vw, 24px);
 }
 
 .world-card {
@@ -309,7 +311,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   background: white;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
   cursor: pointer;
-  padding: 24px;
+  padding: clamp(18px, 2.2vw, 24px);
   animation: floatIn 0.42s ease both;
   transition:
     transform 0.24s ease,
@@ -383,7 +385,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 .world-card h3 {
   margin: 0 0 12px;
   color: #1d1d1f;
-  font-size: 24px;
+  font-size: clamp(20px, 2.2vw, 24px);
   font-weight: 650;
   letter-spacing: -0.03em;
 }
@@ -397,7 +399,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
 
 .empty-card {
   display: flex;
-  min-height: 212px;
+  min-height: 192px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -416,6 +418,12 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   background: color-mix(in srgb, var(--arc-primary) 5%, white);
   border-color: color-mix(in srgb, var(--arc-primary) 20%, white);
   color: var(--arc-primary);
+}
+
+@media (max-width: 1240px) {
+  .head-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 760px) {

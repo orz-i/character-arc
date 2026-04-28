@@ -265,7 +265,7 @@ function requestDeleteProject(projectId: string): void {
   padding:
     calc(var(--arc-titlebar-height) + clamp(12px, 2vw, 20px))
     max(clamp(20px, 3vw, 40px), calc(var(--arc-window-controls-width) + 24px))
-    64px
+    clamp(36px, 6vw, 64px)
     clamp(20px, 3vw, 40px);
 }
 
@@ -317,20 +317,20 @@ function requestDeleteProject(projectId: string): void {
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-  gap: 28px;
+  gap: clamp(18px, 2.4vw, 28px);
 }
 
 .project-card {
   position: relative;
   display: flex;
-  min-height: 292px;
+  min-height: clamp(248px, 30vw, 292px);
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(243, 244, 246, 0.9);
   border-radius: 28px;
   background: white;
   cursor: pointer;
-  padding: 24px;
+  padding: clamp(18px, 2.2vw, 24px);
   animation: cardRise 0.45s ease both;
   transition:
     transform 0.32s ease,
@@ -475,6 +475,12 @@ function requestDeleteProject(projectId: string): void {
   gap: 22px;
   color: #86868b;
   font-size: 13px;
+}
+
+@media (max-width: 1240px) {
+  .project-card h3 {
+    margin-bottom: 14px;
+  }
 }
 
 .meta-item {

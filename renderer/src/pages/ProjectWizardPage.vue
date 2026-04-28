@@ -238,8 +238,10 @@ function goNext(): void {
   display: flex;
   width: 100%;
   max-width: 840px;
-  min-height: min(620px, calc(100vh - 48px));
+  min-height: min(620px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 32px);
   flex-direction: column;
+  overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: 34px;
   background: rgba(255, 255, 255, 0.74);
@@ -608,6 +610,16 @@ function goNext(): void {
 
   .primary-action {
     width: 100%;
+  }
+}
+
+@media (max-height: 820px) {
+  .wizard-page {
+    align-items: stretch;
+  }
+
+  .wizard-card {
+    min-height: auto;
   }
 }
 

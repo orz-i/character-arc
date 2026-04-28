@@ -214,6 +214,7 @@ async function handleImportJson(): Promise<void> {
 .settings-panel {
   max-width: 960px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .section-head {
@@ -235,10 +236,10 @@ async function handleImportJson(): Promise<void> {
 
 .settings-wrap {
   display: flex;
-  width: min(100%, 640px);
+  width: min(100%, 720px);
   margin: 0 auto;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .setting-card {
@@ -279,6 +280,7 @@ async function handleImportJson(): Promise<void> {
 
 .setting-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 24px;
 }
@@ -322,8 +324,8 @@ async function handleImportJson(): Promise<void> {
 
 .theme-dot {
   display: flex;
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
   align-items: end;
   justify-content: center;
   border: 3px solid transparent;
@@ -337,6 +339,12 @@ async function handleImportJson(): Promise<void> {
 
 .theme-dot.active {
   border-color: #1d1d1f;
+}
+
+@media (max-width: 1240px) {
+  .setting-actions :deep(.n-button) {
+    justify-content: center;
+  }
 }
 
 @media (max-width: 760px) {

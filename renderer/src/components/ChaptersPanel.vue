@@ -367,13 +367,13 @@ onBeforeUnmount(() => {
 
 .chapters-shell {
   display: flex;
-  gap: 24px;
-  min-height: 680px;
+  gap: clamp(18px, 2vw, 24px);
+  min-height: clamp(520px, 60vh, 680px);
 }
 
 .chapter-sidebar {
   display: flex;
-  width: clamp(220px, 24vw, 260px);
+  width: clamp(200px, 22vw, 248px);
   flex-shrink: 0;
   flex-direction: column;
   border: 1px solid rgba(243, 244, 246, 0.9);
@@ -496,12 +496,13 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex: 1;
+  min-width: 0;
   flex-direction: column;
   border: 1px solid rgba(243, 244, 246, 0.9);
   border-radius: 28px;
   background: white;
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
-  padding: 44px clamp(26px, 4vw, 54px) 28px;
+  padding: 44px clamp(22px, 3vw, 42px) 24px;
 }
 
 .editor-floating-actions {
@@ -623,7 +624,7 @@ onBeforeUnmount(() => {
   font-size: clamp(30px, 4vw, 42px);
   font-weight: 650;
   letter-spacing: -0.04em;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   outline: none;
 }
 
@@ -634,7 +635,7 @@ onBeforeUnmount(() => {
 .chapter-editor {
   flex: 1;
   width: 100%;
-  min-height: 420px;
+  min-height: clamp(280px, 42vh, 420px);
   border: none;
   resize: none;
   background: transparent;
@@ -687,7 +688,7 @@ onBeforeUnmount(() => {
   }
 
   .editor-shell {
-    min-height: 520px;
+    min-height: 480px;
   }
 }
 

@@ -200,6 +200,7 @@ function openEntry(type: string, title: string): void {
 .overview-panel {
   max-width: 1180px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .section-head {
@@ -238,7 +239,7 @@ function openEntry(type: string, title: string): void {
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
-  gap: 22px;
+  gap: clamp(16px, 1.8vw, 22px);
   margin-bottom: 24px;
 }
 
@@ -248,7 +249,7 @@ function openEntry(type: string, title: string): void {
   border: 1px solid rgba(243, 244, 246, 0.9);
   border-radius: 30px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
-  padding: 28px;
+  padding: clamp(22px, 2.4vw, 28px);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
@@ -320,6 +321,7 @@ function openEntry(type: string, title: string): void {
 
 .stats-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -331,7 +333,7 @@ function openEntry(type: string, title: string): void {
   border-radius: 24px;
   background: white;
   cursor: pointer;
-  padding: 18px 20px;
+  padding: 16px 18px;
   box-shadow: 0 6px 22px rgba(15, 23, 42, 0.03);
   text-align: left;
   transition:
@@ -384,7 +386,7 @@ function openEntry(type: string, title: string): void {
   border: 1px solid rgba(243, 244, 246, 0.9);
   border-radius: 30px;
   background: rgba(255, 255, 255, 0.9);
-  padding: 24px;
+  padding: clamp(18px, 2.2vw, 24px);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.03);
 }
 
@@ -471,8 +473,21 @@ function openEntry(type: string, title: string): void {
   font-size: 14px;
 }
 
+@media (max-width: 1240px) {
+  .hero-card p {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+}
+
 @media (max-width: 1080px) {
   .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 }

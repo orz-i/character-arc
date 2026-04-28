@@ -155,16 +155,34 @@ async function generateAiTask(task) {
   }
   return extractJsonObject(rawText);
 }
-const APP_MIN_WIDTH = 1360;
-const APP_MIN_HEIGHT = 860;
+const APP_DEFAULT_WIDTH = 1480;
+const APP_DEFAULT_HEIGHT = 920;
+const APP_MIN_WIDTH = 1120;
+const APP_MIN_HEIGHT = 720;
 const WORKSPACE_DB = "workspace.db";
 const WORKSPACE_FILE = "workspace.json";
+function getMainWindowMetrics() {
+  const { workAreaSize } = electron.screen.getPrimaryDisplay();
+  const compactScreen = workAreaSize.width <= 1366 || workAreaSize.height <= 820;
+  const minWidth = Math.min(APP_MIN_WIDTH, workAreaSize.width);
+  const minHeight = Math.min(APP_MIN_HEIGHT, workAreaSize.height);
+  const width = Math.min(Math.max(Math.round(workAreaSize.width * 0.9), minWidth), APP_DEFAULT_WIDTH);
+  const height = Math.min(Math.max(Math.round(workAreaSize.height * 0.9), minHeight), APP_DEFAULT_HEIGHT);
+  return {
+    width,
+    height,
+    minWidth,
+    minHeight,
+    compactScreen
+  };
+}
 function createMainWindow() {
+  const { width, height, minWidth, minHeight, compactScreen } = getMainWindowMetrics();
   const window = new electron.BrowserWindow({
-    width: 1560,
-    height: 960,
-    minWidth: APP_MIN_WIDTH,
-    minHeight: APP_MIN_HEIGHT,
+    width,
+    height,
+    minWidth,
+    minHeight,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     // Keep native caption buttons while giving the renderer a compact title-bar area to style around.
@@ -182,6 +200,9 @@ function createMainWindow() {
     }
   });
   window.once("ready-to-show", () => {
+    if (compactScreen) {
+      window.center();
+    }
     window.show();
   });
   window.webContents.setWindowOpenHandler(({ url }) => {

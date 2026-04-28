@@ -258,6 +258,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 .character-panel {
   max-width: 1180px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .section-head {
@@ -287,12 +288,13 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  width: min(100%, 100%);
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .search-input {
   display: inline-flex;
-  width: min(260px, 100%);
+  width: clamp(220px, 24vw, 280px);
   align-items: center;
   gap: 8px;
   border: 1px solid transparent;
@@ -351,8 +353,8 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 
 .character-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: clamp(16px, 2vw, 24px);
 }
 
 .character-card {
@@ -362,7 +364,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   border-radius: 28px;
   background: white;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-  padding: 20px;
+  padding: 18px;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
@@ -446,6 +448,12 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   -webkit-line-clamp: 3;
 }
 
+@media (max-width: 1240px) {
+  .head-actions {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 860px) {
   .search-input {
     width: 100%;
@@ -466,6 +474,11 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 
   .character-card {
     flex-direction: column;
+  }
+
+  .avatar {
+    width: 56px;
+    height: 56px;
   }
 }
 </style>

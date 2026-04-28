@@ -1,20 +1,40 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { join } from 'node:path'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { generateAiTask, type AiTaskPayload } from './ai'
 
-const APP_MIN_WIDTH = 1360
-const APP_MIN_HEIGHT = 860
+const APP_DEFAULT_WIDTH = 1480
+const APP_DEFAULT_HEIGHT = 920
+const APP_MIN_WIDTH = 1120
+const APP_MIN_HEIGHT = 720
 const WORKSPACE_DB = 'workspace.db'
 const WORKSPACE_FILE = 'workspace.json'
 
+function getMainWindowMetrics() {
+  const { workAreaSize } = screen.getPrimaryDisplay()
+  const compactScreen = workAreaSize.width <= 1366 || workAreaSize.height <= 820
+  const minWidth = Math.min(APP_MIN_WIDTH, workAreaSize.width)
+  const minHeight = Math.min(APP_MIN_HEIGHT, workAreaSize.height)
+  const width = Math.min(Math.max(Math.round(workAreaSize.width * 0.9), minWidth), APP_DEFAULT_WIDTH)
+  const height = Math.min(Math.max(Math.round(workAreaSize.height * 0.9), minHeight), APP_DEFAULT_HEIGHT)
+
+  return {
+    width,
+    height,
+    minWidth,
+    minHeight,
+    compactScreen
+  }
+}
+
 function createMainWindow(): void {
+  const { width, height, minWidth, minHeight, compactScreen } = getMainWindowMetrics()
   const window = new BrowserWindow({
-    width: 1560,
-    height: 960,
-    minWidth: APP_MIN_WIDTH,
-    minHeight: APP_MIN_HEIGHT,
+    width,
+    height,
+    minWidth,
+    minHeight,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     // Keep native caption buttons while giving the renderer a compact title-bar area to style around.
@@ -36,6 +56,9 @@ function createMainWindow(): void {
   })
 
   window.once('ready-to-show', () => {
+    if (compactScreen) {
+      window.center()
+    }
     window.show()
   })
 

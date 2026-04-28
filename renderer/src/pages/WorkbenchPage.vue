@@ -47,7 +47,7 @@ const activePanelLabel = computed(
 )
 const normalizedSearch = computed(() => searchKeyword.value.trim())
 
-const isCompactSidebar = computed(() => viewportWidth.value <= 820)
+const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
 const shouldRenderSidebarLabels = computed(() => isSidebarOpen.value && !isCompactSidebar.value)
 
 function toggleSidebar(): void {
@@ -61,8 +61,8 @@ function toggleSidebar(): void {
 function syncViewportState(): void {
   viewportWidth.value = window.innerWidth
 
-  // 在紧凑桌面宽度下强制收起侧栏，避免正文区被过度挤压。
-  if (viewportWidth.value <= 820) {
+  // 在较窄的桌面窗口下强制切换到图标侧栏，优先为正文留空间。
+  if (viewportWidth.value <= 1280) {
     isSidebarOpen.value = false
     return
   }
@@ -291,11 +291,12 @@ watch(searchKeyword, (value) => {
 .main-shell {
   display: flex;
   flex: 1;
+  min-width: 0;
   flex-direction: column;
   overflow: hidden;
   border-top: 1px solid rgba(243, 244, 246, 0.8);
   border-left: 1px solid rgba(243, 244, 246, 0.8);
-  border-top-left-radius: 34px;
+  border-top-left-radius: clamp(24px, 3vw, 34px);
   background: white;
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.02);
 }
@@ -345,8 +346,8 @@ watch(searchKeyword, (value) => {
 .search-box {
   position: relative;
   display: inline-flex;
-  width: min(280px, 28vw);
-  min-width: 180px;
+  width: clamp(180px, 24vw, 280px);
+  min-width: 160px;
   align-items: center;
   gap: 8px;
   border: 1px solid transparent;
@@ -394,7 +395,8 @@ watch(searchKeyword, (value) => {
 .workspace-body {
   flex: 1;
   overflow-y: auto;
-  padding: 32px;
+  min-width: 0;
+  padding: clamp(18px, 2.4vw, 32px);
 }
 
 .panel-switch-enter-active,
@@ -410,6 +412,32 @@ watch(searchKeyword, (value) => {
 .panel-switch-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+@media (max-width: 1280px) {
+  .sidebar {
+    width: 88px;
+  }
+
+  .sidebar.collapsed {
+    width: 72px;
+  }
+
+  .project-title,
+  .sidebar-item span {
+    display: none;
+  }
+
+  .sidebar-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .sidebar-top {
+    justify-content: center;
+    gap: 8px;
+    padding-inline: 8px;
+  }
 }
 
 @media (max-width: 1180px) {
@@ -455,30 +483,6 @@ watch(searchKeyword, (value) => {
 }
 
 @media (max-width: 820px) {
-  .sidebar {
-    width: 92px;
-  }
-
-  .sidebar.collapsed {
-    width: 72px;
-  }
-
-  .project-title,
-  .sidebar-item span {
-    display: none;
-  }
-
-  .sidebar-item {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .sidebar-top {
-    justify-content: center;
-    gap: 8px;
-    padding-inline: 8px;
-  }
-
   .header-tools {
     flex-wrap: wrap;
     gap: 12px;
@@ -486,6 +490,10 @@ watch(searchKeyword, (value) => {
 
   .profile-badge {
     margin-left: auto;
+  }
+
+  .workspace-body {
+    padding: 16px;
   }
 }
 </style>
