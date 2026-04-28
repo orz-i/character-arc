@@ -135,7 +135,7 @@ function requestDeleteProject(projectId: string): void {
           :key="project.id"
           class="project-card"
           :style="{ animationDelay: `${index * 80}ms` }"
-          @click="openProjectEditor(project)"
+          @click="appStore.openProject(project.id)"
         >
           <div class="project-glow" :style="{ background: project.cover }"></div>
 
@@ -304,7 +304,7 @@ function requestDeleteProject(projectId: string): void {
 }
 
 .project-card::after {
-  content: '点击编辑项目';
+  content: '点击进入项目';
   position: absolute;
   right: 20px;
   bottom: 18px;
