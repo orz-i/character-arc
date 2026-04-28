@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { FilePenLine, Globe2, GripVertical, MoreVertical, PenTool, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
-import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, useDialog, useMessage } from 'naive-ui'
+import { Bot, FilePenLine, Globe2, GripVertical, MoreVertical, PanelRightClose, PanelRightOpen, PenTool, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
+import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, NTooltip, useDialog, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import type { ChapterDraft } from '@/types/app'
 import type { DropdownOption } from 'naive-ui'
@@ -13,9 +13,7 @@ const props = defineProps<{
 const appStore = useAppStore()
 const dialog = useDialog()
 const message = useMessage()
-const activeHelper = ref<'polish' | 'world' | null>(null)
 const saveState = ref<'saved' | 'saving'>('saved')
-const polishPrompt = ref('优化当前段落的氛围感和节奏。')
 const editorVisible = ref(false)
 const draggingChapterId = ref<string | null>(null)
 const dragTargetChapterId = ref<string | null>(null)
@@ -37,17 +35,6 @@ const currentWordCount = computed(() => {
   return content.length
 })
 
-const helperTitle = computed(() => (activeHelper.value === 'polish' ? 'AI 润色建议' : '设定查阅'))
-const helperDescription = computed(() =>
-  activeHelper.value === 'polish'
-    ? '这里先提供一个轻量交互反馈，后续接入真实模型后可替换为流式润色结果。'
-    : '这里预留了世界观查阅入口，后续可以挂接角色、地理和设定词条检索。'
-)
-const helperBody = computed(() =>
-  activeHelper.value === 'polish'
-    ? '建议把动作句与环境句交错排布，先压低外部噪音，再推角色的身体感知。这样能让“苏醒”场景更有压迫感和电影感。'
-    : '当前章节与“夜城酸雨”“义体排异”“底层回收站”三个设定关联度最高，适合在写作过程中快速复查。'
-)
 const filteredChapters = computed(() => {
   const query = props.searchQuery?.trim().toLowerCase() ?? ''
   if (!query) {
@@ -59,8 +46,27 @@ const filteredChapters = computed(() => {
   )
 })
 
-function toggleHelper(panel: 'polish' | 'world'): void {
-  activeHelper.value = activeHelper.value === panel ? null : panel
+function requestAiPolish(): void {
+  appStore.queueAssistantPrompt(
+    '请基于当前章节内容给出一版更有节奏感、氛围感和画面感的润色稿，优先输出可以直接插入正文的内容。',
+    '润色段落'
+  )
+}
+
+function requestWorldSupport(): void {
+  appStore.queueAssistantPrompt(
+    '请结合当前章节、已有世界观和角色设定，列出 3 到 5 条与本章最相关的设定提醒，并说明如何自然融入正文。',
+    '设定查阅'
+  )
+}
+
+function syncEditorSelection(event: Event): void {
+  const target = event.target as HTMLTextAreaElement | null
+  if (!target) {
+    return
+  }
+
+  appStore.setChapterSelection(target.selectionStart, target.selectionEnd)
 }
 
 function requestDeleteChapter(): void {
@@ -242,50 +248,57 @@ onBeforeUnmount(() => {
 
       <section class="editor-shell">
         <div class="editor-floating-actions">
-          <button class="tool-badge neutral" title="编辑章节信息" @click="openChapterMetaEditor(appStore.selectedChapter)">
-            <FilePenLine :size="16" />
-          </button>
-          <button
-            class="tool-badge"
-            :class="{ active: activeHelper === 'polish' }"
-            title="AI 润色"
-            @click="toggleHelper('polish')"
-          >
-            <Sparkles :size="16" />
-          </button>
-          <button
-            class="tool-badge neutral"
-            :class="{ active: activeHelper === 'world' }"
-            title="设定查阅"
-            @click="toggleHelper('world')"
-          >
-            <Globe2 :size="16" />
-          </button>
-          <button
-            class="tool-badge neutral danger"
-            :disabled="appStore.chapters.length <= 1"
-            title="删除章节"
-            @click="requestDeleteChapter"
-          >
-            <Trash2 :size="16" />
-          </button>
-        </div>
-
-        <Transition name="helper-fade">
-          <div v-if="activeHelper" class="helper-card">
-            <div class="helper-head">
-              <strong>{{ helperTitle }}</strong>
-              <span>{{ helperDescription }}</span>
-            </div>
-
-            <template v-if="activeHelper === 'polish'">
-              <label class="helper-label">润色指令</label>
-              <input v-model="polishPrompt" class="helper-input" type="text" />
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <button
+                class="tool-badge neutral assistant-toggle"
+                :class="{ active: appStore.aiVisible }"
+                @click="appStore.toggleAi()"
+              >
+                <Bot :size="16" />
+                <PanelRightClose v-if="appStore.aiVisible" :size="14" />
+                <PanelRightOpen v-else :size="14" />
+              </button>
             </template>
-
-            <p class="helper-copy">{{ helperBody }}</p>
-          </div>
-        </Transition>
+            {{ appStore.aiVisible ? '隐藏 AI 助手' : '显示 AI 助手' }}
+          </n-tooltip>
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <button class="tool-badge neutral" @click="openChapterMetaEditor(appStore.selectedChapter)">
+                <FilePenLine :size="16" />
+              </button>
+            </template>
+            编辑章节信息
+          </n-tooltip>
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <button class="tool-badge" @click="requestAiPolish">
+                <Sparkles :size="16" />
+              </button>
+            </template>
+            AI 润色
+          </n-tooltip>
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <button class="tool-badge neutral" @click="requestWorldSupport">
+                <Globe2 :size="16" />
+              </button>
+            </template>
+            设定查阅
+          </n-tooltip>
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <button
+                class="tool-badge neutral danger"
+                :disabled="appStore.chapters.length <= 1"
+                @click="requestDeleteChapter"
+              >
+                <Trash2 :size="16" />
+              </button>
+            </template>
+            删除章节
+          </n-tooltip>
+        </div>
 
         <input
           class="chapter-title"
@@ -298,6 +311,9 @@ onBeforeUnmount(() => {
           :value="appStore.selectedChapter?.content"
           placeholder="从这里开始创作..."
           @input="appStore.updateChapterContent(($event.target as HTMLTextAreaElement).value)"
+          @click="syncEditorSelection"
+          @keyup="syncEditorSelection"
+          @select="syncEditorSelection"
         ></textarea>
 
         <div class="editor-status">
@@ -350,6 +366,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-bottom: 32px;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .section-head h2 {
@@ -363,6 +380,13 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #86868b;
   font-size: 15px;
+}
+
+.assistant-toggle {
+  width: auto;
+  min-width: 52px;
+  gap: 6px;
+  padding-inline: 12px;
 }
 
 .chapters-shell {

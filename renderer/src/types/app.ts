@@ -46,6 +46,12 @@ export interface ChatMessage {
   content: string
 }
 
+export interface AssistantPromptRequest {
+  id: string
+  prompt: string
+  quickAction?: string
+}
+
 export interface ChapterDraft {
   id: string
   title: string

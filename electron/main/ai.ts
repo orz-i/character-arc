@@ -7,7 +7,7 @@ type AppSettings = {
   baseUrl: string
 }
 
-type AiTaskName = 'worldview-entry' | 'character-card' | 'outline-item'
+type AiTaskName = 'worldview-entry' | 'character-card' | 'outline-item' | 'chapter-assistant'
 
 export type AiTaskPayload = {
   task: AiTaskName
@@ -35,7 +35,11 @@ type OutlineResult = {
   summary: string
 }
 
-type AiTaskResult = WorldviewResult | CharacterResult | OutlineResult
+type ChapterAssistantResult = {
+  content: string
+}
+
+type AiTaskResult = WorldviewResult | CharacterResult | OutlineResult | ChapterAssistantResult
 
 function resolveProviderDefaults(provider: ProviderName): { baseUrl: string; model: string } {
   switch (provider) {
@@ -81,6 +85,33 @@ function buildTaskPrompt(task: AiTaskPayload): { system: string; user: string } 
     }
   }
 
+  if (task.task === 'chapter-assistant') {
+    const worldviewEntries = Array.isArray(context.worldviewEntries)
+      ? context.worldviewEntries
+          .slice(0, 8)
+          .map((entry) => `${String((entry as Record<string, unknown>).title ?? '')}：${String((entry as Record<string, unknown>).content ?? '')}`)
+          .join('\n')
+      : ''
+    const characters = Array.isArray(context.characters)
+      ? context.characters
+          .slice(0, 8)
+          .map((character) => `${String((character as Record<string, unknown>).name ?? '')} / ${String((character as Record<string, unknown>).role ?? '')}：${String((character as Record<string, unknown>).description ?? '')}`)
+          .join('\n')
+      : ''
+    const outlineItems = Array.isArray(context.outlineItems)
+      ? context.outlineItems
+          .slice(0, 6)
+          .map((item) => `${String((item as Record<string, unknown>).title ?? '')}：${String((item as Record<string, unknown>).summary ?? '')}`)
+          .join('\n')
+      : ''
+
+    return {
+      system:
+        '你是 CharacterArc 的小说创作助理。请基于当前项目和章节上下文，用中文直接输出可供作者使用的正文、润色稿、分析或建议。不要输出 Markdown 标题，不要解释你是 AI，也不要返回 JSON。',
+      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n快捷动作：${String(context.quickAction ?? '自由提问')}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果请求是分析或建议，请给出清晰可执行的建议\n4. 控制篇幅，默认输出 120 到 400 字，除非用户明确要求更长`
+    }
+  }
+
   return {
     system:
       '你是小说剧情大纲助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 title、wordTarget、conflict、summary。',
@@ -95,6 +126,17 @@ function extractJsonObject(text: string): AiTaskResult {
   const lastBrace = raw.lastIndexOf('}')
   const jsonSlice = firstBrace >= 0 && lastBrace >= 0 ? raw.slice(firstBrace, lastBrace + 1) : raw
   return JSON.parse(jsonSlice) as AiTaskResult
+}
+
+function normalizeAssistantText(text: string): ChapterAssistantResult {
+  const cleaned = text
+    .replace(/```[\w-]*\n?/g, '')
+    .replace(/```/g, '')
+    .trim()
+
+  return {
+    content: cleaned
+  }
 }
 
 async function requestOpenAiCompatible(settings: AppSettings, prompt: { system: string; user: string }): Promise<string> {
@@ -173,6 +215,10 @@ export async function generateAiTask(task: AiTaskPayload): Promise<AiTaskResult>
     rawText = await requestAnthropic(settings, prompt)
   } else {
     rawText = await requestOpenAiCompatible(settings, prompt)
+  }
+
+  if (task.task === 'chapter-assistant') {
+    return normalizeAssistantText(rawText)
   }
 
   return extractJsonObject(rawText)

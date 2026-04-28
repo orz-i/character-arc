@@ -20,6 +20,7 @@ import CharactersPanel from '@/components/CharactersPanel.vue'
 import OutlinePanel from '@/components/OutlinePanel.vue'
 import ChaptersPanel from '@/components/ChaptersPanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
+import AiAssistantPanel from '@/components/AiAssistantPanel.vue'
 
 const appStore = useAppStore()
 const isSidebarOpen = ref(true)
@@ -46,6 +47,7 @@ const activePanelLabel = computed(
   () => sidebarItems.find((item) => item.id === appStore.activePanel)?.label ?? '项目工作台'
 )
 const normalizedSearch = computed(() => searchKeyword.value.trim())
+const shouldShowAssistant = computed(() => appStore.activePanel === 'chapters' && appStore.aiVisible)
 
 const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
 const shouldRenderSidebarLabels = computed(() => isSidebarOpen.value && !isCompactSidebar.value)
@@ -160,6 +162,7 @@ watch(searchKeyword, (value) => {
         </Transition>
       </div>
     </main>
+    <AiAssistantPanel v-if="shouldShowAssistant" />
   </section>
 </template>
 
@@ -169,6 +172,7 @@ watch(searchKeyword, (value) => {
   flex: 1;
   width: 100%;
   height: 100%;
+  min-width: 0;
   overflow: hidden;
   background: #f5f5f7;
   color: #1d1d1f;

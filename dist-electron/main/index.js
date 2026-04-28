@@ -65,6 +65,39 @@ function buildTaskPrompt(task) {
 返回格式：{"name":"","role":"","description":"","tags":["",""]}`
     };
   }
+  if (task.task === "chapter-assistant") {
+    const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
+    const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    const outlineItems = Array.isArray(context.outlineItems) ? context.outlineItems.slice(0, 6).map((item) => `${String(item.title ?? "")}：${String(item.summary ?? "")}`).join("\n") : "";
+    return {
+      system: "你是 CharacterArc 的小说创作助理。请基于当前项目和章节上下文，用中文直接输出可供作者使用的正文、润色稿、分析或建议。不要输出 Markdown 标题，不要解释你是 AI，也不要返回 JSON。",
+      user: `请处理当前写作请求，并优先给出可直接使用的结果。
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节正文：
+${String(context.chapterContent ?? "")}
+
+相关世界观：
+${worldviewEntries || "暂无"}
+
+相关角色：
+${characters || "暂无"}
+
+相关大纲：
+${outlineItems || "暂无"}
+
+快捷动作：${String(context.quickAction ?? "自由提问")}
+用户请求：${String(context.userPrompt ?? "")}
+
+要求：
+1. 回答要紧贴当前章节上下文
+2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容
+3. 如果请求是分析或建议，请给出清晰可执行的建议
+4. 控制篇幅，默认输出 120 到 400 字，除非用户明确要求更长`
+    };
+  }
   return {
     system: "你是小说剧情大纲助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 title、wordTarget、conflict、summary。",
     user: `基于以下上下文，为当前小说项目补充一个新的章节大纲节点。
@@ -90,6 +123,12 @@ function extractJsonObject(text) {
   const lastBrace = raw.lastIndexOf("}");
   const jsonSlice = firstBrace >= 0 && lastBrace >= 0 ? raw.slice(firstBrace, lastBrace + 1) : raw;
   return JSON.parse(jsonSlice);
+}
+function normalizeAssistantText(text) {
+  const cleaned = text.replace(/```[\w-]*\n?/g, "").replace(/```/g, "").trim();
+  return {
+    content: cleaned
+  };
 }
 async function requestOpenAiCompatible(settings, prompt) {
   const response = await fetch(`${settings.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -152,6 +191,9 @@ async function generateAiTask(task) {
     rawText = await requestAnthropic(settings, prompt);
   } else {
     rawText = await requestOpenAiCompatible(settings, prompt);
+  }
+  if (task.task === "chapter-assistant") {
+    return normalizeAssistantText(rawText);
   }
   return extractJsonObject(rawText);
 }

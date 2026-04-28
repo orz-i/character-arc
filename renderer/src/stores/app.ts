@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { getThemePreset } from '@/theme/presets'
 import type {
+  AssistantPromptRequest,
   AppSettings,
   ChapterDraft,
   ChatMessage,
@@ -182,6 +183,8 @@ export const useAppStore = defineStore('app', () => {
   const chapters = ref<ChapterDraft[]>(stored.chapters)
   const appSettings = ref<AppSettings>(stored.appSettings)
   const messages = ref<ChatMessage[]>(initialMessages)
+  const pendingAssistantRequest = ref<AssistantPromptRequest | null>(null)
+  const chapterSelection = ref<{ start: number; end: number } | null>(null)
   const selectedChapterId = ref((stored.chapters[0] ?? defaultChapters[0]).id)
 
   const selectedChapter = computed(
@@ -405,6 +408,7 @@ export const useAppStore = defineStore('app', () => {
 
   function selectChapter(chapterId: string): void {
     selectedChapterId.value = chapterId
+    chapterSelection.value = null
     activePanel.value = 'chapters'
   }
 
@@ -418,6 +422,7 @@ export const useAppStore = defineStore('app', () => {
 
     chapters.value.push(newChapter)
     selectedChapterId.value = newChapter.id
+    chapterSelection.value = null
     activePanel.value = 'chapters'
   }
 
@@ -480,6 +485,7 @@ export const useAppStore = defineStore('app', () => {
     if (selectedChapterId.value === chapterId) {
       const fallback = chapters.value[Math.max(0, targetIndex - 1)] ?? chapters.value[0]
       selectedChapterId.value = fallback.id
+      chapterSelection.value = null
     }
   }
 
@@ -517,6 +523,32 @@ export const useAppStore = defineStore('app', () => {
     aiVisible.value = !aiVisible.value
   }
 
+  function setChapterSelection(start: number, end: number): void {
+    chapterSelection.value = {
+      start,
+      end
+    }
+  }
+
+  function openAiAssistant(): void {
+    aiVisible.value = true
+  }
+
+  function queueAssistantPrompt(prompt: string, quickAction?: string): void {
+    aiVisible.value = true
+    pendingAssistantRequest.value = {
+      id: `assistant-${Date.now()}`,
+      prompt,
+      quickAction
+    }
+  }
+
+  function consumeAssistantPrompt(requestId: string): void {
+    if (pendingAssistantRequest.value?.id === requestId) {
+      pendingAssistantRequest.value = null
+    }
+  }
+
   function updateAppSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     appSettings.value[key] = value
   }
@@ -543,7 +575,27 @@ export const useAppStore = defineStore('app', () => {
       return
     }
 
-    chapter.content = `${chapter.content}\n\n${content}`.trim()
+    const insertion = content.trim()
+    if (!insertion) {
+      return
+    }
+
+    const selection = chapterSelection.value
+    if (!selection) {
+      chapter.content = `${chapter.content}\n\n${insertion}`.trim()
+      return
+    }
+
+    const start = Math.max(0, Math.min(selection.start, chapter.content.length))
+    const end = Math.max(start, Math.min(selection.end, chapter.content.length))
+    const prefix = chapter.content.slice(0, start)
+    const suffix = chapter.content.slice(end)
+    chapter.content = `${prefix}${insertion}${suffix}`
+    const nextCursor = start + insertion.length
+    chapterSelection.value = {
+      start: nextCursor,
+      end: nextCursor
+    }
   }
 
   watch(
@@ -590,18 +642,23 @@ export const useAppStore = defineStore('app', () => {
     deleteWorldviewEntry,
     insertIntoChapter,
     importProjectData,
+    consumeAssistantPrompt,
     messages,
     moveChapter,
+    openAiAssistant,
     openProject,
     openWizard,
     outlineItems,
+    pendingAssistantRequest,
     projects,
     pushAssistantMessage,
     pushUserMessage,
+    queueAssistantPrompt,
     selectChapter,
     selectedChapter,
     selectedChapterId,
     selectedProjectId,
+    setChapterSelection,
     setPanel,
     setTheme,
     theme,
