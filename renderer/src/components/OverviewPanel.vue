@@ -189,7 +189,7 @@ function openEntry(type: string, title: string): void {
           <p>{{ entry.description }}</p>
         </button>
       </div>
-      <div v-else class="empty-state">
+      <div v-else class="arc-empty-state">
         <p>没有匹配“{{ normalizedQuery }}”的项目内容。</p>
       </div>
     </section>

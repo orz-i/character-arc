@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { FilePenLine, Globe2, PenTool, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
-import { NButton, NForm, NFormItem, NInput, NModal, useDialog, useMessage } from 'naive-ui'
+import { FilePenLine, Globe2, MoreVertical, PenTool, Plus, Sparkles, Trash2 } from 'lucide-vue-next'
+import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, useDialog, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import type { ChapterDraft } from '@/types/app'
+import type { DropdownOption } from 'naive-ui'
 
 const props = defineProps<{
   searchQuery?: string
@@ -20,6 +21,10 @@ const chapterForm = reactive({
   title: ''
 })
 let saveTimer: number | null = null
+const chapterMenuOptions: DropdownOption[] = [
+  { key: 'edit', label: '编辑章节信息' },
+  { key: 'delete', label: '删除章节' }
+]
 
 const currentWordCount = computed(() => {
   const content = appStore.selectedChapter?.content.trim() ?? ''
@@ -91,7 +96,7 @@ function submitChapterMeta(): void {
   }
 
   if (!chapterForm.title.trim()) {
-    message.warning('请先填写章节标题')
+    message.warning('请填写章节标题')
     return
   }
 
@@ -100,6 +105,25 @@ function submitChapterMeta(): void {
   })
   editorVisible.value = false
   message.success('章节信息已更新')
+}
+
+function handleChapterMenuSelect(action: string | number, chapter: ChapterDraft): void {
+  if (action === 'edit') {
+    openChapterMetaEditor(chapter)
+    return
+  }
+
+  dialog.warning({
+    title: '确认删除章节',
+    content: `确定要删除“${chapter.title}”吗？删除后当前章节草稿将无法恢复。`,
+    positiveText: '确认删除',
+    negativeText: '取消',
+    autoFocus: false,
+    closable: false,
+    onPositiveClick: () => {
+      appStore.deleteChapter(chapter.id)
+    }
+  })
 }
 
 watch(
@@ -156,7 +180,12 @@ onBeforeUnmount(() => {
             :class="{ active: appStore.selectedChapterId === chapter.id }"
             @click="appStore.selectChapter(chapter.id)"
           >
-            {{ chapter.title }}
+            <span class="chapter-pill-label">{{ chapter.title }}</span>
+            <n-dropdown :options="chapterMenuOptions" placement="bottom-end" @select="(key) => handleChapterMenuSelect(key, chapter)">
+              <span class="chapter-pill-action" @click.stop>
+                <MoreVertical :size="14" />
+              </span>
+            </n-dropdown>
           </button>
         </div>
       </aside>
@@ -231,7 +260,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
-    <div v-if="filteredChapters.length === 0" class="empty-state">
+    <div v-if="filteredChapters.length === 0" class="arc-empty-state">
       没有匹配“{{ props.searchQuery }}”的章节内容。
     </div>
 
@@ -343,6 +372,10 @@ onBeforeUnmount(() => {
 
 .chapter-pill {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border: none;
   border-radius: 16px;
   background: transparent;
@@ -363,6 +396,27 @@ onBeforeUnmount(() => {
   background: white;
   color: var(--arc-primary);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.chapter-pill-label {
+  flex: 1;
+  text-align: left;
+}
+
+.chapter-pill-action {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #c4cad4;
+  flex-shrink: 0;
+}
+
+.chapter-pill:hover .chapter-pill-action {
+  background: rgba(0, 0, 0, 0.04);
+  color: #6b7280;
 }
 
 .editor-shell {
@@ -500,6 +554,10 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
+.chapter-title:hover {
+  color: var(--arc-primary);
+}
+
 .chapter-editor {
   flex: 1;
   width: 100%;
@@ -528,16 +586,6 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.empty-state {
-  margin-top: 18px;
-  border: 1px dashed rgba(209, 213, 219, 0.95);
-  border-radius: 22px;
-  color: #86868b;
-  font-size: 14px;
-  padding: 22px;
-  text-align: center;
 }
 
 .helper-fade-enter-active,

@@ -98,7 +98,7 @@ function openEditor(character?: CharacterCard): void {
 
 function submitCharacter(): void {
   if (!form.name.trim() || !form.description.trim()) {
-    message.warning('请先填写角色名称和简介')
+    message.warning('请完整填写角色名称和角色简介')
     return
   }
 
@@ -192,7 +192,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
       </article>
     </div>
 
-    <div v-if="filteredCharacters.length === 0" class="empty-state">
+    <div v-if="filteredCharacters.length === 0" class="arc-empty-state">
       没有匹配当前搜索条件的角色。
     </div>
 
@@ -355,8 +355,22 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.06);
 }
 
+.character-card::after {
+  content: '点击编辑';
+  display: inline-flex;
+  margin-top: auto;
+  color: rgba(31, 41, 55, 0);
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
 .character-card:hover h3 {
   color: var(--arc-primary);
+}
+
+.character-card:hover::after {
+  color: #9ca3af;
 }
 
 .avatar {
@@ -412,16 +426,6 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
   line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
-}
-
-.empty-state {
-  margin-top: 18px;
-  border: 1px dashed rgba(209, 213, 219, 0.95);
-  border-radius: 22px;
-  color: #86868b;
-  font-size: 14px;
-  padding: 22px;
-  text-align: center;
 }
 
 @media (max-width: 860px) {

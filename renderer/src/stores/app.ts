@@ -231,6 +231,35 @@ export const useAppStore = defineStore('app', () => {
     () => projects.value.find((project) => project.id === selectedProjectId.value) ?? projects.value[0]
   )
 
+  function importProjectData(payload: {
+    project?: Partial<ProjectSummary>
+    worldviewEntries?: WorldviewEntry[]
+    characters?: CharacterCard[]
+    outlineItems?: OutlineItem[]
+    chapters?: ChapterDraft[]
+  }): void {
+    const nextProjectId = `project-${Date.now()}`
+    const project: ProjectSummary = {
+      id: nextProjectId,
+      title: payload.project?.title?.trim() || '导入项目',
+      genre: payload.project?.genre?.trim() || '未分类',
+      wordCount: payload.project?.wordCount?.trim() || '已导入',
+      lastEdited: '刚刚导入',
+      cover: payload.project?.cover || 'linear-gradient(135deg, #9be15d 0%, #00e3ae 100%)'
+    }
+
+    // Import replaces the active project workspace content so the result is predictable and easy to verify.
+    projects.value = [project, ...projects.value.filter((item) => item.id !== selectedProjectId.value)]
+    selectedProjectId.value = project.id
+    worldviewEntries.value = payload.worldviewEntries?.length ? payload.worldviewEntries : defaultWorldview
+    characters.value = payload.characters?.length ? payload.characters : defaultCharacters
+    outlineItems.value = payload.outlineItems?.length ? payload.outlineItems : defaultOutline
+    chapters.value = payload.chapters?.length ? payload.chapters : defaultChapters
+    selectedChapterId.value = chapters.value[0].id
+    currentView.value = 'workbench'
+    activePanel.value = 'overview'
+  }
+
   function setTheme(nextTheme: ThemeName): void {
     theme.value = nextTheme
   }
@@ -284,6 +313,21 @@ export const useAppStore = defineStore('app', () => {
       selectedProjectId.value = projects.value[0].id
       currentView.value = 'projects'
     }
+  }
+
+  function updateProject(projectId: string, payload: Partial<ProjectSummary>): void {
+    projects.value = projects.value.map((project) =>
+      project.id === projectId
+        ? {
+            ...project,
+            title: payload.title?.trim() || project.title,
+            genre: payload.genre?.trim() || project.genre,
+            wordCount: payload.wordCount?.trim() || project.wordCount,
+            lastEdited: payload.lastEdited?.trim() || '刚刚更新',
+            cover: payload.cover || project.cover
+          }
+        : project
+    )
   }
 
   function createWorldviewEntry(payload?: Partial<WorldviewEntry>): void {
@@ -528,6 +572,7 @@ export const useAppStore = defineStore('app', () => {
     deleteProject,
     deleteWorldviewEntry,
     insertIntoChapter,
+    importProjectData,
     messages,
     openProject,
     openWizard,
@@ -544,6 +589,7 @@ export const useAppStore = defineStore('app', () => {
     theme,
     toggleAi,
     updateAppSetting,
+    updateProject,
     updateChapter,
     updateChapterContent,
     updateChapterTitle,

@@ -137,3 +137,13 @@ input {
   justify-content: flex-end;
   gap: 12px;
 }
+
+.arc-empty-state {
+  margin-top: 18px;
+  border: 1px dashed rgba(209, 213, 219, 0.95);
+  border-radius: 22px;
+  color: #86868b;
+  font-size: 14px;
+  padding: 22px;
+  text-align: center;
+}

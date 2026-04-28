@@ -76,7 +76,7 @@ function openEditor(item?: OutlineItem): void {
 
 function submitOutline(): void {
   if (!form.title.trim() || !form.summary.trim()) {
-    message.warning('请先填写节点标题和剧情描述')
+    message.warning('请完整填写节点标题和剧情描述')
     return
   }
 
@@ -152,7 +152,7 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
       </div>
     </div>
 
-    <div v-if="filteredOutlineItems.length === 0" class="empty-state">
+    <div v-if="filteredOutlineItems.length === 0" class="arc-empty-state">
       没有匹配“{{ props.searchQuery }}”的大纲节点。
     </div>
 
@@ -349,16 +349,6 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
   cursor: pointer;
   font-size: 14px;
   padding: 18px 20px;
-}
-
-.empty-state {
-  margin-top: 18px;
-  border: 1px dashed rgba(209, 213, 219, 0.95);
-  border-radius: 22px;
-  color: #86868b;
-  font-size: 14px;
-  padding: 22px;
-  text-align: center;
 }
 
 @media (max-width: 760px) {

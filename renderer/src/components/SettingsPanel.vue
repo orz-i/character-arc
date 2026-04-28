@@ -1,16 +1,65 @@
 <script setup lang="ts">
-import { Cpu, FolderOutput, FileText, Palette, Save } from 'lucide-vue-next'
-import { NButton, NCard, NFormItem, NInput, NSelect } from 'naive-ui'
+import { Cpu, Download, FolderOutput, FileText, Palette, Save } from 'lucide-vue-next'
+import { NButton, NCard, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
 import type { ThemeName } from '@/types/app'
 
 const appStore = useAppStore()
+const message = useMessage()
 
 const themeOptions = themePresets.map((preset) => ({
   label: preset.label,
   value: preset.name
 }))
+
+async function handleExportJson(): Promise<void> {
+  const payload = {
+    project: appStore.currentProject,
+    worldviewEntries: appStore.worldviewEntries,
+    characters: appStore.characters,
+    outlineItems: appStore.outlineItems,
+    chapters: appStore.chapters,
+    exportedAt: new Date().toISOString()
+  }
+
+  const result = await window.characterArc.exportJson(payload)
+  if (result.success) {
+    message.success('项目数据已导出')
+  }
+}
+
+async function handleExportText(): Promise<void> {
+  const payload = {
+    project: appStore.currentProject,
+    chapters: appStore.chapters.map((chapter) => ({
+      title: chapter.title,
+      content: chapter.content
+    })),
+    exportedAt: new Date().toISOString()
+  }
+
+  const result = await window.characterArc.exportText(payload)
+  if (result.success) {
+    message.success('章节内容已导出')
+  }
+}
+
+async function handleImportJson(): Promise<void> {
+  const result = await window.characterArc.importJson()
+  if (!result.success || result.canceled || !result.payload) {
+    return
+  }
+
+  appStore.importProjectData(result.payload as {
+    project?: import('@/types/app').ProjectSummary
+    worldviewEntries?: import('@/types/app').WorldviewEntry[]
+    characters?: import('@/types/app').CharacterCard[]
+    outlineItems?: import('@/types/app').OutlineItem[]
+    chapters?: import('@/types/app').ChapterDraft[]
+  })
+  message.success('项目数据已导入')
+}
 </script>
 
 <template>
@@ -81,13 +130,19 @@ const themeOptions = themePresets.map((preset) => ({
           />
         </div>
         <div class="setting-actions">
-          <n-button round strong>
+          <n-button round strong @click="handleImportJson">
+            <template #icon>
+              <Download :size="16" />
+            </template>
+            导入项目 JSON
+          </n-button>
+          <n-button round strong @click="handleExportJson">
             <template #icon>
               <FolderOutput :size="16" />
             </template>
             导出项目为 JSON
           </n-button>
-          <n-button round strong>
+          <n-button round strong @click="handleExportText">
             <template #icon>
               <FileText :size="16" />
             </template>

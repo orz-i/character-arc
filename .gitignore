@@ -117,7 +117,6 @@ embed_build.py
 
 .roo/
 data/
-docs/
 data_old/
 backend/migrate_all_databases.py
 test_api.py

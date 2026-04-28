@@ -1,18 +1,32 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
-import { BookOpen, Clock, MoreHorizontal, Plus, Trash2 } from 'lucide-vue-next'
-import { NDropdown, useDialog } from 'naive-ui'
+import { computed, h, reactive, ref } from 'vue'
+import { BookOpen, Clock, FilePenLine, MoreHorizontal, Plus, Trash2 } from 'lucide-vue-next'
+import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, useDialog, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
+import type { ProjectSummary } from '@/types/app'
 
 const appStore = useAppStore()
 const dialog = useDialog()
+const message = useMessage()
+const editorVisible = ref(false)
+const editingProjectId = ref<string | null>(null)
+const form = reactive({
+  title: '',
+  genre: '',
+  wordCount: ''
+})
 
 const canDeleteProject = computed(() => appStore.projects.length > 1)
+const isEditing = computed(() => Boolean(editingProjectId.value))
 
 const projectMenuOptions = computed(() => [
   {
     key: 'open',
     label: '打开项目'
+  },
+  {
+    key: 'edit',
+    label: '编辑项目信息'
   },
   {
     key: 'divider',
@@ -29,6 +43,9 @@ function renderMenuIcon(option: { key?: string | number }) {
   if (option.key === 'open') {
     return h(BookOpen, { size: 16 })
   }
+  if (option.key === 'edit') {
+    return h(FilePenLine, { size: 16 })
+  }
   if (option.key === 'delete') {
     return h(Trash2, { size: 16, class: 'project-menu-danger-label' })
   }
@@ -41,9 +58,40 @@ function handleMenuSelect(action: string | number, projectId: string): void {
     return
   }
 
+  if (action === 'edit') {
+    const project = appStore.projects.find((item) => item.id === projectId)
+    if (project) {
+      openProjectEditor(project)
+    }
+    return
+  }
+
   if (action === 'delete') {
     requestDeleteProject(projectId)
   }
+}
+
+function openProjectEditor(project?: ProjectSummary): void {
+  editingProjectId.value = project?.id ?? null
+  form.title = project?.title ?? ''
+  form.genre = project?.genre ?? ''
+  form.wordCount = project?.wordCount ?? ''
+  editorVisible.value = true
+}
+
+function submitProject(): void {
+  if (!editingProjectId.value) {
+    return
+  }
+
+  if (!form.title.trim() || !form.genre.trim()) {
+    message.warning('请完整填写项目标题和题材分类')
+    return
+  }
+
+  appStore.updateProject(editingProjectId.value, form)
+  editorVisible.value = false
+  message.success('项目信息已更新')
 }
 
 function requestDeleteProject(projectId: string): void {
@@ -87,7 +135,7 @@ function requestDeleteProject(projectId: string): void {
           :key="project.id"
           class="project-card"
           :style="{ animationDelay: `${index * 80}ms` }"
-          @click="appStore.openProject(project.id)"
+          @click="openProjectEditor(project)"
         >
           <div class="project-glow" :style="{ background: project.cover }"></div>
 
@@ -128,6 +176,33 @@ function requestDeleteProject(projectId: string): void {
       </div>
     </div>
 
+    <n-modal
+      :show="editorVisible"
+      preset="card"
+      class="arc-editor-modal"
+      :title="isEditing ? '编辑项目信息' : '编辑项目'"
+      :bordered="false"
+      @close="editorVisible = false"
+    >
+      <n-form label-placement="top">
+        <n-form-item label="项目标题">
+          <n-input v-model:value="form.title" placeholder="例如：赛博飞升指南" />
+        </n-form-item>
+        <n-form-item label="题材分类">
+          <n-input v-model:value="form.genre" placeholder="例如：科幻 / 赛博朋克" />
+        </n-form-item>
+        <n-form-item label="字数展示">
+          <n-input v-model:value="form.wordCount" placeholder="例如：12.5万字" />
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <div class="arc-modal-actions">
+          <n-button round strong @click="editorVisible = false">取消</n-button>
+          <n-button type="primary" round strong @click="submitProject">保存修改</n-button>
+        </div>
+      </template>
+    </n-modal>
   </section>
 </template>
 
@@ -226,6 +301,23 @@ function requestDeleteProject(projectId: string): void {
   transform: translateY(-6px);
   border-color: rgba(229, 231, 235, 0.95);
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.07);
+}
+
+.project-card::after {
+  content: '点击编辑项目';
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  color: rgba(29, 29, 31, 0);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+  z-index: 2;
+}
+
+.project-card:hover::after {
+  color: #9ca3af;
 }
 
 .project-glow {

@@ -76,7 +76,7 @@ function openEditor(entry?: WorldviewEntry): void {
 
 function submitEntry(): void {
   if (!form.title.trim() || !form.content.trim()) {
-    message.warning('请先填写标题和内容')
+    message.warning('请完整填写词条标题和词条内容')
     return
   }
 
@@ -157,7 +157,7 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
       </button>
     </div>
 
-    <div v-if="filteredEntries.length === 0" class="empty-state">
+    <div v-if="filteredEntries.length === 0" class="arc-empty-state">
       没有匹配“{{ props.searchQuery }}”的世界观设定。
     </div>
 
@@ -301,8 +301,22 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
 }
 
+.world-card::after {
+  content: '点击编辑';
+  display: inline-flex;
+  margin-top: 14px;
+  color: rgba(31, 41, 55, 0);
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
 .world-card:hover h3 {
   color: var(--arc-primary);
+}
+
+.world-card:hover::after {
+  color: #9ca3af;
 }
 
 .card-top {
@@ -382,16 +396,6 @@ function handleMenuSelect(action: string | number, entry: WorldviewEntry): void 
   background: color-mix(in srgb, var(--arc-primary) 5%, white);
   border-color: color-mix(in srgb, var(--arc-primary) 20%, white);
   color: var(--arc-primary);
-}
-
-.empty-state {
-  margin-top: 18px;
-  border: 1px dashed rgba(209, 213, 219, 0.95);
-  border-radius: 22px;
-  color: #86868b;
-  font-size: 14px;
-  padding: 22px;
-  text-align: center;
 }
 
 @media (max-width: 760px) {
