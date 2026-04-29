@@ -1,6 +1,17 @@
 import { pickRelevantInspirationEntries } from '@/features/inspiration/relevance'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
-import type { ChapterDraft, CharacterCard, InspirationEntry, OutlineItem, OutlineVolume, ProjectSummary, WorldviewEntry } from '@/types/app'
+import type {
+  ChapterDraft,
+  CharacterCard,
+  CharacterRelationship,
+  InspirationEntry,
+  OrganizationEntry,
+  OrganizationMembership,
+  OutlineItem,
+  OutlineVolume,
+  ProjectSummary,
+  WorldviewEntry
+} from '@/types/app'
 
 type ChapterAssistantMessage = {
   role: 'user' | 'assistant'
@@ -19,6 +30,9 @@ type ChapterAssistantContextInput = {
   recentMessages: ChapterAssistantMessage[]
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
+  organizations: OrganizationEntry[]
+  characterRelationships: CharacterRelationship[]
+  organizationMemberships: OrganizationMembership[]
   inspirationEntries: InspirationEntry[]
   outlineItems: OutlineItem[]
   selectedText: string
@@ -64,6 +78,26 @@ export function buildChapterAssistantContext(input: ChapterAssistantContextInput
       name: character.name,
       role: character.role,
       description: character.description
+    })),
+    organizations: input.organizations.map((organization) => ({
+      id: organization.id,
+      name: organization.name,
+      type: organization.type,
+      description: organization.description,
+      motto: organization.motto
+    })),
+    characterRelationships: input.characterRelationships.map((relationship) => ({
+      fromCharacterId: relationship.fromCharacterId,
+      toCharacterId: relationship.toCharacterId,
+      type: relationship.type,
+      description: relationship.description,
+      intensity: relationship.intensity
+    })),
+    organizationMemberships: input.organizationMemberships.map((membership) => ({
+      characterId: membership.characterId,
+      organizationId: membership.organizationId,
+      role: membership.role,
+      notes: membership.notes
     })),
     inspirationEntries: relevantInspirationEntries.map((entry) => ({
       type: entry.type,

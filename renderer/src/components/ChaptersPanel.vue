@@ -3,6 +3,9 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import {
   ArrowUpRight,
   Bot,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
   FilePenLine,
   Globe2,
   GripVertical,
@@ -19,7 +22,7 @@ import {
 } from 'lucide-vue-next'
 import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, NSelect, NTooltip, useDialog, useMessage } from 'naive-ui'
 import RichChapterEditor from '@/components/RichChapterEditor.vue'
-import { getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
+import { ensureEditorHtmlContent, getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { pickRelevantInspirationEntries } from '@/features/inspiration/relevance'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
 import { useAppStore } from '@/stores/app'
@@ -59,6 +62,7 @@ const editorVisible = ref(false)
 const versionHistoryVisible = ref(false)
 const isAnalyzing = ref(false)
 const isGeneratingInspiration = ref(false)
+const readingMode = ref(false)
 const chapterAnalysis = ref<ChapterAnalysisResult | null>(null)
 const analysisSourceKey = ref('')
 const draggingChapterId = ref<string | null>(null)
@@ -134,6 +138,7 @@ const currentVolumeLabel = computed(() => {
 
   return formatVolumeLabel(appStore.selectedChapterVolume, Math.max(currentVolumeIndex.value, 0), 'compact')
 })
+const currentChapterTitle = computed(() => appStore.selectedChapter?.title || '未命名章节')
 const chapterCountLabel = computed(() => `${appStore.chapters.length} 个章节`)
 const volumeCountLabel = computed(() => `${appStore.outlineVolumes.length} 个分卷`)
 const versionCountLabel = computed(() => `${currentChapterVersions.value.length} 个版本`)
@@ -160,6 +165,12 @@ const currentProgressPercent = computed(() => {
 })
 const currentSummaryText = computed(() => appStore.selectedChapter?.summary?.trim() || '待补充章节摘要')
 const chapterInspirationFocuses = ['场景火花', '剧情转折', '人物动机'] as const
+const hasSelectionForWorkflow = computed(
+  () => appStore.currentChapterSelection?.chapterId === appStore.selectedChapter?.id && Boolean(appStore.currentChapterSelection?.text.trim())
+)
+const workflowSelectionLabel = computed(() =>
+  hasSelectionForWorkflow.value ? `已选中 ${appStore.currentChapterSelection?.text.trim().slice(0, 22)}...` : '未选中正文片段'
+)
 const chapterInspirationEntries = computed(() =>
   pickRelevantInspirationEntries(
     appStore.inspirationEntries,
@@ -207,12 +218,82 @@ const filteredChapterGroups = computed(() => {
     .filter((group) => group.items.length > 0)
 })
 const totalVisibleChapters = computed(() => filteredChapterGroups.value.reduce((count, group) => count + group.items.length, 0))
+const selectedChapterArrayIndex = computed(() => appStore.chapters.findIndex((chapter) => chapter.id === appStore.selectedChapterId))
+const previousChapter = computed(() =>
+  selectedChapterArrayIndex.value > 0 ? appStore.chapters[selectedChapterArrayIndex.value - 1] : null
+)
+const nextChapter = computed(() =>
+  selectedChapterArrayIndex.value >= 0 && selectedChapterArrayIndex.value < appStore.chapters.length - 1
+    ? appStore.chapters[selectedChapterArrayIndex.value + 1]
+    : null
+)
+const readingContentHtml = computed(() =>
+  ensureEditorHtmlContent(appStore.selectedChapter?.content?.trim() ? appStore.selectedChapter.content : '<p>当前章节还没有正文内容。</p>')
+)
+const readingWordCountLabel = computed(() => `${currentWordCount.value} 字`)
+const readingProgressLabel = computed(() =>
+  currentTargetWordCount.value ? `完成度 ${currentProgressPercent.value}%` : '自由字数模式'
+)
+const readingLeadText = computed(() => {
+  if (appStore.selectedChapter?.summary?.trim()) {
+    return appStore.selectedChapter.summary.trim()
+  }
+
+  return getChapterPreviewText(appStore.selectedChapter?.content ?? '', '这一章还没有写下摘要，可以先从成稿阅读中检查节奏。').slice(0, 120)
+})
 
 function requestAiPolish(): void {
   appStore.queueAssistantPrompt(
     '请基于当前章节内容给出一版更有节奏感、氛围感和画面感的润色稿，优先输出可以直接插入正文的内容。',
     '润色段落'
   )
+}
+
+function triggerChapterWorkflow(action: 'draft' | 'rewrite-selection' | 'intensify-conflict' | 'adjust-pacing' | 'camp-rewrite'): void {
+  if (action === 'rewrite-selection' && !hasSelectionForWorkflow.value) {
+    message.warning('请先在正文中选中需要局部改写的段落')
+    return
+  }
+
+  const workflowMap = {
+    draft: {
+      label: '本章初稿',
+      prompt: '请基于当前章节标题、章节摘要、分卷定位、已有角色关系和组织上下文，直接生成一版可继续写作的本章初稿，优先输出正文，不要解释。'
+    },
+    'rewrite-selection': {
+      label: '局部改写',
+      prompt: '请只针对当前选中的正文片段做一版重写，保留剧情事实，但强化表达、动作层次和情绪推进。直接输出最终文本。'
+    },
+    'intensify-conflict': {
+      label: '强化冲突',
+      prompt: '请基于当前章节内容，输出一版更有冲突推进力的正文或改写建议，优先强化人物立场碰撞、关系张力和场景对抗。'
+    },
+    'adjust-pacing': {
+      label: '调整节奏',
+      prompt: '请基于当前章节内容，给出一版更顺畅的节奏调整结果。若适合直接改写，就优先输出可插入正文的最终文本；若不适合整体改写，再给出具体修改方案。'
+    },
+    'camp-rewrite': {
+      label: '阵营改写',
+      prompt: '请基于当前章节内容，从更鲜明的组织或阵营立场出发，改写一段能直接进入正文的文本，让角色态度、语言和冲突重心更贴合其归属。'
+    }
+  } as const
+
+  const target = workflowMap[action]
+  appStore.queueAssistantPrompt(target.prompt, target.label)
+  message.success(`已发送到 AI 助手：${target.label}`)
+}
+
+function toggleReadingMode(): void {
+  readingMode.value = !readingMode.value
+}
+
+function openAdjacentChapter(offset: -1 | 1): void {
+  const target = offset < 0 ? previousChapter.value : nextChapter.value
+  if (!target) {
+    return
+  }
+
+  appStore.selectChapter(target.id)
 }
 
 async function saveCurrentVersion(): Promise<void> {
@@ -279,6 +360,9 @@ async function requestChapterInspiration(focusType: (typeof chapterInspirationFo
         existingInspirationTitles: appStore.inspirationEntries.map((entry) => entry.title),
         worldviewEntries: appStore.worldviewEntries,
         characters: appStore.characters,
+        organizations: appStore.organizations,
+        characterRelationships: appStore.characterRelationships,
+        organizationMemberships: appStore.organizationMemberships,
         outlineItems: appStore.outlineItems
       }
     })
@@ -348,6 +432,9 @@ async function requestChapterAnalysis(): Promise<void> {
         chapterContent: currentPlainContent.value,
         worldviewEntries: appStore.worldviewEntries,
         characters: appStore.characters,
+        organizations: appStore.organizations,
+        characterRelationships: appStore.characterRelationships,
+        organizationMemberships: appStore.organizationMemberships,
         outlineItems: appStore.outlineItems
       }
     })
@@ -576,8 +663,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="chapters-layout">
-    <div class="section-head">
+  <section class="chapters-layout" :class="{ 'reading-mode': readingMode }">
+    <div v-if="!readingMode" class="section-head">
       <div class="section-copy">
         <span class="section-kicker">Chapter Studio</span>
         <h2>章节创作</h2>
@@ -590,8 +677,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="chapters-shell">
-      <aside class="chapter-sidebar">
+    <div class="chapters-shell" :class="{ 'reading-mode': readingMode }">
+      <aside v-if="!readingMode" class="chapter-sidebar">
         <div class="chapter-side-head">
           <div>
             <span class="chapter-side-eyebrow">章节目录</span>
@@ -672,18 +759,45 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <section class="editor-shell">
+      <section class="editor-shell" :class="{ 'reading-mode': readingMode }">
         <div class="editor-topbar">
           <div class="editor-context">
-            <span class="editor-kicker">MANUSCRIPT DESK</span>
-          <div class="editor-context-main">
-            <strong>{{ currentVolumeLabel }}</strong>
-            <span>{{ saveStatusText }}</span>
-            <span>风格 {{ writingStyle.label }}</span>
-          </div>
+            <span class="editor-kicker">{{ readingMode ? 'READING MODE' : 'MANUSCRIPT DESK' }}</span>
+            <div class="editor-context-main">
+              <strong>{{ readingMode ? currentChapterTitle : currentVolumeLabel }}</strong>
+              <span>{{ readingMode ? `全书第 ${selectedChapterIndex} 章` : saveStatusText }}</span>
+              <span>{{ readingMode ? readingWordCountLabel : `风格 ${writingStyle.label}` }}</span>
+            </div>
           </div>
 
           <div class="editor-floating-actions">
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button class="tool-badge neutral" :class="{ active: readingMode }" @click="toggleReadingMode">
+                  <BookOpen :size="16" />
+                </button>
+              </template>
+              {{ readingMode ? '返回编辑模式' : '进入阅读模式' }}
+            </n-tooltip>
+            <template v-if="readingMode">
+              <n-tooltip trigger="hover">
+                <template #trigger>
+                  <button class="tool-badge neutral" :disabled="!previousChapter" @click="openAdjacentChapter(-1)">
+                    <ChevronLeft :size="16" />
+                  </button>
+                </template>
+                上一章
+              </n-tooltip>
+              <n-tooltip trigger="hover">
+                <template #trigger>
+                  <button class="tool-badge neutral" :disabled="!nextChapter" @click="openAdjacentChapter(1)">
+                    <ChevronRight :size="16" />
+                  </button>
+                </template>
+                下一章
+              </n-tooltip>
+            </template>
+            <template v-else>
             <n-tooltip trigger="hover">
               <template #trigger>
                 <button class="tool-badge" @click="saveCurrentVersion">
@@ -764,10 +878,11 @@ onBeforeUnmount(() => {
               </template>
               删除章节
             </n-tooltip>
+            </template>
           </div>
         </div>
 
-        <div class="editor-ribbon">
+        <div v-if="!readingMode" class="editor-ribbon">
           <div class="editor-ribbon-main">
             <span class="ribbon-chip strong">{{ currentVolumeLabel }}</span>
             <span class="ribbon-chip accent">{{ writingStyle.label }}</span>
@@ -788,8 +903,61 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="editor-stage">
-          <div class="editor-manuscript">
+        <div v-if="!readingMode" class="workflow-bar">
+          <div class="workflow-bar-copy">
+            <span class="workflow-kicker">AI Workflow</span>
+            <strong>把助手能力变成明确的章节操作</strong>
+            <p>{{ workflowSelectionLabel }}</p>
+          </div>
+
+          <div class="workflow-actions">
+            <button class="workflow-action primary" @click="triggerChapterWorkflow('draft')">生成本章初稿</button>
+            <button class="workflow-action" :disabled="!hasSelectionForWorkflow" @click="triggerChapterWorkflow('rewrite-selection')">
+              重写选中段落
+            </button>
+            <button class="workflow-action" @click="triggerChapterWorkflow('intensify-conflict')">强化冲突</button>
+            <button class="workflow-action" @click="triggerChapterWorkflow('adjust-pacing')">调整节奏</button>
+            <button class="workflow-action" @click="triggerChapterWorkflow('camp-rewrite')">阵营视角改写</button>
+          </div>
+        </div>
+
+        <div class="editor-stage" :class="{ 'reading-mode': readingMode }">
+          <div class="editor-manuscript" :class="{ 'reading-mode': readingMode }">
+            <template v-if="readingMode">
+              <div class="reading-header">
+                <div class="reading-header-meta">
+                  <span class="meta-chip" :class="currentChapterStatusTone">{{ currentChapterStatusLabel }}</span>
+                  <span class="meta-chip neutral">{{ currentVolumeLabel }}</span>
+                  <span class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+                  <span class="meta-chip ghost">{{ readingProgressLabel }}</span>
+                </div>
+
+                <div class="reading-heading">
+                  <span class="manuscript-overline">Chapter {{ selectedChapterIndex }}</span>
+                  <h1>{{ appStore.selectedChapter?.title || '未命名章节' }}</h1>
+                  <p>{{ readingLeadText }}</p>
+                </div>
+              </div>
+
+              <div class="reading-body">
+                <article class="reading-paper">
+                  <div class="reading-content arc-scrollbar" v-html="readingContentHtml"></div>
+                </article>
+              </div>
+
+              <div class="reading-footer">
+                <button class="reading-nav" :disabled="!previousChapter" @click="openAdjacentChapter(-1)">
+                  <ChevronLeft :size="16" />
+                  <span>{{ previousChapter?.title || '已经是第一章' }}</span>
+                </button>
+                <button class="reading-nav primary" :disabled="!nextChapter" @click="openAdjacentChapter(1)">
+                  <span>{{ nextChapter?.title || '已经是最后一章' }}</span>
+                  <ChevronRight :size="16" />
+                </button>
+              </div>
+            </template>
+
+            <template v-else>
             <div class="editor-manuscript-head">
               <div class="editor-meta-stack">
                 <div class="chapter-meta-strip">
@@ -964,6 +1132,7 @@ onBeforeUnmount(() => {
                 {{ saveStatusText }}
               </span>
             </div>
+            </template>
           </div>
         </div>
       </section>
@@ -1517,6 +1686,13 @@ onBeforeUnmount(() => {
   color: #6b7280;
 }
 
+.chapters-shell.reading-mode {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: clamp(720px, 82vh, 1080px);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.94) 42%, rgba(236, 241, 247, 0.98));
+}
+
 .editor-shell {
   display: flex;
   min-width: 0;
@@ -1656,10 +1832,99 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 18px color-mix(in srgb, var(--arc-primary) 22%, transparent);
 }
 
+.workflow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--chapter-border);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 253, 0.94), rgba(244, 247, 251, 0.96));
+  padding: 16px 18px;
+}
+
+.workflow-bar-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.workflow-kicker {
+  color: color-mix(in srgb, var(--arc-primary) 70%, #64748b);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workflow-bar-copy strong {
+  color: #18212f;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.workflow-bar-copy p {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.workflow-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workflow-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(226, 232, 240, 0.96);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #475467;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 13px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.workflow-action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--arc-primary) 16%, white);
+  color: var(--arc-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+}
+
+.workflow-action.primary {
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
+  background: linear-gradient(135deg, var(--arc-primary), color-mix(in srgb, var(--arc-primary) 76%, white));
+  color: white;
+}
+
+.workflow-action:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
 .editor-stage {
   display: flex;
   min-height: 0;
   flex: 1;
+}
+
+.editor-stage.reading-mode {
+  padding: clamp(18px, 2.8vw, 34px);
 }
 
 .tool-badge {
@@ -1733,6 +1998,13 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, rgba(249, 251, 254, 0.92), rgba(255, 255, 255, 0.98));
   padding: 18px;
+}
+
+.editor-manuscript.reading-mode {
+  gap: 22px;
+  padding: clamp(18px, 2.6vw, 32px);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 253, 0.92), rgba(241, 245, 250, 0.98));
 }
 
 .editor-manuscript-head {
@@ -1825,6 +2097,167 @@ onBeforeUnmount(() => {
 .meta-chip.success {
   background: #ebf8ef;
   color: #15803d;
+}
+
+.reading-header {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.reading-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reading-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reading-heading h1 {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.reading-heading p {
+  max-width: 720px;
+  margin: 0;
+  color: #5f6b7a;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.reading-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.reading-paper {
+  width: min(100%, 920px);
+  min-height: 100%;
+  margin: 0 auto;
+  border: 1px solid rgba(222, 228, 236, 0.96);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 253, 255, 0.98));
+  box-shadow:
+    0 28px 60px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+}
+
+.reading-content {
+  min-height: clamp(520px, 72vh, 980px);
+  max-height: 100%;
+  overflow-y: auto;
+  color: #2d3748;
+  font-family: 'Georgia', 'Songti SC', 'Noto Serif SC', serif;
+  font-size: clamp(18px, 1.2vw, 20px);
+  line-height: 2;
+  padding: clamp(30px, 4vw, 52px) clamp(24px, 5vw, 76px);
+}
+
+.reading-content :deep(h2),
+.reading-content :deep(h3) {
+  color: #18212f;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  margin: 1.4em 0 0.72em;
+}
+
+.reading-content :deep(h2) {
+  font-size: 28px;
+}
+
+.reading-content :deep(h3) {
+  font-size: 22px;
+}
+
+.reading-content :deep(p) {
+  margin: 0 0 1.2em;
+  text-align: justify;
+  text-indent: 2em;
+}
+
+.reading-content :deep(ul),
+.reading-content :deep(ol) {
+  margin: 0 0 1.2em;
+  padding-left: 1.6em;
+}
+
+.reading-content :deep(li) {
+  margin-bottom: 0.55em;
+}
+
+.reading-content :deep(blockquote) {
+  margin: 0 0 1.4em;
+  border-left: 3px solid rgba(148, 163, 184, 0.7);
+  color: #475569;
+  padding-left: 16px;
+}
+
+.reading-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+
+.reading-nav {
+  display: inline-flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(222, 228, 236, 0.96);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #475467;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 14px 16px;
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.reading-nav span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reading-nav:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.reading-nav.primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
+  color: #1f4ea3;
+}
+
+.reading-nav:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
 }
 
 .summary-card {
@@ -2369,12 +2802,25 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .workflow-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workflow-actions {
+    justify-content: flex-start;
+  }
+
   .editor-manuscript-head {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .analysis-grid {
     grid-template-columns: 1fr;
+  }
+
+  .reading-content {
+    min-height: clamp(480px, 65vh, 860px);
   }
 }
 
@@ -2385,6 +2831,7 @@ onBeforeUnmount(() => {
 
   .chapter-group-head,
   .editor-topbar,
+  .workflow-bar,
   .version-card-head {
     flex-direction: column;
   }
@@ -2405,6 +2852,26 @@ onBeforeUnmount(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+
+  .editor-stage.reading-mode,
+  .editor-manuscript.reading-mode {
+    padding: 14px;
+  }
+
+  .reading-content {
+    min-height: 56vh;
+    padding: 22px 18px 28px;
+    font-size: 16px;
+    line-height: 1.9;
+  }
+
+  .reading-heading h1 {
+    font-size: 30px;
+  }
+
+  .reading-footer {
+    grid-template-columns: 1fr;
   }
 
   .analysis-actions {

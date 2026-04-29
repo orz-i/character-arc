@@ -83,7 +83,16 @@ async function handleGenerateCharacter(): Promise<void> {
         writingStyleLabel: writingStyle.value.label,
         writingStylePrompt: writingStyle.value.prompt,
         characterNames: appStore.characters.map((character) => character.name),
-        worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title)
+        worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title),
+        organizations: appStore.organizations,
+        characterRelationships: appStore.characterRelationships,
+        organizationMemberships: appStore.organizationMemberships,
+        characters: appStore.characters.map((character) => ({
+          id: character.id,
+          name: character.name,
+          role: character.role,
+          description: character.description
+        }))
       }
     })
 

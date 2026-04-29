@@ -160,6 +160,33 @@ export interface ProjectWorkspaceData {
   messages: ChatMessage[]
 }
 
+export type ImportExportModuleType = 'project' | 'characters' | 'outline' | 'inspiration' | 'relations' | 'chapters'
+
+export type ImportConflictMode = 'overwrite' | 'copy'
+
+export interface ProjectImportPayload {
+  project?: Partial<ProjectSummary>
+  worldviewEntries?: WorldviewEntry[]
+  characters?: CharacterCard[]
+  organizations?: OrganizationEntry[]
+  characterRelationships?: CharacterRelationship[]
+  organizationMemberships?: OrganizationMembership[]
+  inspirationEntries?: InspirationEntry[]
+  outlineVolumes?: OutlineVolume[]
+  outlineItems?: OutlineItem[]
+  chapters?: ChapterDraft[]
+  chapterVersions?: ChapterVersion[]
+}
+
+export interface CharacterArcExportEnvelope {
+  app: 'CharacterArc'
+  schemaVersion: string
+  moduleType: ImportExportModuleType
+  compatibilityNote: string
+  exportedAt: string
+  data: ProjectImportPayload
+}
+
 export interface AppSettings {
   provider: string
   model: string

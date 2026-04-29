@@ -27,6 +27,9 @@ function buildTaskPrompt(task) {
     };
   }
   if (task.task === "character-card") {
+    const organizations = formatOrganizations(context.organizations);
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters);
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters);
     return {
       system: "你是小说角色设定助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 name、role、description、tags。",
       user: `基于以下上下文，为当前小说项目生成一名新角色。
@@ -36,12 +39,22 @@ function buildTaskPrompt(task) {
 已有角色：${JSON.stringify(context.characterNames ?? [])}
 世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}
 
+已有组织：
+${organizations || "暂无"}
+
+已有角色关系：
+${relationships || "暂无"}
+
+已有成员归属：
+${memberships || "暂无"}
+
 要求：
 1. 不与已有角色重名
 2. role 用短语概括角色定位
-3. description 用中文完整描述，80 到 160 字
-4. tags 返回 2 到 4 个简短标签数组
-5. ${writingStyleInstruction}
+3. 新角色要尽量能自然嵌入现有关系网络或组织结构，避免像孤立路人
+4. description 用中文完整描述，80 到 160 字，尽量体现其立场、关系张力或潜在冲突
+5. tags 返回 2 到 4 个简短标签数组
+6. ${writingStyleInstruction}
 
 返回格式：{"name":"","role":"","description":"","tags":["",""]}`
     };
@@ -70,6 +83,9 @@ function buildTaskPrompt(task) {
   if (task.task === "chapter-analysis") {
     const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
     const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    const organizations = formatOrganizations(context.organizations);
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters);
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters);
     Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
       const record = entry;
       const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
@@ -98,6 +114,15 @@ ${worldviewEntries || "暂无"}
 相关角色：
 ${characters || "暂无"}
 
+相关组织：
+${organizations || "暂无"}
+
+角色关系：
+${relationships || "暂无"}
+
+成员归属：
+${memberships || "暂无"}
+
 相关大纲：
 ${outlineItems || "暂无"}
 
@@ -105,9 +130,10 @@ ${outlineItems || "暂无"}
 1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题
 2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因
 3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方
-4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用或信息密度方面的风险
+4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用、关系张力、阵营立场或信息密度方面的风险
 5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体
-6. 输出务必紧贴当前正文，不要给空泛写作建议
+6. 如果人物关系、阵营动机或组织归属没有被有效利用，也要明确指出
+7. 输出务必紧贴当前正文，不要给空泛写作建议
 
 返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
     };
@@ -115,6 +141,9 @@ ${outlineItems || "暂无"}
   if (task.task === "inspiration-pack") {
     const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
     const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    const organizations = formatOrganizations(context.organizations);
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters);
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters);
     Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
       const record = entry;
       const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
@@ -142,6 +171,15 @@ ${worldviewEntries || "暂无"}
 相关角色：
 ${characters || "暂无"}
 
+相关组织：
+${organizations || "暂无"}
+
+角色关系：
+${relationships || "暂无"}
+
+成员归属：
+${memberships || "暂无"}
+
 相关大纲：
 ${outlineItems || "暂无"}
 
@@ -150,9 +188,10 @@ ${outlineItems || "暂无"}
 2. type 必须从以下类型中选一个：标题灵感、开篇钩子、场景火花、剧情转折、设定补完、人物动机
 3. title 要短而明确，避免与已有灵感标题重复
 4. content 用中文写成 60 到 140 字的可执行灵感描述，强调可落地场景、冲突、情绪或推进方式
-5. tags 返回 2 到 4 个简短标签，方便后续筛选
-6. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的“灵感卡片”
-7. ${writingStyleInstruction}
+5. 当关系、组织或阵营立场明显可用时，优先让灵感围绕这些张力展开
+6. tags 返回 2 到 4 个简短标签，方便后续筛选
+7. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的“灵感卡片”
+8. ${writingStyleInstruction}
 
 返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
     };
@@ -160,6 +199,9 @@ ${outlineItems || "暂无"}
   if (task.task === "chapter-assistant") {
     const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
     const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
+    const organizations = formatOrganizations(context.organizations);
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters);
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters);
     const inspirationEntries = Array.isArray(context.inspirationEntries) ? context.inspirationEntries.slice(0, 6).map((entry) => {
       const record = entry;
       const tags = Array.isArray(record.tags) ? record.tags.map((tag) => String(tag)).join("、") : "";
@@ -213,6 +255,15 @@ ${worldviewEntries || "暂无"}
 相关角色：
 ${characters || "暂无"}
 
+相关组织：
+${organizations || "暂无"}
+
+角色关系：
+${relationships || "暂无"}
+
+成员归属：
+${memberships || "暂无"}
+
 当前可用灵感：
 ${inspirationEntries || "暂无"}
 
@@ -235,10 +286,11 @@ ${recentMessages || "暂无"}
 5. 避免与最近几条对话重复表达，除非用户明确要求重写
 6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续
 7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中
-8. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架
-9. ${modeInstruction}
-10. ${lengthInstruction}
-11. ${quickActionInstruction}`
+8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果
+9. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架
+10. ${modeInstruction}
+11. ${lengthInstruction}
+12. ${quickActionInstruction}`
     };
   }
   return {
@@ -327,9 +379,59 @@ function resolveChapterAssistantQuickActionInstruction(quickAction) {
       return "如果当前任务是润色选中内容，请只输出润色后的最终文本，紧贴当前选中文本，不要解释，不要分点。";
     case "下一章建议":
       return "如果当前任务是下一章建议，请输出 3 条具体方案，每条都要体现推进方向、冲突和悬念。";
+    case "关系冲突":
+      return "如果当前任务是关系冲突，请输出 3 条关系驱动冲突方案，每条都明确人物关系、阵营立场和可触发场景。";
+    case "阵营视角":
+      return "如果当前任务是阵营视角，请优先输出可直接替换或插入正文的最终文本，突出组织立场、身份认同和冲突措辞。";
     default:
       return "如果快捷动作已经明确输出形态，请优先遵循该动作要求。";
   }
+}
+function formatOrganizations(source) {
+  return Array.isArray(source) ? source.slice(0, 6).map((entry) => {
+    const record = entry;
+    return `${String(record.name ?? "")} / ${String(record.type ?? "")}：${String(record.description ?? "")}${record.motto ? `（信条：${String(record.motto)}）` : ""}`;
+  }).join("\n") : "";
+}
+function formatCharacterRelationships(source, charactersSource) {
+  if (!Array.isArray(source)) {
+    return "";
+  }
+  const characterNameMap = new Map(
+    Array.isArray(charactersSource) ? charactersSource.map((character) => {
+      const record = character;
+      return [String(record.id ?? ""), String(record.name ?? "")];
+    }) : []
+  );
+  return source.slice(0, 8).map((entry) => {
+    const record = entry;
+    const fromName = characterNameMap.get(String(record.fromCharacterId ?? "")) || String(record.fromCharacterId ?? "");
+    const toName = characterNameMap.get(String(record.toCharacterId ?? "")) || String(record.toCharacterId ?? "");
+    return `${fromName} -> ${toName} / ${String(record.type ?? "")}：${String(record.description ?? "")}（强度 ${String(record.intensity ?? "")}）`;
+  }).join("\n");
+}
+function formatOrganizationMemberships(membershipsSource, organizationsSource, charactersSource) {
+  if (!Array.isArray(membershipsSource)) {
+    return "";
+  }
+  const organizationNameMap = new Map(
+    Array.isArray(organizationsSource) ? organizationsSource.map((organization) => {
+      const record = organization;
+      return [String(record.id ?? ""), String(record.name ?? "")];
+    }) : []
+  );
+  const characterNameMap = new Map(
+    Array.isArray(charactersSource) ? charactersSource.map((character) => {
+      const record = character;
+      return [String(record.id ?? ""), String(record.name ?? "")];
+    }) : []
+  );
+  return membershipsSource.slice(0, 8).map((entry) => {
+    const record = entry;
+    const characterName = characterNameMap.get(String(record.characterId ?? "")) || String(record.characterId ?? "");
+    const organizationName = organizationNameMap.get(String(record.organizationId ?? "")) || String(record.organizationId ?? "");
+    return `${characterName} 属于 ${organizationName} / 身份：${String(record.role ?? "")}${record.notes ? ` / 备注：${String(record.notes)}` : ""}`;
+  }).join("\n");
 }
 function resolveWritingStyleInstruction(context) {
   const label = String(context.writingStyleLabel ?? "").trim();
@@ -1751,6 +1853,7 @@ function writeWorkspaceSnapshot(db, payload) {
     throw error;
   }
 }
+const EXPORT_COMPATIBILITY_NOTE = "2.x 导出文件可直接导入当前版本；1.x 旧导出会按兼容模式解析，并默认按完整项目导入。";
 function validateImportedWorkspace(payload) {
   if (!payload || typeof payload !== "object") {
     return { valid: false, message: "导入文件不是有效的项目对象。" };
@@ -1872,6 +1975,47 @@ function validateImportedWorkspace(payload) {
   }
   return { valid: true };
 }
+function validateImportedPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return { valid: false, message: "导入文件不是有效的 JSON 对象。" };
+  }
+  const data = payload;
+  if (data.app === "CharacterArc" && typeof data.schemaVersion === "string" && typeof data.moduleType === "string" && data.data && typeof data.data === "object") {
+    const moduleType = data.moduleType;
+    const normalizedPayload = data.data;
+    const validation = validateImportedWorkspace({
+      project: normalizedPayload.project ?? { title: "导入模块" },
+      ...normalizedPayload
+    });
+    if (!validation.valid) {
+      return validation;
+    }
+    return {
+      valid: true,
+      payload: normalizedPayload,
+      meta: {
+        schemaVersion: data.schemaVersion,
+        moduleType,
+        compatibilityNote: typeof data.compatibilityNote === "string" && data.compatibilityNote.trim() ? data.compatibilityNote : EXPORT_COMPATIBILITY_NOTE,
+        isLegacy: false
+      }
+    };
+  }
+  const legacyValidation = validateImportedWorkspace(data);
+  if (!legacyValidation.valid) {
+    return legacyValidation;
+  }
+  return {
+    valid: true,
+    payload: data,
+    meta: {
+      schemaVersion: "1.0",
+      moduleType: "project",
+      compatibilityNote: "这是旧版 1.x 导出文件，系统已按兼容模式识别为完整项目导入。",
+      isLegacy: true
+    }
+  };
+}
 function resolveImageMime(filePath) {
   const lower = filePath.toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
@@ -1978,7 +2122,7 @@ electron.ipcMain.handle("characterarc:import-json", async () => {
       error: "文件不是有效的 JSON 格式。"
     };
   }
-  const validation = validateImportedWorkspace(parsed);
+  const validation = validateImportedPayload(parsed);
   if (!validation.valid) {
     return {
       success: false,
@@ -1989,7 +2133,8 @@ electron.ipcMain.handle("characterarc:import-json", async () => {
   return {
     success: true,
     canceled: false,
-    payload: parsed
+    payload: validation.payload,
+    meta: validation.meta
   };
 });
 electron.ipcMain.handle("characterarc:pick-cover-image", async () => {

@@ -1334,6 +1334,28 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
   }
 }
 
+const EXPORT_SCHEMA_VERSION = '2.0'
+const EXPORT_COMPATIBILITY_NOTE =
+  '2.x 导出文件可直接导入当前版本；1.x 旧导出会按兼容模式解析，并默认按完整项目导入。'
+
+type ImportModuleType = 'project' | 'characters' | 'outline' | 'inspiration' | 'relations' | 'chapters'
+
+type ImportValidationResult =
+  | {
+      valid: true
+      payload: Record<string, unknown>
+      meta: {
+        schemaVersion: string
+        moduleType: ImportModuleType
+        compatibilityNote: string
+        isLegacy: boolean
+      }
+    }
+  | {
+      valid: false
+      message: string
+    }
+
 function validateImportedWorkspace(payload: unknown): { valid: true } | { valid: false; message: string } {
   if (!payload || typeof payload !== 'object') {
     return { valid: false, message: '导入文件不是有效的项目对象。' }
@@ -1541,6 +1563,66 @@ function validateImportedWorkspace(payload: unknown): { valid: true } | { valid:
   return { valid: true }
 }
 
+function validateImportedPayload(payload: unknown): ImportValidationResult {
+  if (!payload || typeof payload !== 'object') {
+    return { valid: false, message: '导入文件不是有效的 JSON 对象。' }
+  }
+
+  const data = payload as Record<string, unknown>
+  if (
+    data.app === 'CharacterArc' &&
+    typeof data.schemaVersion === 'string' &&
+    typeof data.moduleType === 'string' &&
+    data.data &&
+    typeof data.data === 'object'
+  ) {
+    const moduleType = data.moduleType as ImportModuleType
+    const normalizedPayload = data.data as Record<string, unknown>
+    // New schema exports wrap the real workspace fragment in a stable envelope so
+    // future import compatibility checks can evolve without breaking old files.
+    const validation = validateImportedWorkspace({
+      project: normalizedPayload.project ?? { title: '导入模块' },
+      ...normalizedPayload
+    })
+
+    if (!validation.valid) {
+      return validation
+    }
+
+    return {
+      valid: true,
+      payload: normalizedPayload,
+      meta: {
+        schemaVersion: data.schemaVersion,
+        moduleType,
+        compatibilityNote:
+          typeof data.compatibilityNote === 'string' && data.compatibilityNote.trim()
+            ? data.compatibilityNote
+            : EXPORT_COMPATIBILITY_NOTE,
+        isLegacy: false
+      }
+    }
+  }
+
+  const legacyValidation = validateImportedWorkspace(data)
+  if (!legacyValidation.valid) {
+    return legacyValidation
+  }
+
+  // Legacy 1.x exports were raw project objects, so we keep accepting them and
+  // surface a compatibility note back to the renderer instead of hard failing.
+  return {
+    valid: true,
+    payload: data,
+    meta: {
+      schemaVersion: '1.0',
+      moduleType: 'project',
+      compatibilityNote: '这是旧版 1.x 导出文件，系统已按兼容模式识别为完整项目导入。',
+      isLegacy: true
+    }
+  }
+}
+
 function resolveImageMime(filePath: string): string {
   const lower = filePath.toLowerCase()
   if (lower.endsWith('.png')) return 'image/png'
@@ -1682,7 +1764,7 @@ ipcMain.handle('characterarc:import-json', async () => {
     }
   }
 
-  const validation = validateImportedWorkspace(parsed)
+  const validation = validateImportedPayload(parsed)
   if (!validation.valid) {
     return {
       success: false,
@@ -1694,7 +1776,8 @@ ipcMain.handle('characterarc:import-json', async () => {
   return {
     success: true,
     canceled: false,
-    payload: parsed
+    payload: validation.payload,
+    meta: validation.meta
   }
 })
 

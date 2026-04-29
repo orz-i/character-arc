@@ -13,10 +13,14 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
   }
 
   if (task.task === 'character-card') {
+    const organizations = formatOrganizations(context.organizations)
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters)
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters)
+
     return {
       system:
         '你是小说角色设定助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 name、role、description、tags。',
-      user: `基于以下上下文，为当前小说项目生成一名新角色。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n已有角色：${JSON.stringify(context.characterNames ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n\n要求：\n1. 不与已有角色重名\n2. role 用短语概括角色定位\n3. description 用中文完整描述，80 到 160 字\n4. tags 返回 2 到 4 个简短标签数组\n5. ${writingStyleInstruction}\n\n返回格式：{"name":"","role":"","description":"","tags":["",""]}`
+      user: `基于以下上下文，为当前小说项目生成一名新角色。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n已有角色：${JSON.stringify(context.characterNames ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n\n已有组织：\n${organizations || '暂无'}\n\n已有角色关系：\n${relationships || '暂无'}\n\n已有成员归属：\n${memberships || '暂无'}\n\n要求：\n1. 不与已有角色重名\n2. role 用短语概括角色定位\n3. 新角色要尽量能自然嵌入现有关系网络或组织结构，避免像孤立路人\n4. description 用中文完整描述，80 到 160 字，尽量体现其立场、关系张力或潜在冲突\n5. tags 返回 2 到 4 个简短标签数组\n6. ${writingStyleInstruction}\n\n返回格式：{"name":"","role":"","description":"","tags":["",""]}`
     }
   }
 
@@ -41,6 +45,9 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
           .map((character) => `${String((character as Record<string, unknown>).name ?? '')} / ${String((character as Record<string, unknown>).role ?? '')}：${String((character as Record<string, unknown>).description ?? '')}`)
           .join('\n')
       : ''
+    const organizations = formatOrganizations(context.organizations)
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters)
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters)
     const inspirationEntries = Array.isArray(context.inspirationEntries)
       ? context.inspirationEntries
           .slice(0, 6)
@@ -61,7 +68,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     return {
       system:
         '你是小说章节分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、pacing、tension、continuity、highlights、risks、revisionActions。',
-      user: `请分析当前章节的写作质量与可优化点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节实际字数：${String(context.chapterWordCount ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题\n2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因\n3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方\n4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用或信息密度方面的风险\n5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体\n6. 输出务必紧贴当前正文，不要给空泛写作建议\n\n返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
+      user: `请分析当前章节的写作质量与可优化点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节实际字数：${String(context.chapterWordCount ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题\n2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因\n3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方\n4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用、关系张力、阵营立场或信息密度方面的风险\n5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体\n6. 如果人物关系、阵营动机或组织归属没有被有效利用，也要明确指出\n7. 输出务必紧贴当前正文，不要给空泛写作建议\n\n返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
     }
   }
 
@@ -78,6 +85,9 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
           .map((character) => `${String((character as Record<string, unknown>).name ?? '')} / ${String((character as Record<string, unknown>).role ?? '')}：${String((character as Record<string, unknown>).description ?? '')}`)
           .join('\n')
       : ''
+    const organizations = formatOrganizations(context.organizations)
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters)
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters)
     const inspirationEntries = Array.isArray(context.inspirationEntries)
       ? context.inspirationEntries
           .slice(0, 6)
@@ -101,7 +111,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     return {
       system:
         '你是小说灵感生成助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 entries，entries 中每一项都必须包含 type、title、content、tags。',
-      user: `请围绕当前小说项目生成一组可直接保存的灵感卡片。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n灵感焦点：${String(context.focusType ?? '场景火花')}\n已有灵感标题：${existingInspirationTitles}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. entries 返回 4 条灵感卡片，每条都必须紧贴“灵感焦点”\n2. type 必须从以下类型中选一个：标题灵感、开篇钩子、场景火花、剧情转折、设定补完、人物动机\n3. title 要短而明确，避免与已有灵感标题重复\n4. content 用中文写成 60 到 140 字的可执行灵感描述，强调可落地场景、冲突、情绪或推进方式\n5. tags 返回 2 到 4 个简短标签，方便后续筛选\n6. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的“灵感卡片”\n7. ${writingStyleInstruction}\n\n返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
+      user: `请围绕当前小说项目生成一组可直接保存的灵感卡片。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n灵感焦点：${String(context.focusType ?? '场景火花')}\n已有灵感标题：${existingInspirationTitles}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. entries 返回 4 条灵感卡片，每条都必须紧贴“灵感焦点”\n2. type 必须从以下类型中选一个：标题灵感、开篇钩子、场景火花、剧情转折、设定补完、人物动机\n3. title 要短而明确，避免与已有灵感标题重复\n4. content 用中文写成 60 到 140 字的可执行灵感描述，强调可落地场景、冲突、情绪或推进方式\n5. 当关系、组织或阵营立场明显可用时，优先让灵感围绕这些张力展开\n6. tags 返回 2 到 4 个简短标签，方便后续筛选\n7. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的“灵感卡片”\n8. ${writingStyleInstruction}\n\n返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
     }
   }
 
@@ -118,6 +128,9 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
           .map((character) => `${String((character as Record<string, unknown>).name ?? '')} / ${String((character as Record<string, unknown>).role ?? '')}：${String((character as Record<string, unknown>).description ?? '')}`)
           .join('\n')
       : ''
+    const organizations = formatOrganizations(context.organizations)
+    const relationships = formatCharacterRelationships(context.characterRelationships, context.characters)
+    const memberships = formatOrganizationMemberships(context.organizationMemberships, context.organizations, context.characters)
     const inspirationEntries = Array.isArray(context.inspirationEntries)
       ? context.inspirationEntries
           .slice(0, 6)
@@ -164,7 +177,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     return {
       system:
         '你是 CharacterArc 的小说创作助理。请基于当前项目和章节上下文，用中文直接输出可供作者使用的正文、润色稿、分析或建议。不要输出 Markdown 标题，不要解释你是 AI，也不要返回 JSON。',
-      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考：\n${relatedChapters || '暂无'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n最近对话：\n${recentMessages || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n9. ${modeInstruction}\n10. ${lengthInstruction}\n11. ${quickActionInstruction}`
+      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考：\n${relatedChapters || '暂无'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n最近对话：\n${recentMessages || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果\n9. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n10. ${modeInstruction}\n11. ${lengthInstruction}\n12. ${quickActionInstruction}`
     }
   }
 
@@ -222,9 +235,83 @@ function resolveChapterAssistantQuickActionInstruction(quickAction: string): str
       return '如果当前任务是润色选中内容，请只输出润色后的最终文本，紧贴当前选中文本，不要解释，不要分点。'
     case '下一章建议':
       return '如果当前任务是下一章建议，请输出 3 条具体方案，每条都要体现推进方向、冲突和悬念。'
+    case '关系冲突':
+      return '如果当前任务是关系冲突，请输出 3 条关系驱动冲突方案，每条都明确人物关系、阵营立场和可触发场景。'
+    case '阵营视角':
+      return '如果当前任务是阵营视角，请优先输出可直接替换或插入正文的最终文本，突出组织立场、身份认同和冲突措辞。'
     default:
       return '如果快捷动作已经明确输出形态，请优先遵循该动作要求。'
   }
+}
+
+function formatOrganizations(source: unknown): string {
+  return Array.isArray(source)
+    ? source
+        .slice(0, 6)
+        .map((entry) => {
+          const record = entry as Record<string, unknown>
+          return `${String(record.name ?? '')} / ${String(record.type ?? '')}：${String(record.description ?? '')}${record.motto ? `（信条：${String(record.motto)}）` : ''}`
+        })
+        .join('\n')
+    : ''
+}
+
+function formatCharacterRelationships(source: unknown, charactersSource: unknown): string {
+  if (!Array.isArray(source)) {
+    return ''
+  }
+
+  const characterNameMap = new Map(
+    Array.isArray(charactersSource)
+      ? charactersSource.map((character) => {
+          const record = character as Record<string, unknown>
+          return [String(record.id ?? ''), String(record.name ?? '')]
+        })
+      : []
+  )
+
+  return source
+    .slice(0, 8)
+    .map((entry) => {
+      const record = entry as Record<string, unknown>
+      const fromName = characterNameMap.get(String(record.fromCharacterId ?? '')) || String(record.fromCharacterId ?? '')
+      const toName = characterNameMap.get(String(record.toCharacterId ?? '')) || String(record.toCharacterId ?? '')
+      return `${fromName} -> ${toName} / ${String(record.type ?? '')}：${String(record.description ?? '')}（强度 ${String(record.intensity ?? '')}）`
+    })
+    .join('\n')
+}
+
+function formatOrganizationMemberships(membershipsSource: unknown, organizationsSource: unknown, charactersSource: unknown): string {
+  if (!Array.isArray(membershipsSource)) {
+    return ''
+  }
+
+  const organizationNameMap = new Map(
+    Array.isArray(organizationsSource)
+      ? organizationsSource.map((organization) => {
+          const record = organization as Record<string, unknown>
+          return [String(record.id ?? ''), String(record.name ?? '')]
+        })
+      : []
+  )
+  const characterNameMap = new Map(
+    Array.isArray(charactersSource)
+      ? charactersSource.map((character) => {
+          const record = character as Record<string, unknown>
+          return [String(record.id ?? ''), String(record.name ?? '')]
+        })
+      : []
+  )
+
+  return membershipsSource
+    .slice(0, 8)
+    .map((entry) => {
+      const record = entry as Record<string, unknown>
+      const characterName = characterNameMap.get(String(record.characterId ?? '')) || String(record.characterId ?? '')
+      const organizationName = organizationNameMap.get(String(record.organizationId ?? '')) || String(record.organizationId ?? '')
+      return `${characterName} 属于 ${organizationName} / 身份：${String(record.role ?? '')}${record.notes ? ` / 备注：${String(record.notes)}` : ''}`
+    })
+    .join('\n')
 }
 
 function resolveWritingStyleInstruction(context: Record<string, unknown>): string {

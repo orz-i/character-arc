@@ -7,6 +7,13 @@ declare global {
     defaultPath?: string
   }
 
+  type CharacterArcImportMeta = {
+    schemaVersion: string
+    moduleType: import('@/types/app').ImportExportModuleType
+    compatibilityNote: string
+    isLegacy: boolean
+  }
+
   type CharacterArcAiStreamEvent =
     | {
         streamId: string
@@ -127,6 +134,7 @@ declare global {
         success: boolean
         canceled: boolean
         payload?: unknown
+        meta?: CharacterArcImportMeta
         error?: string
       }>
       openAssistantWindow: () => Promise<{

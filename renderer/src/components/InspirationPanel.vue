@@ -119,6 +119,9 @@ async function handleGeneratePack(): Promise<void> {
         existingInspirationTitles: appStore.inspirationEntries.map((entry) => entry.title),
         worldviewEntries: appStore.worldviewEntries,
         characters: appStore.characters,
+        organizations: appStore.organizations,
+        characterRelationships: appStore.characterRelationships,
+        organizationMemberships: appStore.organizationMemberships,
         outlineItems: appStore.outlineItems
       }
     })

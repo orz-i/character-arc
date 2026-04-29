@@ -37,11 +37,14 @@ import type {
   CharacterCard,
   CharacterRelationship,
   InspirationEntry,
+  ImportConflictMode,
+  ImportExportModuleType,
   OrganizationEntry,
   OrganizationMembership,
   OutlineItem,
   OutlineVolume,
   PanelName,
+  ProjectImportPayload,
   ProjectSummary,
   ProjectWorkspaceData,
   ThemeName,
@@ -423,19 +426,11 @@ export const useAppStore = defineStore('app', () => {
     }, delay)
   }
 
-  function importProjectData(payload: {
-    project?: Partial<ProjectSummary>
-    worldviewEntries?: WorldviewEntry[]
-    characters?: CharacterCard[]
-    organizations?: OrganizationEntry[]
-    characterRelationships?: CharacterRelationship[]
-    organizationMemberships?: OrganizationMembership[]
-    inspirationEntries?: InspirationEntry[]
-    outlineVolumes?: OutlineVolume[]
-    outlineItems?: OutlineItem[]
-    chapters?: ChapterDraft[]
-    chapterVersions?: ChapterVersion[]
-  }): void {
+  function buildImportedId(prefix: string, index: number): string {
+    return `${prefix}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  function importProjectData(payload: ProjectImportPayload): void {
     const projectId = `project-${Date.now()}`
     const project: ProjectSummary = {
       id: projectId,
@@ -469,6 +464,227 @@ export const useAppStore = defineStore('app', () => {
     currentView.value = 'workbench'
     activePanel.value = 'overview'
     syncSelectedChapter(project.id)
+    schedulePersist('fast')
+  }
+
+  function importModuleData(moduleType: ImportExportModuleType, payload: ProjectImportPayload, mode: ImportConflictMode): void {
+    updateCurrentWorkspace((workspace) => {
+      // Normalize once so every module import can reuse the same fallback and schema repair path.
+      const normalizedImport = normalizeProjectWorkspaceData({
+        worldviewEntries: payload.worldviewEntries,
+        characters: payload.characters,
+        organizations: payload.organizations,
+        characterRelationships: payload.characterRelationships,
+        organizationMemberships: payload.organizationMemberships,
+        inspirationEntries: payload.inspirationEntries,
+        outlineVolumes: payload.outlineVolumes,
+        outlineItems: payload.outlineItems,
+        chapters: payload.chapters,
+        chapterVersions: payload.chapterVersions
+      })
+
+      if (moduleType === 'characters') {
+        if (mode === 'overwrite') {
+          return {
+            ...workspace,
+            characters: normalizedImport.characters
+          }
+        }
+
+        return {
+          ...workspace,
+          characters: [
+            ...normalizedImport.characters.map((character, index) => ({
+              ...character,
+              id: buildImportedId('character', index)
+            })),
+            ...workspace.characters
+          ]
+        }
+      }
+
+      if (moduleType === 'inspiration') {
+        if (mode === 'overwrite') {
+          return {
+            ...workspace,
+            inspirationEntries: reindexInspirationEntries(normalizedImport.inspirationEntries)
+          }
+        }
+
+        return {
+          ...workspace,
+          inspirationEntries: reindexInspirationEntries([
+            ...normalizedImport.inspirationEntries.map((entry, index) => ({
+              ...entry,
+              id: buildImportedId('inspiration', index)
+            })),
+            ...workspace.inspirationEntries
+          ])
+        }
+      }
+
+      if (moduleType === 'outline') {
+        const volumeIdMap = new Map<string, string>()
+        const importedVolumes = normalizedImport.outlineVolumes.map((volume, index) => {
+          const nextId = buildImportedId('volume', index)
+          volumeIdMap.set(volume.id, nextId)
+          return {
+            ...volume,
+            id: nextId
+          }
+        })
+        const importedItems = normalizedImport.outlineItems.map((item, index) => ({
+          ...item,
+          id: buildImportedId('outline', index),
+          volumeId: volumeIdMap.get(item.volumeId) || item.volumeId
+        }))
+
+        if (mode === 'overwrite') {
+          return {
+            ...workspace,
+            outlineVolumes: importedVolumes,
+            outlineItems: reindexOutlineItems(importedItems)
+          }
+        }
+
+        return {
+          ...workspace,
+          outlineVolumes: [...workspace.outlineVolumes, ...importedVolumes],
+          outlineItems: reindexOutlineItems([...workspace.outlineItems, ...importedItems])
+        }
+      }
+
+      if (moduleType === 'chapters') {
+        const volumeIdMap = new Map<string, string>()
+        const chapterIdMap = new Map<string, string>()
+        const importedVolumes = normalizedImport.outlineVolumes.map((volume, index) => {
+          const nextId = buildImportedId('volume', index)
+          volumeIdMap.set(volume.id, nextId)
+          return {
+            ...volume,
+            id: nextId
+          }
+        })
+        const importedChapters = normalizedImport.chapters.map((chapter, index) => {
+          const nextId = buildImportedId('chapter', index)
+          chapterIdMap.set(chapter.id, nextId)
+          return normalizeChapterDraft({
+            ...chapter,
+            id: nextId,
+            volumeId: volumeIdMap.get(chapter.volumeId) || chapter.volumeId
+          })
+        })
+        const importedVersions = normalizedImport.chapterVersions.map((version, index) =>
+          normalizeChapterVersion({
+            ...version,
+            id: buildImportedId('chapter-version', index),
+            chapterId: chapterIdMap.get(version.chapterId) || version.chapterId
+          })
+        )
+
+        if (mode === 'overwrite') {
+          return {
+            ...workspace,
+            outlineVolumes: importedVolumes.length ? importedVolumes : workspace.outlineVolumes,
+            chapters: importedChapters,
+            chapterVersions: importedVersions
+          }
+        }
+
+        return {
+          ...workspace,
+          outlineVolumes: importedVolumes.length ? [...workspace.outlineVolumes, ...importedVolumes] : workspace.outlineVolumes,
+          chapters: [...workspace.chapters, ...importedChapters],
+          chapterVersions: [...workspace.chapterVersions, ...importedVersions]
+        }
+      }
+
+      if (moduleType === 'relations') {
+        const characterNameMap = new Map(workspace.characters.map((character) => [character.name.trim(), character.id]))
+        const importedCharacterIdMap = new Map<string, string>()
+        const importedCharacters: CharacterCard[] = []
+
+        // Relations and memberships depend on character ids, so we first match by
+        // local name and only create missing characters when no stable match exists.
+        normalizedImport.characters.forEach((character, index) => {
+          const existingId = characterNameMap.get(character.name.trim())
+          if (existingId) {
+            importedCharacterIdMap.set(character.id, existingId)
+            return
+          }
+
+          const nextId = buildImportedId('character', index)
+          importedCharacterIdMap.set(character.id, nextId)
+          importedCharacters.push({
+            ...character,
+            id: nextId
+          })
+        })
+
+        const organizationIdMap = new Map<string, string>()
+        const importedOrganizations = normalizedImport.organizations.map((organization, index) => {
+          const nextId = buildImportedId('organization', index)
+          organizationIdMap.set(organization.id, nextId)
+          return {
+            ...organization,
+            id: nextId
+          }
+        })
+        const importedRelationships = normalizedImport.characterRelationships
+          .map((relationship, index) => {
+            const fromCharacterId = importedCharacterIdMap.get(relationship.fromCharacterId)
+            const toCharacterId = importedCharacterIdMap.get(relationship.toCharacterId)
+            if (!fromCharacterId || !toCharacterId) {
+              return null
+            }
+
+            return {
+              ...relationship,
+              id: buildImportedId('relationship', index),
+              fromCharacterId,
+              toCharacterId
+            }
+          })
+          .filter((relationship): relationship is CharacterRelationship => Boolean(relationship))
+        const importedMemberships = normalizedImport.organizationMemberships
+          .map((membership, index) => {
+            const characterId = importedCharacterIdMap.get(membership.characterId)
+            const organizationId = organizationIdMap.get(membership.organizationId)
+            if (!characterId || !organizationId) {
+              return null
+            }
+
+            return {
+              ...membership,
+              id: buildImportedId('membership', index),
+              characterId,
+              organizationId
+            }
+          })
+          .filter((membership): membership is OrganizationMembership => Boolean(membership))
+
+        if (mode === 'overwrite') {
+          return {
+            ...workspace,
+            characters: [...importedCharacters, ...workspace.characters],
+            organizations: reindexOrganizations(importedOrganizations),
+            characterRelationships: importedRelationships,
+            organizationMemberships: importedMemberships
+          }
+        }
+
+        return {
+          ...workspace,
+          characters: [...importedCharacters, ...workspace.characters],
+          organizations: reindexOrganizations([...importedOrganizations, ...workspace.organizations]),
+          characterRelationships: [...importedRelationships, ...workspace.characterRelationships],
+          organizationMemberships: [...importedMemberships, ...workspace.organizationMemberships]
+        }
+      }
+
+      return workspace
+    })
+
     schedulePersist('fast')
   }
 
@@ -1582,6 +1798,7 @@ export const useAppStore = defineStore('app', () => {
     deleteWorldviewEntry,
     insertIntoChapter,
     importProjectData,
+    importModuleData,
     consumeAssistantPrompt,
     getChapterVersions,
     messages,

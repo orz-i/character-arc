@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Network, Palette, PenTool, PlugZap, Save, Users } from 'lucide-vue-next'
-import { NButton, NCard, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
+import { NButton, NCard, NFormItem, NInput, NModal, NSelect, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { buildProjectWritingStyleContext, writingStylePresets } from '@/features/writingStyles/presets'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
-import type { ThemeName } from '@/types/app'
+import type { CharacterArcExportEnvelope, ImportConflictMode, ImportExportModuleType, ProjectImportPayload, ThemeName } from '@/types/app'
 
 const appStore = useAppStore()
 const message = useMessage()
 const isTestingAiConnection = ref(false)
+const importConflictMode = ref<ImportConflictMode>('copy')
+const importModalVisible = ref(false)
+const pendingImportPayload = ref<ProjectImportPayload | null>(null)
+const pendingImportMeta = ref<CharacterArcImportMeta | null>(null)
 
 type ProviderPreset = {
   label: string
@@ -112,6 +116,18 @@ const activeProviderPreset = computed(
   () => providerPresets.find((item) => item.value === appStore.appSettings.provider) ?? providerPresets[0]
 )
 const activeWritingStyle = computed(() => buildProjectWritingStyleContext(appStore.currentProject))
+const importConflictOptions = [
+  { label: '新建副本', value: 'copy' as const },
+  { label: '覆盖当前模块', value: 'overwrite' as const }
+]
+const importModuleLabelMap: Record<ImportExportModuleType, string> = {
+  project: '完整项目',
+  characters: '角色资料',
+  outline: '剧情大纲',
+  inspiration: '灵感卡片',
+  relations: '关系组织',
+  chapters: '章节数据'
+}
 
 function updateWritingStylePreset(presetId: string): void {
   if (!appStore.currentProject?.id) {
@@ -181,6 +197,17 @@ function buildExportStem(suffix: string): string {
   return `${safeTitle}-${suffix}`
 }
 
+function buildExportEnvelope(moduleType: ImportExportModuleType, data: ProjectImportPayload): CharacterArcExportEnvelope {
+  return {
+    app: 'CharacterArc',
+    schemaVersion: '2.0',
+    moduleType,
+    compatibilityNote: '2.x 导出文件可直接导入当前版本；1.x 旧导出会按兼容模式解析，并默认按完整项目导入。',
+    exportedAt: new Date().toISOString(),
+    data
+  }
+}
+
 async function handleExportJson(): Promise<void> {
   const payload = {
     project: appStore.currentProject,
@@ -193,16 +220,11 @@ async function handleExportJson(): Promise<void> {
     outlineVolumes: appStore.outlineVolumes,
     outlineItems: appStore.outlineItems,
     chapters: appStore.chapters,
-    chapterVersions: appStore.chapterVersions,
-    exportedAt: new Date().toISOString()
+    chapterVersions: appStore.chapterVersions
   }
 
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'project',
-      ...payload
-    },
+    data: buildExportEnvelope('project', payload),
     title: '导出完整项目 JSON',
     defaultPath: `${buildExportStem('project')}.json`
   })
@@ -245,13 +267,10 @@ async function handleExportText(): Promise<void> {
 
 async function handleExportCharacters(): Promise<void> {
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'characters',
+    data: buildExportEnvelope('characters', {
       project: appStore.currentProject,
-      characters: appStore.characters,
-      exportedAt: new Date().toISOString()
-    },
+      characters: appStore.characters
+    }),
     title: '导出角色资料 JSON',
     defaultPath: `${buildExportStem('characters')}.json`
   })
@@ -268,14 +287,11 @@ async function handleExportCharacters(): Promise<void> {
 
 async function handleExportOutline(): Promise<void> {
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'outline',
+    data: buildExportEnvelope('outline', {
       project: appStore.currentProject,
       outlineVolumes: appStore.outlineVolumes,
-      outlineItems: appStore.outlineItems,
-      exportedAt: new Date().toISOString()
-    },
+      outlineItems: appStore.outlineItems
+    }),
     title: '导出大纲节点 JSON',
     defaultPath: `${buildExportStem('outline')}.json`
   })
@@ -292,13 +308,10 @@ async function handleExportOutline(): Promise<void> {
 
 async function handleExportInspiration(): Promise<void> {
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'inspiration',
+    data: buildExportEnvelope('inspiration', {
       project: appStore.currentProject,
-      inspirationEntries: appStore.inspirationEntries,
-      exportedAt: new Date().toISOString()
-    },
+      inspirationEntries: appStore.inspirationEntries
+    }),
     title: '导出灵感卡片 JSON',
     defaultPath: `${buildExportStem('inspiration')}.json`
   })
@@ -315,15 +328,13 @@ async function handleExportInspiration(): Promise<void> {
 
 async function handleExportRelations(): Promise<void> {
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'relations',
+    data: buildExportEnvelope('relations', {
       project: appStore.currentProject,
+      characters: appStore.characters,
       organizations: appStore.organizations,
       characterRelationships: appStore.characterRelationships,
-      organizationMemberships: appStore.organizationMemberships,
-      exportedAt: new Date().toISOString()
-    },
+      organizationMemberships: appStore.organizationMemberships
+    }),
     title: '导出关系组织 JSON',
     defaultPath: `${buildExportStem('relations')}.json`
   })
@@ -340,14 +351,12 @@ async function handleExportRelations(): Promise<void> {
 
 async function handleExportChaptersJson(): Promise<void> {
   const result = await window.characterArc.exportJson({
-    data: {
-      version: '1.0',
-      type: 'chapters',
+    data: buildExportEnvelope('chapters', {
       project: appStore.currentProject,
       outlineVolumes: appStore.outlineVolumes,
       chapters: appStore.chapters,
-      exportedAt: new Date().toISOString()
-    },
+      chapterVersions: appStore.chapterVersions
+    }),
     title: '导出章节数据 JSON',
     defaultPath: `${buildExportStem('chapters')}.json`
   })
@@ -373,20 +382,40 @@ async function handleImportJson(): Promise<void> {
     return
   }
 
-  appStore.importProjectData(result.payload as {
-    project?: import('@/types/app').ProjectSummary
-    worldviewEntries?: import('@/types/app').WorldviewEntry[]
-    characters?: import('@/types/app').CharacterCard[]
-    organizations?: import('@/types/app').OrganizationEntry[]
-    characterRelationships?: import('@/types/app').CharacterRelationship[]
-    organizationMemberships?: import('@/types/app').OrganizationMembership[]
-    inspirationEntries?: import('@/types/app').InspirationEntry[]
-    outlineVolumes?: import('@/types/app').OutlineVolume[]
-    outlineItems?: import('@/types/app').OutlineItem[]
-    chapters?: import('@/types/app').ChapterDraft[]
-    chapterVersions?: import('@/types/app').ChapterVersion[]
-  })
-  message.success('项目数据已导入')
+  const payload = result.payload as ProjectImportPayload
+  const meta = result.meta ?? {
+    schemaVersion: '1.0',
+    moduleType: 'project' as const,
+    compatibilityNote: '这是旧版 1.x 导出文件，系统已按兼容模式识别为完整项目导入。',
+    isLegacy: true
+  }
+
+  if (meta.moduleType === 'project') {
+    appStore.importProjectData(payload)
+    message.success(meta.isLegacy ? '旧版项目数据已按兼容模式导入' : '项目数据已导入')
+    return
+  }
+
+  pendingImportPayload.value = payload
+  pendingImportMeta.value = meta
+  importConflictMode.value = 'copy'
+  importModalVisible.value = true
+}
+
+function confirmModuleImport(): void {
+  if (!pendingImportPayload.value || !pendingImportMeta.value) {
+    return
+  }
+
+  appStore.importModuleData(pendingImportMeta.value.moduleType, pendingImportPayload.value, importConflictMode.value)
+  importModalVisible.value = false
+  message.success(`${importModuleLabelMap[pendingImportMeta.value.moduleType]}已导入到当前项目`)
+}
+
+function closeImportModal(): void {
+  importModalVisible.value = false
+  pendingImportPayload.value = null
+  pendingImportMeta.value = null
 }
 </script>
 
@@ -495,7 +524,7 @@ async function handleImportJson(): Promise<void> {
             <template #icon>
               <Download :size="16" />
             </template>
-            导入项目 JSON
+            导入 JSON
           </n-button>
           <n-button round strong @click="handleExportJson">
             <template #icon>
@@ -614,6 +643,45 @@ async function handleImportJson(): Promise<void> {
         </div>
       </n-card>
     </div>
+
+    <n-modal
+      :show="importModalVisible"
+      preset="card"
+      class="arc-editor-modal import-modal"
+      title="导入模块数据"
+      :bordered="false"
+      @close="closeImportModal"
+    >
+      <div class="import-modal-body">
+        <div class="storage-status">
+          <strong>{{ pendingImportMeta ? `检测到 ${importModuleLabelMap[pendingImportMeta.moduleType]} 导入包` : '等待导入文件' }}</strong>
+          <span>{{ pendingImportMeta?.compatibilityNote || '请确认导入策略后再继续。' }}</span>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-name">Schema 版本</div>
+            <div class="setting-hint">旧版本文件会按兼容模式导入，当前不会直接拒绝 1.x 导出。</div>
+          </div>
+          <div class="import-meta-pill">{{ pendingImportMeta?.schemaVersion || '--' }}</div>
+        </div>
+
+        <n-form-item label="冲突处理策略">
+          <n-select v-model:value="importConflictMode" :options="importConflictOptions" />
+        </n-form-item>
+
+        <div class="setting-hint">
+          新建副本会尽量保留当前项目现有数据；覆盖当前模块只覆盖对应模块，不会删除整个项目。
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="setting-actions">
+          <n-button round strong @click="closeImportModal">取消</n-button>
+          <n-button type="primary" round strong @click="confirmModuleImport">开始导入</n-button>
+        </div>
+      </template>
+    </n-modal>
   </section>
 </template>
 
@@ -896,6 +964,26 @@ async function handleImportJson(): Promise<void> {
 .storage-status.error span,
 .storage-status.error strong {
   color: #991b1b;
+}
+
+.import-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  border: 1px solid rgba(191, 219, 254, 0.92);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.96);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
 }
 
 .theme-swatches {

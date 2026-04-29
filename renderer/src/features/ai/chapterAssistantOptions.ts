@@ -86,6 +86,24 @@ export const chapterAssistantQuickActions = [
     length: 'medium' as const,
     task: 'chat' as const,
     requiresSelection: false
+  },
+  {
+    label: '关系冲突',
+    prompt: '请结合当前章节、已有人物关系、组织阵营与成员归属，给出 3 条更能推动剧情的关系驱动冲突建议。每条都要说明冲突双方、阵营立场和可落地到本章或下一章的触发点。',
+    icon: Lightbulb,
+    mode: 'suggest' as const,
+    length: 'medium' as const,
+    task: 'chat' as const,
+    requiresSelection: false
+  },
+  {
+    label: '阵营视角',
+    prompt: '请基于当前章节内容，改写或补写一段更鲜明体现某个组织或阵营立场的正文，让人物态度、用词和冲突重心更贴合其归属。',
+    icon: Sparkles,
+    mode: 'polish' as const,
+    length: 'medium' as const,
+    task: 'chat' as const,
+    requiresSelection: false
   }
 ] as const
 
