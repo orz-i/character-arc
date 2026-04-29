@@ -60,6 +60,12 @@ export interface AssistantPromptRequest {
   quickAction?: string
 }
 
+export interface ChapterInsertionRequest {
+  id: string
+  chapterId: string
+  content: string
+}
+
 export interface ChapterDraft {
   id: string
   volumeId: string
@@ -97,4 +103,5 @@ export interface AppSettings {
   apiKey: string
   baseUrl: string
   autoSaveInterval: string
+  uiScale: number
 }

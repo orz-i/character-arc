@@ -41,6 +41,16 @@ declare global {
         canceled: boolean
         filePath?: string
       }>
+      setZoomFactor: (factor: number) => Promise<{
+        success: boolean
+        factor?: number
+        error?: string
+      }>
+      getZoomFactor: () => Promise<{
+        success: boolean
+        factor?: number
+        error?: string
+      }>
       importJson: () => Promise<{
         success: boolean
         canceled: boolean

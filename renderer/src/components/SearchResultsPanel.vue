@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { BookOpenText, FileText, GitMerge, Globe2, Search, Sparkles, Users } from 'lucide-vue-next'
+import { getChapterCharacterCount, getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
 
@@ -69,12 +70,16 @@ const resultGroups = computed<ResultGroup[]>(() => {
     }))
 
   const chapterItems = appStore.chapters
-    .filter((chapter) => `${chapter.title} ${chapter.summary} ${chapter.wordTarget} ${chapter.status} ${chapter.content}`.toLowerCase().includes(query))
+    .filter((chapter) =>
+      `${chapter.title} ${chapter.summary} ${chapter.wordTarget} ${chapter.status} ${getPlainTextFromEditorContent(chapter.content)}`
+        .toLowerCase()
+        .includes(query)
+    )
     .map((chapter) => ({
       id: chapter.id,
       title: chapter.title,
-      summary: chapter.summary || chapter.content || '章节尚未写入正文内容。',
-      meta: `${chapter.wordTarget} · ${chapter.content.trim().length} 字`,
+      summary: chapter.summary || getChapterPreviewText(chapter.content),
+      meta: `${chapter.wordTarget} · ${getChapterCharacterCount(chapter.content)} 字`,
       chapterId: chapter.id
     }))
 

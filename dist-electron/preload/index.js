@@ -9,5 +9,7 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
   generateAi: (payload) => electron.ipcRenderer.invoke("characterarc:ai-generate", payload),
   exportJson: (payload) => electron.ipcRenderer.invoke("characterarc:export-json", payload),
   exportText: (payload) => electron.ipcRenderer.invoke("characterarc:export-text", payload),
+  setZoomFactor: (factor) => electron.ipcRenderer.invoke("characterarc:set-zoom-factor", factor),
+  getZoomFactor: () => electron.ipcRenderer.invoke("characterarc:get-zoom-factor"),
   importJson: () => electron.ipcRenderer.invoke("characterarc:import-json")
 });

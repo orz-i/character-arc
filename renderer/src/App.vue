@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, NSpin } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { createNaiveThemeOverrides } from '@/theme/presets'
@@ -31,6 +31,15 @@ const appStyleVars = computed(() => ({
   '--arc-titlebar-height': platform === 'win32' ? '28px' : platform === 'darwin' ? '24px' : '0px',
   '--arc-window-controls-width': platform === 'win32' ? '138px' : '0px'
 }))
+
+watch(
+  () => appStore.appSettings.uiScale,
+  async (factor) => {
+    const nextFactor = Number.isFinite(factor) ? Math.min(1.75, Math.max(0.75, factor)) : 1
+    await window.characterArc.setZoomFactor(nextFactor)
+  },
+  { immediate: true }
+)
 </script>
 
 <template>

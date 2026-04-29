@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowDownToLine, Bot, Lightbulb, PenTool, ScrollText, SendHorizonal, Sparkles } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
+import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -67,7 +68,7 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
         chapterSummary: currentChapter.value?.summary,
         chapterStatus: currentChapter.value?.status,
         chapterWordTarget: currentChapter.value?.wordTarget,
-        chapterContent: currentChapter.value?.content,
+        chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
         worldviewEntries: appStore.worldviewEntries.map((entry) => ({
           title: entry.title,
           content: entry.content
@@ -105,7 +106,12 @@ function handleQuickAction(action: (typeof quickActions)[number]): void {
 }
 
 function handleInsert(content: string): void {
-  appStore.insertIntoChapter(content)
+  const inserted = appStore.insertIntoChapter(content)
+  if (!inserted) {
+    message.warning('当前没有可插入内容的章节')
+    return
+  }
+
   message.success('AI 内容已插入正文')
 }
 
@@ -430,6 +436,31 @@ watch(
   .assistant-shell {
     width: 260px;
     min-width: 260px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .assistant-shell {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .assistant-head {
+    padding: 14px 18px 12px;
+  }
+
+  .assistant-quick-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .assistant-messages {
+    padding-bottom: 12px;
+  }
+}
+
+@media (max-width: 920px) {
+  .assistant-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

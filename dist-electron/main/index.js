@@ -401,7 +401,8 @@ async function ensureWorkspaceDb() {
       model TEXT NOT NULL,
       api_key TEXT NOT NULL,
       base_url TEXT NOT NULL,
-      auto_save_interval TEXT NOT NULL
+      auto_save_interval TEXT NOT NULL,
+      ui_scale REAL NOT NULL DEFAULT 1
     ) STRICT;
   `);
   ensureAppSettingsColumns(workspaceDb);
@@ -416,6 +417,9 @@ function ensureAppSettingsColumns(db) {
   const columnNames = new Set(columns.map((column) => column.name));
   if (!columnNames.has("model")) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN model TEXT NOT NULL DEFAULT 'deepseek-chat';`);
+  }
+  if (!columnNames.has("ui_scale")) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN ui_scale REAL NOT NULL DEFAULT 1;`);
   }
 }
 function ensureChapterColumns(db) {
@@ -464,6 +468,17 @@ async function migrateLegacyWorkspaceFile(db) {
   } catch {
   }
 }
+function normalizeAppSettings(settings) {
+  const uiScale = settings?.uiScale !== void 0 && Number.isFinite(settings.uiScale) ? Math.min(1.75, Math.max(0.75, settings.uiScale)) : 1;
+  return {
+    provider: settings?.provider || "deepseek",
+    model: settings?.model || "deepseek-chat",
+    apiKey: settings?.apiKey || "sk-1234567890abcdef",
+    baseUrl: settings?.baseUrl || "https://api.deepseek.com/v1",
+    autoSaveInterval: settings?.autoSaveInterval || "5m",
+    uiScale
+  };
+}
 function createFallbackVolume(title = "故事开端", volumeId = "volume-legacy-default") {
   return {
     id: volumeId,
@@ -474,7 +489,10 @@ function createFallbackVolume(title = "故事开端", volumeId = "volume-legacy-
 }
 function normalizeWorkspacePayload(payload) {
   if ("workspaces" in payload && payload.workspaces) {
-    return payload;
+    return {
+      ...payload,
+      appSettings: normalizeAppSettings(payload.appSettings)
+    };
   }
   const legacyPayload = payload;
   const projects = legacyPayload.projects?.length ? legacyPayload.projects : [];
@@ -504,7 +522,7 @@ function normalizeWorkspacePayload(payload) {
     selectedProjectId,
     projects,
     workspaces,
-    appSettings: legacyPayload.appSettings
+    appSettings: normalizeAppSettings(legacyPayload.appSettings)
   };
 }
 function readWorkspaceSnapshot(db) {
@@ -561,7 +579,7 @@ function readWorkspaceSnapshot(db) {
   `).all();
   const settings = db.prepare(`
     SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
-    , model
+    , model, ui_scale AS uiScale
     FROM app_settings
     WHERE id = 1
   `).get();
@@ -588,11 +606,14 @@ function readWorkspaceSnapshot(db) {
     projects,
     workspaces,
     appSettings: {
-      provider: settings.provider,
-      model: settings.model,
-      apiKey: settings.apiKey,
-      baseUrl: settings.baseUrl,
-      autoSaveInterval: settings.autoSaveInterval
+      ...normalizeAppSettings({
+        provider: settings.provider,
+        model: settings.model,
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        autoSaveInterval: settings.autoSaveInterval,
+        uiScale: settings.uiScale
+      })
     }
   };
 }
@@ -706,16 +727,17 @@ function writeWorkspaceSnapshot(db, payload) {
       });
     }
     db.prepare(`
-      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, auto_save_interval)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, auto_save_interval, ui_scale)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
       payload.selectedProjectId,
-      payload.appSettings.provider,
-      payload.appSettings.model,
-      payload.appSettings.apiKey,
-      payload.appSettings.baseUrl,
-      payload.appSettings.autoSaveInterval
+      normalizeAppSettings(payload.appSettings).provider,
+      normalizeAppSettings(payload.appSettings).model,
+      normalizeAppSettings(payload.appSettings).apiKey,
+      normalizeAppSettings(payload.appSettings).baseUrl,
+      normalizeAppSettings(payload.appSettings).autoSaveInterval,
+      normalizeAppSettings(payload.appSettings).uiScale
     );
     db.exec("COMMIT");
   } catch (error) {
@@ -970,6 +992,35 @@ electron.ipcMain.handle("characterarc:load-workspace", async () => {
       error: error instanceof Error ? error.message : "Unknown workspace load error"
     };
   }
+});
+electron.ipcMain.handle("characterarc:get-zoom-factor", () => {
+  const window = electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0];
+  if (!window) {
+    return {
+      success: false,
+      error: "No active window"
+    };
+  }
+  return {
+    success: true,
+    factor: window.webContents.getZoomFactor()
+  };
+});
+electron.ipcMain.handle("characterarc:set-zoom-factor", (_event, factor) => {
+  const window = electron.BrowserWindow.getFocusedWindow() ?? electron.BrowserWindow.getAllWindows()[0];
+  if (!window) {
+    return {
+      success: false,
+      error: "No active window"
+    };
+  }
+  const numericFactor = typeof factor === "number" ? factor : Number(factor);
+  const nextFactor = Number.isFinite(numericFactor) ? Math.min(1.75, Math.max(0.75, numericFactor)) : 1;
+  window.webContents.setZoomFactor(nextFactor);
+  return {
+    success: true,
+    factor: nextFactor
+  };
 });
 electron.ipcMain.handle("characterarc:save-workspace", async (_event, payload) => {
   try {

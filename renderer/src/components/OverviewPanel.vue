@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { BookCopy, Clock3, FileText, GitMerge, Sparkles, Users } from 'lucide-vue-next'
+import { getChapterCharacterCount, getChapterPreviewText } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
 
@@ -16,7 +17,7 @@ const totalCharacters = computed(() => appStore.characters.length)
 const totalOutlineItems = computed(() => appStore.outlineItems.length)
 const totalChapters = computed(() => appStore.chapters.length)
 const totalWords = computed(() =>
-  appStore.chapters.reduce((count, chapter) => count + chapter.content.trim().length, 0)
+  appStore.chapters.reduce((count, chapter) => count + getChapterCharacterCount(chapter.content), 0)
 )
 
 const overviewCards = computed(() => [
@@ -78,7 +79,7 @@ const quickEntries = computed(() => {
       id: `chapter-${chapter.id}`,
       type: '章节',
       title: chapter.title,
-      description: chapter.content || '章节尚未写入内容'
+      description: getChapterPreviewText(chapter.content, '章节尚未写入内容')
     }))
   ]
 

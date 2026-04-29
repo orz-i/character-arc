@@ -11,6 +11,7 @@ import type {
   AssistantPromptRequest,
   AppSettings,
   ChapterDraft,
+  ChapterInsertionRequest,
   ChapterVersion,
   ChatMessage,
   CharacterCard,
@@ -77,7 +78,19 @@ const defaultAppSettings: AppSettings = {
   model: 'deepseek-chat',
   apiKey: 'sk-1234567890abcdef',
   baseUrl: 'https://api.deepseek.com/v1',
-  autoSaveInterval: '5m'
+  autoSaveInterval: '5m',
+  uiScale: 1
+}
+
+function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
+  return {
+    ...defaultAppSettings,
+    ...settings,
+    uiScale:
+      settings?.uiScale !== undefined && Number.isFinite(settings.uiScale)
+        ? Math.min(1.75, Math.max(0.75, settings.uiScale))
+        : defaultAppSettings.uiScale
+  }
 }
 
 function loadStoredState(): StoredState {
@@ -205,7 +218,7 @@ export const useAppStore = defineStore('app', () => {
   const projectWorkspaces = ref<Record<string, ProjectWorkspaceData>>(stored.workspaces)
   const appSettings = ref<AppSettings>(stored.appSettings)
   const pendingAssistantRequest = ref<AssistantPromptRequest | null>(null)
-  const chapterSelection = ref<{ start: number; end: number } | null>(null)
+  const pendingChapterInsertion = ref<ChapterInsertionRequest | null>(null)
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
 
   const currentWorkspace = computed(
@@ -291,7 +304,7 @@ export const useAppStore = defineStore('app', () => {
       ensureProjectWorkspace(project.id, index === 0 && project.id === defaultProjects[0].id)
     }
 
-    appSettings.value = payload.appSettings ?? defaultAppSettings
+    appSettings.value = normalizeAppSettings(payload.appSettings)
     syncSelectedChapter()
   }
 
@@ -379,7 +392,7 @@ export const useAppStore = defineStore('app', () => {
       })
     }
     selectedProjectId.value = project.id
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     currentView.value = 'workbench'
     activePanel.value = 'overview'
     syncSelectedChapter(project.id)
@@ -398,7 +411,7 @@ export const useAppStore = defineStore('app', () => {
       syncSelectedChapter()
     }
 
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     activePanel.value = 'chapters'
     currentView.value = 'chapter-studio'
   }
@@ -418,7 +431,7 @@ export const useAppStore = defineStore('app', () => {
 
     ensureProjectWorkspace(projectId)
     selectedProjectId.value = projectId
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     currentView.value = 'workbench'
     activePanel.value = 'world'
     lastWorkbenchPanel.value = 'world'
@@ -466,7 +479,7 @@ export const useAppStore = defineStore('app', () => {
       })
     }
     selectedProjectId.value = projectId
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     aiVisible.value = true
     currentView.value = 'workbench'
     activePanel.value = payload.worldviewEntries?.length || payload.outlineItems?.length ? 'overview' : 'chapters'
@@ -494,7 +507,7 @@ export const useAppStore = defineStore('app', () => {
 
     if (selectedProjectId.value === projectId) {
       selectedProjectId.value = projects.value[0].id
-      chapterSelection.value = null
+      pendingChapterInsertion.value = null
       currentView.value = 'projects'
       syncSelectedChapter()
     }
@@ -657,7 +670,7 @@ export const useAppStore = defineStore('app', () => {
 
   function selectChapter(chapterId: string): void {
     selectedChapterId.value = chapterId
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     activePanel.value = 'chapters'
     currentView.value = 'chapter-studio'
   }
@@ -685,7 +698,7 @@ export const useAppStore = defineStore('app', () => {
     })
 
     selectedChapterId.value = nextChapterId || selectedChapterId.value
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
     activePanel.value = 'chapters'
     schedulePersist('fast')
   }
@@ -779,7 +792,7 @@ export const useAppStore = defineStore('app', () => {
     if (selectedChapterId.value === chapterId) {
       const fallback = chapters.value[Math.max(0, targetIndex - 1)] ?? chapters.value[0]
       selectedChapterId.value = fallback?.id ?? ''
-      chapterSelection.value = null
+      pendingChapterInsertion.value = null
     }
     schedulePersist('fast')
   }
@@ -890,7 +903,7 @@ export const useAppStore = defineStore('app', () => {
 
     selectedChapterId.value = version.chapterId
     activePanel.value = 'chapters'
-    chapterSelection.value = null
+    pendingChapterInsertion.value = null
 
     if (hasHydrated.value) {
       await persistWorkspace()
@@ -909,13 +922,6 @@ export const useAppStore = defineStore('app', () => {
 
   function toggleAi(): void {
     aiVisible.value = !aiVisible.value
-  }
-
-  function setChapterSelection(start: number, end: number): void {
-    chapterSelection.value = {
-      start,
-      end
-    }
   }
 
   function openAiAssistant(): void {
@@ -972,38 +978,28 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
-  function insertIntoChapter(content: string): void {
+  function insertIntoChapter(content: string): boolean {
     const chapter = selectedChapter.value
     if (!chapter) {
-      return
+      return false
     }
 
     const insertion = content.trim()
     if (!insertion) {
-      return
+      return false
     }
 
-    const selection = chapterSelection.value
-    if (!selection) {
-      updateChapter(chapter.id, {
-        content: `${chapter.content}\n\n${insertion}`.trim()
-      })
-      schedulePersist('autosave')
-      return
+    pendingChapterInsertion.value = {
+      id: `insert-${Date.now()}`,
+      chapterId: chapter.id,
+      content: insertion
     }
+    return true
+  }
 
-    const start = Math.max(0, Math.min(selection.start, chapter.content.length))
-    const end = Math.max(start, Math.min(selection.end, chapter.content.length))
-    const prefix = chapter.content.slice(0, start)
-    const suffix = chapter.content.slice(end)
-    updateChapter(chapter.id, {
-      content: `${prefix}${insertion}${suffix}`
-    })
-    schedulePersist('autosave')
-    const nextCursor = start + insertion.length
-    chapterSelection.value = {
-      start: nextCursor,
-      end: nextCursor
+  function consumeChapterInsertion(requestId: string): void {
+    if (pendingChapterInsertion.value?.id === requestId) {
+      pendingChapterInsertion.value = null
     }
   }
 
@@ -1061,6 +1057,7 @@ export const useAppStore = defineStore('app', () => {
     outlineVolumeGroups,
     outlineVolumes,
     pendingAssistantRequest,
+    pendingChapterInsertion,
     projects,
     pushAssistantMessage,
     pushUserMessage,
@@ -1072,11 +1069,11 @@ export const useAppStore = defineStore('app', () => {
     selectedChapterId,
     selectedChapterVolume,
     selectedProjectId,
-    setChapterSelection,
     setPanel,
     setTheme,
     theme,
     toggleAi,
+    consumeChapterInsertion,
     updateAppSetting,
     updateProject,
     updateChapter,

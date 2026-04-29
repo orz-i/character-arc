@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Palette, Save, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NSelect, useMessage } from 'naive-ui'
+import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
@@ -14,6 +15,14 @@ const themeOptions = themePresets.map((preset) => ({
   value: preset.name
 }))
 const autoSaveSelectOptions = [...autoSaveOptions]
+const uiScaleOptions = [
+  { label: '75%', value: 0.75 },
+  { label: '85%', value: 0.85 },
+  { label: '100%', value: 1 },
+  { label: '110%', value: 1.1 },
+  { label: '125%', value: 1.25 },
+  { label: '140%', value: 1.4 }
+]
 
 function buildExportStem(suffix: string): string {
   const projectTitle = appStore.currentProject?.title?.trim() || 'characterarc'
@@ -58,7 +67,7 @@ async function handleExportText(): Promise<void> {
     chapters: appStore.chapters.map((chapter) => ({
       volumeId: chapter.volumeId,
       title: chapter.title,
-      content: chapter.content
+      content: getPlainTextFromEditorContent(chapter.content)
     })),
     exportedAt: new Date().toISOString()
   }
@@ -248,6 +257,18 @@ async function handleImportJson(): Promise<void> {
             :options="autoSaveSelectOptions"
             :value="appStore.appSettings.autoSaveInterval"
             @update:value="(value) => appStore.updateAppSetting('autoSaveInterval', value ?? '5m')"
+          />
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-name">界面缩放比例</div>
+            <div class="setting-hint">调整整个应用的显示比例，适配高分屏和不同窗口尺寸。</div>
+          </div>
+          <n-select
+            class="compact-select"
+            :options="uiScaleOptions"
+            :value="appStore.appSettings.uiScale"
+            @update:value="(value) => appStore.updateAppSetting('uiScale', value ?? 1)"
           />
         </div>
         <div class="setting-actions">

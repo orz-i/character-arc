@@ -209,6 +209,24 @@ watch(
   }
 }
 
+@media (max-width: 1360px) {
+  .chapter-studio-page {
+    flex-direction: column;
+  }
+
+  .chapter-studio-main {
+    min-height: 0;
+  }
+
+  .chapter-studio-page :deep(.assistant-shell) {
+    width: 100%;
+    min-width: 0;
+    max-height: 340px;
+    border-left: none;
+    border-top: 1px solid rgba(226, 232, 240, 0.82);
+  }
+}
+
 @media (max-width: 720px) {
   .studio-body {
     padding: 14px;
