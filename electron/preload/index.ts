@@ -21,5 +21,50 @@ contextBridge.exposeInMainWorld('characterArc', {
   exportText: (payload: unknown) => ipcRenderer.invoke('characterarc:export-text', payload),
   setZoomFactor: (factor: number) => ipcRenderer.invoke('characterarc:set-zoom-factor', factor),
   getZoomFactor: () => ipcRenderer.invoke('characterarc:get-zoom-factor'),
-  importJson: () => ipcRenderer.invoke('characterarc:import-json')
+  importJson: () => ipcRenderer.invoke('characterarc:import-json'),
+  openAssistantWindow: () => ipcRenderer.invoke('characterarc:assistant-window-open'),
+  closeAssistantWindow: () => ipcRenderer.invoke('characterarc:assistant-window-close'),
+  getAssistantWindowState: () => ipcRenderer.invoke('characterarc:assistant-window-state'),
+  publishAssistantContext: (payload: unknown) => ipcRenderer.invoke('characterarc:assistant-context-publish', payload),
+  getAssistantContext: () => ipcRenderer.invoke('characterarc:assistant-context-get'),
+  publishAssistantPrompt: (payload: unknown) => ipcRenderer.invoke('characterarc:assistant-prompt-publish', payload),
+  getAssistantPrompt: () => ipcRenderer.invoke('characterarc:assistant-prompt-get'),
+  clearAssistantPrompt: (promptId: string) => ipcRenderer.invoke('characterarc:assistant-prompt-clear', promptId),
+  publishWorkspaceSync: (payload: unknown) => ipcRenderer.invoke('characterarc:workspace-sync-publish', payload),
+  publishAssistantCommand: (payload: unknown) => ipcRenderer.invoke('characterarc:assistant-command-publish', payload),
+  onAssistantWindowVisibility: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:assistant-window-visibility', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:assistant-window-visibility', listener)
+    }
+  },
+  onAssistantContext: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:assistant-context', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:assistant-context', listener)
+    }
+  },
+  onAssistantPrompt: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:assistant-prompt', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:assistant-prompt', listener)
+    }
+  },
+  onWorkspaceSync: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:workspace-sync-event', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:workspace-sync-event', listener)
+    }
+  },
+  onAssistantCommand: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:assistant-command', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:assistant-command', listener)
+    }
+  }
 })

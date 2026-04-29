@@ -9,9 +9,33 @@ const APP_DEFAULT_WIDTH = 1480
 const APP_DEFAULT_HEIGHT = 920
 const APP_MIN_WIDTH = 1120
 const APP_MIN_HEIGHT = 720
+const ASSISTANT_WINDOW_WIDTH = 580
+const ASSISTANT_WINDOW_HEIGHT = 820
+const ASSISTANT_WINDOW_MIN_WIDTH = 460
+const ASSISTANT_WINDOW_MIN_HEIGHT = 620
 const WORKSPACE_DB = 'workspace.db'
 const WORKSPACE_FILE = 'workspace.json'
 const activeAiStreams = new Map<string, AbortController>()
+let mainWindow: BrowserWindow | null = null
+let assistantWindow: BrowserWindow | null = null
+
+type AppWindowKind = 'main' | 'assistant'
+
+type AssistantContextPayload = {
+  selectedProjectId?: string
+  selectedChapterId?: string
+  currentChapterSelection?: {
+    chapterId: string
+    text: string
+  } | null
+}
+
+let latestAssistantContext: AssistantContextPayload = {}
+let latestAssistantPrompt: {
+  id: string
+  prompt: string
+  quickAction?: string
+} | null = null
 
 function getMainWindowMetrics() {
   const { workAreaSize } = screen.getPrimaryDisplay()
@@ -30,7 +54,53 @@ function getMainWindowMetrics() {
   }
 }
 
-function createMainWindow(): void {
+function getWindowSearch(kind: AppWindowKind): string {
+  return kind === 'assistant' ? '?window=assistant' : ''
+}
+
+function loadRendererWindow(window: BrowserWindow, kind: AppWindowKind): void {
+  const search = getWindowSearch(kind)
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${search}`)
+    if (kind === 'main') {
+      window.webContents.openDevTools({ mode: 'detach' })
+    }
+    return
+  }
+
+  void window.loadFile(join(__dirname, '../../dist/index.html'), search ? { search } : undefined)
+}
+
+function sendWindowEvent(window: BrowserWindow | null, channel: string, payload: unknown): void {
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return
+  }
+
+  window.webContents.send(channel, payload)
+}
+
+function broadcastWindowEvent(channel: string, payload: unknown, exceptWebContentsId?: number): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) {
+      continue
+    }
+
+    if (exceptWebContentsId && window.webContents.id === exceptWebContentsId) {
+      continue
+    }
+
+    window.webContents.send(channel, payload)
+  }
+}
+
+function emitAssistantWindowVisibility(visible: boolean): void {
+  broadcastWindowEvent('characterarc:assistant-window-visibility', {
+    visible
+  })
+}
+
+function createMainWindow(): BrowserWindow {
   const { width, height, minWidth, minHeight, compactScreen } = getMainWindowMetrics()
   const window = new BrowserWindow({
     width,
@@ -69,12 +139,95 @@ function createMainWindow(): void {
     return { action: 'deny' }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(process.env.ELECTRON_RENDERER_URL)
-    window.webContents.openDevTools({ mode: 'detach' })
-  } else {
-    void window.loadFile(join(__dirname, '../../dist/index.html'))
+  window.on('closed', () => {
+    if (assistantWindow && !assistantWindow.isDestroyed()) {
+      assistantWindow.close()
+    }
+
+    if (mainWindow === window) {
+      mainWindow = null
+    }
+  })
+
+  loadRendererWindow(window, 'main')
+  mainWindow = window
+  return window
+}
+
+function createAssistantWindow(): BrowserWindow {
+  if (assistantWindow && !assistantWindow.isDestroyed()) {
+    if (assistantWindow.isMinimized()) {
+      assistantWindow.restore()
+    }
+    assistantWindow.show()
+    assistantWindow.focus()
+    emitAssistantWindowVisibility(true)
+    sendWindowEvent(assistantWindow, 'characterarc:assistant-context', latestAssistantContext)
+    return assistantWindow
   }
+
+  const parentBounds = mainWindow?.getBounds()
+  const assistantX = parentBounds ? parentBounds.x + parentBounds.width - ASSISTANT_WINDOW_WIDTH - 32 : undefined
+  const assistantY = parentBounds ? parentBounds.y + 44 : undefined
+
+  const window = new BrowserWindow({
+    width: ASSISTANT_WINDOW_WIDTH,
+    height: ASSISTANT_WINDOW_HEIGHT,
+    minWidth: ASSISTANT_WINDOW_MIN_WIDTH,
+    minHeight: ASSISTANT_WINDOW_MIN_HEIGHT,
+    x: assistantX,
+    y: assistantY,
+    parent: mainWindow ?? undefined,
+    autoHideMenuBar: true,
+    title: 'AI 创作助理',
+    maximizable: false,
+    fullscreenable: false,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarOverlay:
+      process.platform === 'win32'
+        ? {
+            color: '#f5f5f7',
+            symbolColor: '#1d1d1f',
+            height: 28
+          }
+        : false,
+    backgroundColor: '#f5f5f7',
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  window.once('ready-to-show', () => {
+    window.show()
+    window.focus()
+    emitAssistantWindowVisibility(true)
+  })
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  window.webContents.once('did-finish-load', () => {
+    sendWindowEvent(window, 'characterarc:assistant-context', latestAssistantContext)
+    if (latestAssistantPrompt) {
+      sendWindowEvent(window, 'characterarc:assistant-prompt', latestAssistantPrompt)
+    }
+  })
+
+  window.on('closed', () => {
+    if (assistantWindow === window) {
+      assistantWindow = null
+    }
+    emitAssistantWindowVisibility(false)
+  })
+
+  loadRendererWindow(window, 'assistant')
+  assistantWindow = window
+  return window
 }
 
 function getWorkspaceDirPath(): string {
@@ -1186,6 +1339,97 @@ ipcMain.handle('characterarc:ai-test-connection', async (_event, settings: unkno
       success: false,
       error: error instanceof Error ? error.message : 'AI 连接测试失败'
     }
+  }
+})
+
+ipcMain.handle('characterarc:assistant-window-open', async () => {
+  try {
+    createAssistantWindow()
+    return {
+      success: true,
+      visible: true
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'AI 助手窗口打开失败'
+    }
+  }
+})
+
+ipcMain.handle('characterarc:assistant-window-close', async () => {
+  try {
+    if (assistantWindow && !assistantWindow.isDestroyed()) {
+      assistantWindow.close()
+    } else {
+      emitAssistantWindowVisibility(false)
+    }
+
+    return {
+      success: true,
+      visible: false
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'AI 助手窗口关闭失败'
+    }
+  }
+})
+
+ipcMain.handle('characterarc:assistant-window-state', () => ({
+  success: true,
+  visible: Boolean(assistantWindow && !assistantWindow.isDestroyed())
+}))
+
+ipcMain.handle('characterarc:assistant-context-publish', (_event, payload: unknown) => {
+  latestAssistantContext = payload && typeof payload === 'object' ? (payload as AssistantContextPayload) : {}
+  sendWindowEvent(assistantWindow, 'characterarc:assistant-context', latestAssistantContext)
+  return {
+    success: true
+  }
+})
+
+ipcMain.handle('characterarc:assistant-context-get', () => ({
+  success: true,
+  payload: latestAssistantContext
+}))
+
+ipcMain.handle('characterarc:assistant-prompt-publish', (_event, payload: unknown) => {
+  latestAssistantPrompt =
+    payload && typeof payload === 'object' ? (payload as { id: string; prompt: string; quickAction?: string }) : null
+  sendWindowEvent(assistantWindow, 'characterarc:assistant-prompt', latestAssistantPrompt)
+  return {
+    success: true
+  }
+})
+
+ipcMain.handle('characterarc:assistant-prompt-get', () => ({
+  success: true,
+  payload: latestAssistantPrompt
+}))
+
+ipcMain.handle('characterarc:assistant-prompt-clear', (_event, promptId: unknown) => {
+  if (typeof promptId === 'string' && latestAssistantPrompt?.id === promptId) {
+    latestAssistantPrompt = null
+  }
+
+  return {
+    success: true
+  }
+})
+
+ipcMain.handle('characterarc:workspace-sync-publish', (event, payload: unknown) => {
+  broadcastWindowEvent('characterarc:workspace-sync-event', payload, event.sender.id)
+  return {
+    success: true
+  }
+})
+
+ipcMain.handle('characterarc:assistant-command-publish', (_event, payload: unknown) => {
+  sendWindowEvent(mainWindow, 'characterarc:assistant-command', payload)
+  return {
+    success: true
   }
 })
 

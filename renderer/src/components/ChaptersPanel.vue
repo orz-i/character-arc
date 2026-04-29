@@ -510,12 +510,12 @@ onBeforeUnmount(() => {
                     <PanelRightOpen v-else :size="14" />
                   </span>
                   <span class="assistant-toggle-copy">
-                    <span class="assistant-toggle-label">{{ appStore.aiVisible ? 'AI 助手已展开' : 'AI 助手已收起' }}</span>
-                    <span class="assistant-toggle-hint">{{ appStore.aiVisible ? '点击收起右栏' : '点击重新展开' }}</span>
+                    <span class="assistant-toggle-label">{{ appStore.aiVisible ? 'AI 助手窗口已打开' : 'AI 助手窗口已关闭' }}</span>
+                    <span class="assistant-toggle-hint">{{ appStore.aiVisible ? '点击关闭独立窗口' : '点击重新打开窗口' }}</span>
                   </span>
                 </button>
               </template>
-              {{ appStore.aiVisible ? '隐藏 AI 助手' : '显示 AI 助手' }}
+              {{ appStore.aiVisible ? '关闭 AI 助手窗口' : '打开 AI 助手窗口' }}
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>

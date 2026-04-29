@@ -24,6 +24,44 @@ declare global {
         error: string
       }
 
+  type CharacterArcAssistantVisibilityPayload = {
+    visible: boolean
+  }
+
+  type CharacterArcAssistantContextPayload = {
+    selectedProjectId?: string
+    selectedChapterId?: string
+    currentChapterSelection?: {
+      chapterId: string
+      text: string
+    } | null
+  }
+
+  type CharacterArcAssistantCommand =
+    | {
+        type: 'insert-into-chapter'
+        content: string
+        mode: import('@/types/app').ChapterInsertionMode
+      }
+    | {
+        type: 'update-chapter-title'
+        value: string
+      }
+    | {
+        type: 'update-chapter-summary'
+        value: string
+      }
+    | {
+        type: 'create-outline-item'
+        payload: Partial<import('@/types/app').OutlineItem>
+      }
+
+  type CharacterArcAssistantPromptPayload = {
+    id: string
+    prompt: string
+    quickAction?: string
+  }
+
   interface Window {
     characterArc: {
       platform: string
@@ -91,6 +129,56 @@ declare global {
         payload?: unknown
         error?: string
       }>
+      openAssistantWindow: () => Promise<{
+        success: boolean
+        visible?: boolean
+        error?: string
+      }>
+      closeAssistantWindow: () => Promise<{
+        success: boolean
+        visible?: boolean
+        error?: string
+      }>
+      getAssistantWindowState: () => Promise<{
+        success: boolean
+        visible?: boolean
+        error?: string
+      }>
+      publishAssistantContext: (payload: CharacterArcAssistantContextPayload) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      getAssistantContext: () => Promise<{
+        success: boolean
+        payload?: CharacterArcAssistantContextPayload
+        error?: string
+      }>
+      publishAssistantPrompt: (payload: CharacterArcAssistantPromptPayload) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      getAssistantPrompt: () => Promise<{
+        success: boolean
+        payload?: CharacterArcAssistantPromptPayload | null
+        error?: string
+      }>
+      clearAssistantPrompt: (promptId: string) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      publishWorkspaceSync: (payload: unknown) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      publishAssistantCommand: (payload: CharacterArcAssistantCommand) => Promise<{
+        success: boolean
+        error?: string
+      }>
+      onAssistantWindowVisibility: (callback: (payload: CharacterArcAssistantVisibilityPayload) => void) => () => void
+      onAssistantContext: (callback: (payload: CharacterArcAssistantContextPayload) => void) => () => void
+      onAssistantPrompt: (callback: (payload: CharacterArcAssistantPromptPayload | null) => void) => () => void
+      onWorkspaceSync: (callback: (payload: unknown) => void) => () => void
+      onAssistantCommand: (callback: (payload: CharacterArcAssistantCommand) => void) => () => void
     }
   }
 }

@@ -7,6 +7,8 @@ import ProjectCenter from '@/pages/ProjectCenter.vue'
 import ProjectWizardPage from '@/pages/ProjectWizardPage.vue'
 import WorkbenchPage from '@/pages/WorkbenchPage.vue'
 import ChapterStudioPage from '@/pages/ChapterStudioPage.vue'
+import AssistantWindowPage from '@/pages/AssistantWindowPage.vue'
+import { isAssistantWindow } from '@/utils/windowKind'
 
 const appStore = useAppStore()
 const platform = window.characterArc?.platform ?? 'unknown'
@@ -62,7 +64,8 @@ watch(
               <p>正在载入本地工作区...</p>
             </div>
             <Transition v-else name="view-fade" mode="out-in">
-              <ProjectCenter v-if="appStore.currentView === 'projects'" key="projects" />
+              <AssistantWindowPage v-if="isAssistantWindow" key="assistant-window" />
+              <ProjectCenter v-else-if="appStore.currentView === 'projects'" key="projects" />
               <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
               <ChapterStudioPage v-else-if="appStore.currentView === 'chapter-studio'" key="chapter-studio" />
               <WorkbenchPage v-else key="workbench" />

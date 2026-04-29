@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDownToLine, Bot, PanelRightClose, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
+import { ArrowDownToLine, Bot, RotateCcw, SendHorizonal, Square } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
 import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/features/ai/chapterAssistantOptions'
 import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
+import { isAssistantWindow } from '@/utils/windowKind'
 import type { ChapterInsertionMode } from '@/types/app'
 
 const appStore = useAppStore()
@@ -237,6 +238,33 @@ function handleQuickAction(action: ChapterAssistantQuickAction): void {
 }
 
 function handleInsert(content: string, mode: ChapterInsertionMode): void {
+  const insertion = content.trim()
+  if (!appStore.selectedChapter || !insertion) {
+    message.warning('当前没有可插入内容的章节')
+    return
+  }
+
+  if (isAssistantWindow) {
+    void window.characterArc.publishAssistantCommand({
+      type: 'insert-into-chapter',
+      content: insertion,
+      mode
+    })
+
+    if (mode === 'append') {
+      message.success('AI 内容已发送到主窗口并准备追加到正文末尾')
+      return
+    }
+
+    if (mode === 'replace-selection') {
+      message.success('AI 内容已发送到主窗口并准备替换当前选区')
+      return
+    }
+
+    message.success('AI 内容已发送到主窗口，等待插入正文')
+    return
+  }
+
   const inserted = appStore.insertIntoChapter(content, mode)
   if (!inserted) {
     message.warning('当前没有可插入内容的章节')
@@ -406,15 +434,6 @@ watch(
           <p>围绕当前章节给建议、润色或续写。</p>
         </div>
       </div>
-      <button
-        type="button"
-        class="assistant-collapse"
-        title="收起右侧助手栏"
-        @click="appStore.toggleAi()"
-      >
-        <PanelRightClose :size="15" />
-        <span>收起侧栏</span>
-      </button>
     </header>
 
     <div class="assistant-quick-actions">

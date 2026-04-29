@@ -24,6 +24,7 @@ import {
   type LegacyStoredState,
   type StoredState
 } from '@/features/workspace/storeHelpers'
+import { characterArcWindowKind, isAssistantWindow } from '@/utils/windowKind'
 import type {
   AssistantPromptRequest,
   AppSettings,
@@ -65,6 +66,7 @@ export const useAppStore = defineStore('app', () => {
   const hasHydrated = ref(false)
   const persistenceError = ref<string | null>(null)
   let saveTimer: number | null = null
+  let workspaceSyncTimer: number | null = null
   const scheduledPersistAt = ref<number | null>(null)
   const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio'>('projects')
   const activePanel = ref<PanelName>('world')
@@ -79,6 +81,7 @@ export const useAppStore = defineStore('app', () => {
   const pendingChapterInsertion = ref<ChapterInsertionRequest | null>(null)
   const currentChapterSelection = ref<ChapterSelectionState | null>(null)
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
+  let isApplyingRemoteWorkspaceSync = false
 
   const currentWorkspace = computed(
     () => projectWorkspaces.value[selectedProjectId.value] ?? createEmptyWorkspace()
@@ -105,6 +108,133 @@ export const useAppStore = defineStore('app', () => {
   const currentProject = computed(
     () => projects.value.find((project) => project.id === selectedProjectId.value) ?? projects.value[0]
   )
+
+  function serializeAssistantContext(): CharacterArcAssistantContextPayload {
+    return {
+      selectedProjectId: selectedProjectId.value,
+      selectedChapterId: selectedChapterId.value,
+      currentChapterSelection: currentChapterSelection.value
+        ? {
+            chapterId: currentChapterSelection.value.chapterId,
+            text: currentChapterSelection.value.text
+          }
+        : null
+    }
+  }
+
+  function applyAssistantContext(payload?: CharacterArcAssistantContextPayload | null): void {
+    if (!payload?.selectedProjectId) {
+      return
+    }
+
+    ensureProjectWorkspace(payload.selectedProjectId)
+    selectedProjectId.value = payload.selectedProjectId
+
+    if (payload.selectedChapterId) {
+      selectedChapterId.value = payload.selectedChapterId
+    } else {
+      syncSelectedChapter(payload.selectedProjectId)
+    }
+
+    if (
+      payload.currentChapterSelection &&
+      payload.currentChapterSelection.chapterId === selectedChapterId.value &&
+      payload.currentChapterSelection.text.trim()
+    ) {
+      currentChapterSelection.value = {
+        chapterId: payload.currentChapterSelection.chapterId,
+        text: payload.currentChapterSelection.text.trim()
+      }
+      return
+    }
+
+    currentChapterSelection.value = null
+  }
+
+  function scheduleWorkspaceSync(): void {
+    if (!hasHydrated.value || isApplyingRemoteWorkspaceSync) {
+      return
+    }
+
+    if (workspaceSyncTimer) {
+      window.clearTimeout(workspaceSyncTimer)
+    }
+
+    workspaceSyncTimer = window.setTimeout(() => {
+      void window.characterArc.publishWorkspaceSync(serializeWorkspaceState())
+    }, 120)
+  }
+
+  function publishAssistantContext(): void {
+    if (characterArcWindowKind !== 'main') {
+      return
+    }
+
+    void window.characterArc.publishAssistantContext(serializeAssistantContext())
+  }
+
+  async function syncAssistantWindowState(): Promise<void> {
+    if (characterArcWindowKind !== 'main') {
+      aiVisible.value = true
+      return
+    }
+
+    const result = await window.characterArc.getAssistantWindowState()
+    aiVisible.value = result.success ? Boolean(result.visible) : false
+  }
+
+  async function openAssistantWindow(): Promise<void> {
+    const result = await window.characterArc.openAssistantWindow()
+    if (!result.success) {
+      return
+    }
+
+    aiVisible.value = true
+    publishAssistantContext()
+    scheduleWorkspaceSync()
+  }
+
+  async function closeAssistantWindow(): Promise<void> {
+    const result = await window.characterArc.closeAssistantWindow()
+    if (result.success) {
+      aiVisible.value = false
+    }
+  }
+
+  function receiveAssistantPrompt(payload?: CharacterArcAssistantPromptPayload | null): void {
+    if (!payload?.id || !payload.prompt.trim()) {
+      return
+    }
+
+    pendingAssistantRequest.value = {
+      id: payload.id,
+      prompt: payload.prompt,
+      quickAction: payload.quickAction
+    }
+  }
+
+  function handleRemoteWorkspaceSync(payload: unknown): void {
+    if (!payload || typeof payload !== 'object') {
+      return
+    }
+
+    isApplyingRemoteWorkspaceSync = true
+    try {
+      applyWorkspaceState(payload as Partial<StoredState>)
+    } finally {
+      isApplyingRemoteWorkspaceSync = false
+    }
+  }
+
+  function handleAssistantCommand(payload: CharacterArcAssistantCommand): void {
+    if (characterArcWindowKind !== 'main') {
+      return
+    }
+
+    if (payload.type === 'insert-into-chapter') {
+      insertIntoChapter(payload.content, payload.mode)
+    }
+  }
 
   function syncSelectedChapter(projectId = selectedProjectId.value): void {
     const chapterList = projectWorkspaces.value[projectId]?.chapters ?? []
@@ -135,6 +265,7 @@ export const useAppStore = defineStore('app', () => {
     ensureProjectWorkspace(selectedProjectId.value)
     updateProjectWorkspace(selectedProjectId.value, updater)
     syncSelectedChapter()
+    scheduleWorkspaceSync()
   }
 
   function applyWorkspaceState(payload?: Partial<StoredState> | LegacyStoredState | null): void {
@@ -185,6 +316,26 @@ export const useAppStore = defineStore('app', () => {
     } else {
       persistenceError.value = result.error ?? null
     }
+
+    await syncAssistantWindowState()
+
+    if (isAssistantWindow) {
+      const [contextResult, promptResult] = await Promise.all([
+        window.characterArc.getAssistantContext(),
+        window.characterArc.getAssistantPrompt()
+      ])
+
+      if (contextResult.success) {
+        applyAssistantContext(contextResult.payload)
+      }
+
+      if (promptResult.success) {
+        receiveAssistantPrompt(promptResult.payload ?? null)
+      }
+    } else {
+      publishAssistantContext()
+    }
+
     hasHydrated.value = true
   }
 
@@ -205,6 +356,8 @@ export const useAppStore = defineStore('app', () => {
     if (!hasHydrated.value) {
       return
     }
+
+    scheduleWorkspaceSync()
 
     const delay = mode === 'fast' ? FAST_PERSIST_DELAY_MS : resolveAutoSaveDelayMs(appSettings.value.autoSaveInterval)
     scheduledPersistAt.value = Date.now() + delay
@@ -821,25 +974,58 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function toggleAi(): void {
-    aiVisible.value = !aiVisible.value
+    if (isAssistantWindow) {
+      void closeAssistantWindow()
+      return
+    }
+
+    if (aiVisible.value) {
+      void closeAssistantWindow()
+      return
+    }
+
+    void openAssistantWindow()
   }
 
   function openAiAssistant(): void {
-    aiVisible.value = true
+    if (isAssistantWindow) {
+      aiVisible.value = true
+      return
+    }
+
+    if (aiVisible.value) {
+      publishAssistantContext()
+      scheduleWorkspaceSync()
+      return
+    }
+
+    void openAssistantWindow()
   }
 
   function queueAssistantPrompt(prompt: string, quickAction?: string): void {
-    aiVisible.value = true
-    pendingAssistantRequest.value = {
+    const request = {
       id: `assistant-${Date.now()}`,
       prompt,
       quickAction
     }
+
+    if (isAssistantWindow) {
+      pendingAssistantRequest.value = request
+      return
+    }
+
+    aiVisible.value = true
+    void openAssistantWindow()
+    void window.characterArc.publishAssistantPrompt(request)
   }
 
   function consumeAssistantPrompt(requestId: string): void {
     if (pendingAssistantRequest.value?.id === requestId) {
       pendingAssistantRequest.value = null
+    }
+
+    if (isAssistantWindow) {
+      void window.characterArc.clearAssistantPrompt(requestId)
     }
   }
 
@@ -916,6 +1102,24 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  window.characterArc.onWorkspaceSync(handleRemoteWorkspaceSync)
+  window.characterArc.onAssistantWindowVisibility((payload) => {
+    aiVisible.value = payload.visible
+  })
+
+  if (isAssistantWindow) {
+    window.characterArc.onAssistantContext((payload) => {
+      applyAssistantContext(payload)
+    })
+    window.characterArc.onAssistantPrompt((payload) => {
+      receiveAssistantPrompt(payload)
+    })
+  } else {
+    window.characterArc.onAssistantCommand((payload) => {
+      handleAssistantCommand(payload)
+    })
+  }
+
   watch(
     () => selectedChapterId.value,
     () => {
@@ -930,6 +1134,33 @@ export const useAppStore = defineStore('app', () => {
         schedulePersist('fast')
       }
     }
+  )
+
+  watch(
+    [() => selectedProjectId.value, () => selectedChapterId.value, () => currentChapterSelection.value],
+    () => {
+      publishAssistantContext()
+    },
+    { deep: true }
+  )
+
+  watch(
+    () => currentView.value,
+    (view) => {
+      if (characterArcWindowKind !== 'main') {
+        return
+      }
+
+      if (view === 'chapter-studio') {
+        publishAssistantContext()
+        return
+      }
+
+      if (aiVisible.value) {
+        void closeAssistantWindow()
+      }
+    },
+    { immediate: true }
   )
 
   return {

@@ -677,9 +677,17 @@ const APP_DEFAULT_WIDTH = 1480;
 const APP_DEFAULT_HEIGHT = 920;
 const APP_MIN_WIDTH = 1120;
 const APP_MIN_HEIGHT = 720;
+const ASSISTANT_WINDOW_WIDTH = 580;
+const ASSISTANT_WINDOW_HEIGHT = 820;
+const ASSISTANT_WINDOW_MIN_WIDTH = 460;
+const ASSISTANT_WINDOW_MIN_HEIGHT = 620;
 const WORKSPACE_DB = "workspace.db";
 const WORKSPACE_FILE = "workspace.json";
 const activeAiStreams = /* @__PURE__ */ new Map();
+let mainWindow = null;
+let assistantWindow = null;
+let latestAssistantContext = {};
+let latestAssistantPrompt = null;
 function getMainWindowMetrics() {
   const { workAreaSize } = electron.screen.getPrimaryDisplay();
   const compactScreen = workAreaSize.width <= 1366 || workAreaSize.height <= 820;
@@ -694,6 +702,42 @@ function getMainWindowMetrics() {
     minHeight,
     compactScreen
   };
+}
+function getWindowSearch(kind) {
+  return kind === "assistant" ? "?window=assistant" : "";
+}
+function loadRendererWindow(window, kind) {
+  const search = getWindowSearch(kind);
+  if (process.env.ELECTRON_RENDERER_URL) {
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${search}`);
+    if (kind === "main") {
+      window.webContents.openDevTools({ mode: "detach" });
+    }
+    return;
+  }
+  void window.loadFile(node_path.join(__dirname, "../../dist/index.html"), search ? { search } : void 0);
+}
+function sendWindowEvent(window, channel, payload) {
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return;
+  }
+  window.webContents.send(channel, payload);
+}
+function broadcastWindowEvent(channel, payload, exceptWebContentsId) {
+  for (const window of electron.BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) {
+      continue;
+    }
+    if (exceptWebContentsId && window.webContents.id === exceptWebContentsId) {
+      continue;
+    }
+    window.webContents.send(channel, payload);
+  }
+}
+function emitAssistantWindowVisibility(visible) {
+  broadcastWindowEvent("characterarc:assistant-window-visibility", {
+    visible
+  });
 }
 function createMainWindow() {
   const { width, height, minWidth, minHeight, compactScreen } = getMainWindowMetrics();
@@ -728,12 +772,82 @@ function createMainWindow() {
     void electron.shell.openExternal(url);
     return { action: "deny" };
   });
-  if (process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(process.env.ELECTRON_RENDERER_URL);
-    window.webContents.openDevTools({ mode: "detach" });
-  } else {
-    void window.loadFile(node_path.join(__dirname, "../../dist/index.html"));
+  window.on("closed", () => {
+    if (assistantWindow && !assistantWindow.isDestroyed()) {
+      assistantWindow.close();
+    }
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
+  });
+  loadRendererWindow(window, "main");
+  mainWindow = window;
+  return window;
+}
+function createAssistantWindow() {
+  if (assistantWindow && !assistantWindow.isDestroyed()) {
+    if (assistantWindow.isMinimized()) {
+      assistantWindow.restore();
+    }
+    assistantWindow.show();
+    assistantWindow.focus();
+    emitAssistantWindowVisibility(true);
+    sendWindowEvent(assistantWindow, "characterarc:assistant-context", latestAssistantContext);
+    return assistantWindow;
   }
+  const parentBounds = mainWindow?.getBounds();
+  const assistantX = parentBounds ? parentBounds.x + parentBounds.width - ASSISTANT_WINDOW_WIDTH - 32 : void 0;
+  const assistantY = parentBounds ? parentBounds.y + 44 : void 0;
+  const window = new electron.BrowserWindow({
+    width: ASSISTANT_WINDOW_WIDTH,
+    height: ASSISTANT_WINDOW_HEIGHT,
+    minWidth: ASSISTANT_WINDOW_MIN_WIDTH,
+    minHeight: ASSISTANT_WINDOW_MIN_HEIGHT,
+    x: assistantX,
+    y: assistantY,
+    parent: mainWindow ?? void 0,
+    autoHideMenuBar: true,
+    title: "AI 创作助理",
+    maximizable: false,
+    fullscreenable: false,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    titleBarOverlay: process.platform === "win32" ? {
+      color: "#f5f5f7",
+      symbolColor: "#1d1d1f",
+      height: 28
+    } : false,
+    backgroundColor: "#f5f5f7",
+    show: false,
+    webPreferences: {
+      preload: node_path.join(__dirname, "../preload/index.js"),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  window.once("ready-to-show", () => {
+    window.show();
+    window.focus();
+    emitAssistantWindowVisibility(true);
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void electron.shell.openExternal(url);
+    return { action: "deny" };
+  });
+  window.webContents.once("did-finish-load", () => {
+    sendWindowEvent(window, "characterarc:assistant-context", latestAssistantContext);
+    if (latestAssistantPrompt) {
+      sendWindowEvent(window, "characterarc:assistant-prompt", latestAssistantPrompt);
+    }
+  });
+  window.on("closed", () => {
+    if (assistantWindow === window) {
+      assistantWindow = null;
+    }
+    emitAssistantWindowVisibility(false);
+  });
+  loadRendererWindow(window, "assistant");
+  assistantWindow = window;
+  return window;
 }
 function getWorkspaceDirPath() {
   return node_path.join(electron.app.getPath("userData"), "data");
@@ -1515,6 +1629,84 @@ electron.ipcMain.handle("characterarc:ai-test-connection", async (_event, settin
       error: error instanceof Error ? error.message : "AI 连接测试失败"
     };
   }
+});
+electron.ipcMain.handle("characterarc:assistant-window-open", async () => {
+  try {
+    createAssistantWindow();
+    return {
+      success: true,
+      visible: true
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "AI 助手窗口打开失败"
+    };
+  }
+});
+electron.ipcMain.handle("characterarc:assistant-window-close", async () => {
+  try {
+    if (assistantWindow && !assistantWindow.isDestroyed()) {
+      assistantWindow.close();
+    } else {
+      emitAssistantWindowVisibility(false);
+    }
+    return {
+      success: true,
+      visible: false
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "AI 助手窗口关闭失败"
+    };
+  }
+});
+electron.ipcMain.handle("characterarc:assistant-window-state", () => ({
+  success: true,
+  visible: Boolean(assistantWindow && !assistantWindow.isDestroyed())
+}));
+electron.ipcMain.handle("characterarc:assistant-context-publish", (_event, payload) => {
+  latestAssistantContext = payload && typeof payload === "object" ? payload : {};
+  sendWindowEvent(assistantWindow, "characterarc:assistant-context", latestAssistantContext);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-context-get", () => ({
+  success: true,
+  payload: latestAssistantContext
+}));
+electron.ipcMain.handle("characterarc:assistant-prompt-publish", (_event, payload) => {
+  latestAssistantPrompt = payload && typeof payload === "object" ? payload : null;
+  sendWindowEvent(assistantWindow, "characterarc:assistant-prompt", latestAssistantPrompt);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-prompt-get", () => ({
+  success: true,
+  payload: latestAssistantPrompt
+}));
+electron.ipcMain.handle("characterarc:assistant-prompt-clear", (_event, promptId) => {
+  if (typeof promptId === "string" && latestAssistantPrompt?.id === promptId) {
+    latestAssistantPrompt = null;
+  }
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:workspace-sync-publish", (event, payload) => {
+  broadcastWindowEvent("characterarc:workspace-sync-event", payload, event.sender.id);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-command-publish", (_event, payload) => {
+  sendWindowEvent(mainWindow, "characterarc:assistant-command", payload);
+  return {
+    success: true
+  };
 });
 electron.ipcMain.handle("characterarc:load-workspace", async () => {
   try {
