@@ -6,6 +6,7 @@ import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantCont
 import {
   chapterAssistantLengthOptions,
   chapterAssistantModeOptions,
+  chapterAssistantQuickActionGroups,
   chapterAssistantQuickActions,
   type ChapterAssistantQuickAction
 } from '@/features/ai/chapterAssistantOptions'
@@ -100,6 +101,16 @@ const toolboxSummary = computed(() => {
   }
   return summary.join(' · ')
 })
+// Group quick actions so the assistant can absorb page-level AI controls
+// without turning into one long, hard-to-scan button list.
+const quickActionGroups = computed(() =>
+  chapterAssistantQuickActionGroups
+    .map((group) => ({
+      ...group,
+      actions: chapterAssistantQuickActions.filter((action) => action.group === group.key)
+    }))
+    .filter((group) => group.actions.length)
+)
 
 async function scrollToBottom(): Promise<void> {
   await nextTick()
@@ -478,17 +489,31 @@ watch(
 
     <div class="assistant-toolbox" :class="{ collapsed: isToolboxCollapsed }">
       <div class="assistant-toolbox-inner">
-        <div class="assistant-quick-actions">
-          <button
-            v-for="action in chapterAssistantQuickActions"
-            :key="action.label"
-            class="quick-action"
-            :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
-            @click="handleQuickAction(action)"
+        <div class="assistant-quick-groups">
+          <section
+            v-for="group in quickActionGroups"
+            :key="group.key"
+            class="assistant-quick-group"
           >
-            <component :is="action.icon" :size="14" />
-            <span>{{ action.label }}</span>
-          </button>
+            <div class="assistant-quick-group-head">
+              <strong>{{ group.label }}</strong>
+              <span>{{ group.description }}</span>
+            </div>
+
+            <div class="assistant-quick-actions">
+              <button
+                v-for="action in group.actions"
+                :key="action.label"
+                class="quick-action"
+                :title="action.requiresSelection && !selectedExcerpt ? '请先在正文中选中需要处理的内容' : action.label"
+                :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
+                @click="handleQuickAction(action)"
+              >
+                <component :is="action.icon" :size="14" />
+                <span>{{ action.label }}</span>
+              </button>
+            </div>
+          </section>
         </div>
 
         <div class="assistant-controls">

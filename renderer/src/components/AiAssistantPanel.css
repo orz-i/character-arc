@@ -216,11 +216,45 @@
   cursor: not-allowed;
 }
 
+.assistant-quick-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 12px;
+}
+
+.assistant-quick-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--assistant-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 12px;
+}
+
+.assistant-quick-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.assistant-quick-group-head strong {
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-quick-group-head span {
+  color: var(--assistant-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .assistant-quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  padding: 16px 18px 12px;
 }
 
 .assistant-controls {
@@ -306,6 +340,7 @@
   justify-content: flex-start;
   gap: 8px;
   min-height: 42px;
+  min-width: 0;
   border: 1px solid var(--assistant-border);
   border-radius: 14px;
   background:
@@ -316,7 +351,12 @@
   font-weight: 650;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
   padding: 10px 11px;
+  text-align: left;
   transition: all 0.22s ease;
+}
+
+.quick-action span {
+  min-width: 0;
 }
 
 .quick-action:hover:not(:disabled) {
