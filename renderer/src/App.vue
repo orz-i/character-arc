@@ -33,8 +33,11 @@ const appStyleVars = computed(() => ({
   '--arc-radius-sm': '4px',
   '--arc-radius-md': '6px',
   '--arc-radius-lg': '8px',
-  '--arc-titlebar-height': platform === 'win32' ? '28px' : platform === 'darwin' ? '24px' : '0px',
-  '--arc-window-controls-width': platform === 'win32' ? '138px' : '0px'
+  '--arc-titlebar-height': platform === 'win32' ? 'env(titlebar-area-height, 28px)' : platform === 'darwin' ? '24px' : '0px',
+  '--arc-window-controls-width':
+    platform === 'win32'
+      ? 'max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)))'
+      : '0px'
 }))
 
 watch(

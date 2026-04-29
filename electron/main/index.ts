@@ -114,8 +114,7 @@ function createMainWindow(): BrowserWindow {
       process.platform === 'win32'
         ? {
             color: '#f5f5f7',
-            symbolColor: '#1d1d1f',
-            height: 28
+            symbolColor: '#1d1d1f'
           }
         : false,
     backgroundColor: '#f5f5f7',
@@ -187,8 +186,7 @@ function createAssistantWindow(): BrowserWindow {
       process.platform === 'win32'
         ? {
             color: '#f4f7fb',
-            symbolColor: '#1d1d1f',
-            height: 28
+            symbolColor: '#1d1d1f'
           }
         : false,
     backgroundColor: '#f4f7fb',

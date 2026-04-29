@@ -50,19 +50,19 @@ const sidebarItems = [
   { id: 'chapters', label: '章节创作', description: '进入正文草稿与章节推进流程', icon: FileText }
 ] as const
 
-const activePanelLabel = computed(
-  () => sidebarItems.find((item) => item.id === appStore.activePanel)?.label ?? '项目工作台'
-)
-const activePanelDescription = computed(() => {
-  if (appStore.activePanel === 'settings') {
-    return '调整主题、自动保存与创作偏好'
-  }
-
-  return sidebarItems.find((item) => item.id === appStore.activePanel)?.description ?? '管理项目内容'
-})
 const normalizedSearch = computed(() => searchKeyword.value.trim())
 const isSearchMode = computed(() => normalizedSearch.value.length > 0)
-const activeViewLabel = computed(() => (isSearchMode.value ? '项目搜索' : activePanelLabel.value))
+const activeViewLabel = computed(() => {
+  if (isSearchMode.value) {
+    return '项目搜索'
+  }
+
+  if (appStore.activePanel === 'settings') {
+    return '项目设置'
+  }
+
+  return sidebarItems.find((item) => item.id === appStore.activePanel)?.label ?? '项目工作台'
+})
 const projectMeta = computed(() =>
   [appStore.currentProject?.genre?.trim(), appStore.currentProject?.wordCount?.trim()].filter(Boolean).join(' · ')
 )
@@ -167,13 +167,6 @@ watch(searchKeyword, (value) => {
           <PanelLeftClose v-if="isSidebarOpen && !isCompactSidebar" :size="18" />
           <PanelLeftOpen v-else :size="18" />
         </button>
-      </div>
-
-      <div v-if="shouldRenderSidebarLabels" class="sidebar-spotlight">
-        <span class="sidebar-spotlight-label">当前焦点</span>
-        <strong>{{ activePanelLabel }}</strong>
-        <p>{{ activePanelDescription }}</p>
-        <span class="sidebar-spotlight-meta">{{ sidebarSummary }}</span>
       </div>
 
       <div class="sidebar-group">
@@ -303,6 +296,7 @@ watch(searchKeyword, (value) => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
   padding:
     calc(var(--arc-titlebar-height) + 14px)
     14px
@@ -383,19 +377,7 @@ watch(searchKeyword, (value) => {
   color: var(--arc-text-secondary);
 }
 
-.sidebar-spotlight {
-  margin: 0 14px 14px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--arc-primary) 10%, var(--arc-border));
-  border-radius: calc(var(--arc-radius-lg) + 4px);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--arc-primary-soft) 60%, white));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.68),
-    0 10px 24px rgba(15, 23, 42, 0.05);
-}
-
-.sidebar-spotlight-label,
+.sidebar-group-label,
 .sidebar-group-label {
   color: var(--arc-text-hint);
   font-size: 11px;
@@ -404,38 +386,13 @@ watch(searchKeyword, (value) => {
   text-transform: uppercase;
 }
 
-.sidebar-spotlight strong {
-  display: block;
-  margin-top: 8px;
-  color: var(--arc-text-primary);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.sidebar-spotlight p {
-  margin: 6px 0 10px;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.sidebar-spotlight-meta {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--arc-primary);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 10px;
-}
-
 .sidebar-group {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  overflow-y: auto;
   padding: 0 10px;
 }
 
@@ -443,6 +400,7 @@ watch(searchKeyword, (value) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding-bottom: 4px;
 }
 
 .sidebar-item {
@@ -595,6 +553,7 @@ watch(searchKeyword, (value) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
   margin-top: auto;
   padding: 12px 10px 10px;
   border-top: 1px solid var(--arc-border);
@@ -741,7 +700,6 @@ watch(searchKeyword, (value) => {
     width: 72px;
   }
 
-  .sidebar-spotlight,
   .sidebar-group-label,
   .sidebar-brand,
   .sidebar-copy,

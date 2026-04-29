@@ -925,8 +925,7 @@ function createMainWindow() {
     // Keep native caption buttons while giving the renderer a compact title-bar area to style around.
     titleBarOverlay: process.platform === "win32" ? {
       color: "#f5f5f7",
-      symbolColor: "#1d1d1f",
-      height: 28
+      symbolColor: "#1d1d1f"
     } : false,
     backgroundColor: "#f5f5f7",
     show: false,
@@ -987,8 +986,7 @@ function createAssistantWindow() {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     titleBarOverlay: process.platform === "win32" ? {
       color: "#f4f7fb",
-      symbolColor: "#1d1d1f",
-      height: 28
+      symbolColor: "#1d1d1f"
     } : false,
     backgroundColor: "#f4f7fb",
     show: false,
