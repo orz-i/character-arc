@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowUpRight,
   Bot,
@@ -50,8 +50,11 @@ const editorVisible = ref(false)
 const versionHistoryVisible = ref(false)
 const isGeneratingInspiration = ref(false)
 const readingMode = ref(false)
+const compactSidebarVisible = ref(false)
+const compactInsightsVisible = ref(false)
 const draggingChapterId = ref<string | null>(null)
 const dragTargetChapterId = ref<string | null>(null)
+const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const chapterForm = reactive({
   volumeId: '',
   title: '',
@@ -178,6 +181,8 @@ const saveStatusCompactText = computed(() => {
 
   return '已保存'
 })
+const isCompactStudio = computed(() => viewportWidth.value <= 1360)
+const isCondensedTopbar = computed(() => viewportWidth.value <= 1180)
 const filteredChapterGroups = computed(() => {
   const query = props.searchQuery?.trim().toLowerCase() ?? ''
   if (!query) {
@@ -221,7 +226,28 @@ const readingLeadText = computed(() => {
 })
 
 function toggleReadingMode(): void {
+  compactSidebarVisible.value = false
+  compactInsightsVisible.value = false
   readingMode.value = !readingMode.value
+}
+
+function syncViewportWidth(): void {
+  viewportWidth.value = window.innerWidth
+}
+
+function openCompactSidebar(): void {
+  compactInsightsVisible.value = false
+  compactSidebarVisible.value = true
+}
+
+function openCompactInsights(): void {
+  compactSidebarVisible.value = false
+  compactInsightsVisible.value = true
+}
+
+function selectChapterFromCompact(chapterId: string): void {
+  appStore.selectChapter(chapterId)
+  compactSidebarVisible.value = false
 }
 
 function openAdjacentChapter(offset: -1 | 1): void {
@@ -248,6 +274,7 @@ function openVersionHistory(): void {
 }
 
 function openInspirationWorkbench(): void {
+  compactInsightsVisible.value = false
   appStore.setPanel('inspiration')
 }
 
@@ -503,7 +530,20 @@ watch(
   { deep: true }
 )
 
+watch(isCompactStudio, (compact) => {
+  if (!compact) {
+    compactSidebarVisible.value = false
+    compactInsightsVisible.value = false
+  }
+})
+
+onMounted(() => {
+  syncViewportWidth()
+  window.addEventListener('resize', syncViewportWidth)
+})
+
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncViewportWidth)
   if (saveTimer) {
     window.clearTimeout(saveTimer)
   }
@@ -511,9 +551,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="chapters-layout" :class="{ 'reading-mode': readingMode }">
+  <section class="chapters-layout" :class="{ 'reading-mode': readingMode, 'compact-mode': isCompactStudio && !readingMode }">
     <div class="chapters-shell" :class="{ 'reading-mode': readingMode }">
-      <aside v-if="!readingMode" class="chapter-sidebar">
+      <aside v-if="!readingMode && !isCompactStudio" class="chapter-sidebar">
         <div class="chapter-side-head">
           <div class="chapter-side-head-main">
             <n-tooltip trigger="hover">
@@ -603,13 +643,25 @@ onBeforeUnmount(() => {
                 {{ currentWordCount }} / {{ currentTargetWordCount || '自由字数' }} · {{ currentProgressPercent }}%
               </span>
               <span class="meta-chip" :class="currentChapterStatusTone">{{ currentChapterStatusLabel }}</span>
-              <span class="meta-chip neutral">目标 {{ currentTargetWordCount || '自由字数' }}</span>
-              <span class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
-              <span class="meta-chip ghost">全书第 {{ selectedChapterIndex }} 章</span>
+              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip neutral">目标 {{ currentTargetWordCount || '自由字数' }}</span>
+              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip ghost">全书第 {{ selectedChapterIndex }} 章</span>
             </div>
           </div>
 
           <div class="editor-floating-actions">
+            <div v-if="isCompactStudio && !readingMode" class="editor-action-group compact-utility-group">
+              <button class="tool-badge neutral compact-utility-button" @click="appStore.backToWorkbench()">
+                <ChevronLeft :size="15" />
+                <span>返回</span>
+              </button>
+              <button class="tool-badge neutral compact-utility-button" @click="openCompactSidebar">
+                <span>章节目录</span>
+              </button>
+              <button class="tool-badge neutral compact-utility-button" @click="openCompactInsights">
+                <span>章节参考</span>
+              </button>
+            </div>
             <n-tooltip trigger="hover">
               <template #trigger>
                 <button class="tool-badge neutral" :class="{ active: readingMode }" @click="toggleReadingMode">
@@ -760,7 +812,7 @@ onBeforeUnmount(() => {
 
             <div class="manuscript-divider"></div>
 
-            <div class="editor-body">
+            <div class="editor-body" :class="{ compact: isCompactStudio }">
               <div class="editor-column">
                 <RichChapterEditor
                   :chapter-id="appStore.selectedChapter?.id ?? ''"
@@ -772,7 +824,7 @@ onBeforeUnmount(() => {
                 />
               </div>
 
-              <aside class="editor-insights">
+              <aside v-if="!isCompactStudio" class="editor-insights">
                 <div class="editor-insights-rail arc-scrollbar">
                   <div class="summary-card">
                     <span class="summary-card-label">本章定位</span>
@@ -850,6 +902,125 @@ onBeforeUnmount(() => {
     <div v-if="filteredChapterGroups.length === 0" class="arc-empty-state">
       没有匹配“{{ props.searchQuery }}”的章节内容。
     </div>
+
+    <n-modal
+      :show="compactSidebarVisible"
+      preset="card"
+      class="arc-editor-modal compact-panel-modal"
+      title="章节目录"
+      :bordered="false"
+      @close="compactSidebarVisible = false"
+    >
+      <div class="compact-panel compact-panel-directory">
+        <div class="chapter-side-summary compact-panel-summary">
+          <span>{{ chapterCountLabel }}</span>
+          <span>{{ volumeCountLabel }}</span>
+          <span>当前第 {{ selectedChapterIndex }} 章</span>
+        </div>
+
+        <div class="chapter-groups compact-panel-groups arc-scrollbar">
+          <section v-for="group in filteredChapterGroups" :key="`compact-${group.volume.id}`" class="chapter-group">
+            <div class="chapter-group-head">
+              <div>
+                <strong>{{ formatVolumeLabel(group.volume, group.index, 'compact') }}</strong>
+                <p>{{ group.items.length }} 个章节 · {{ group.volume.wordTarget }}</p>
+              </div>
+              <n-tooltip trigger="hover">
+                <template #trigger>
+                  <button class="mini-icon" @click="appStore.createChapter(group.volume.id)">
+                    <Plus :size="15" />
+                  </button>
+                </template>
+                在本卷中新增章节
+              </n-tooltip>
+            </div>
+
+            <div class="chapter-items">
+              <button
+                v-for="chapter in group.items"
+                :key="`compact-item-${chapter.id}`"
+                class="chapter-pill"
+                :class="{ active: appStore.selectedChapterId === chapter.id }"
+                @click="selectChapterFromCompact(chapter.id)"
+              >
+                <span class="chapter-pill-main">
+                  <span class="chapter-pill-label">{{ chapter.title }}</span>
+                  <span class="chapter-pill-meta">
+                    <span>{{ chapter.wordTarget }}</span>
+                    <span class="chapter-pill-dot"></span>
+                    <span>{{ chapterStatusOptions.find((option) => option.value === chapter.status)?.label ?? '草稿中' }}</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </n-modal>
+
+    <n-modal
+      :show="compactInsightsVisible"
+      preset="card"
+      class="arc-editor-modal compact-panel-modal"
+      title="章节参考"
+      :bordered="false"
+      @close="compactInsightsVisible = false"
+    >
+      <div class="compact-panel compact-panel-insights arc-scrollbar">
+        <div class="summary-card">
+          <span class="summary-card-label">本章定位</span>
+          <p>{{ currentSummaryText }}</p>
+        </div>
+
+        <div class="inspiration-card">
+          <div class="inspiration-card-head">
+            <div class="inspiration-card-copy">
+              <span class="summary-card-label">章节灵感</span>
+              <strong>当前可用灵感卡</strong>
+            </div>
+            <button class="inspiration-workbench-link" @click="openInspirationWorkbench">
+              <span>灵感池</span>
+              <ArrowUpRight :size="13" />
+            </button>
+          </div>
+
+          <div class="inspiration-focus-actions">
+            <button
+              v-for="focus in chapterInspirationFocuses"
+              :key="`compact-${focus}`"
+              class="inspiration-focus-chip"
+              :disabled="isGeneratingInspiration"
+              @click="requestChapterInspiration(focus)"
+            >
+              <Lightbulb :size="13" />
+              <span>{{ isGeneratingInspiration ? '生成中...' : `生成${focus}` }}</span>
+            </button>
+          </div>
+
+          <div v-if="chapterInspirationEntries.length" class="inspiration-list">
+            <article v-for="entry in chapterInspirationEntries" :key="`compact-entry-${entry.id}`" class="inspiration-item">
+              <div class="inspiration-item-top">
+                <span class="inspiration-type">{{ entry.type }}</span>
+                <span class="inspiration-source" :class="entry.source">{{ entry.source === 'ai' ? 'AI' : '手记' }}</span>
+              </div>
+              <strong>{{ entry.title }}</strong>
+              <p>{{ entry.content }}</p>
+              <div v-if="entry.tags.length" class="inspiration-tag-row">
+                <span v-for="tag in entry.tags" :key="`compact-${entry.id}-${tag}`" class="inspiration-tag">{{ tag }}</span>
+              </div>
+              <div class="inspiration-item-actions">
+                <button class="inspiration-action" @click="sendInspirationToAssistant(entry, 'expand')">扩成桥段</button>
+                <button class="inspiration-action secondary" @click="sendInspirationToAssistant(entry, 'continue')">继续续写</button>
+              </div>
+            </article>
+          </div>
+
+          <div v-else class="inspiration-empty">
+            <p>当前还没有与本章联动的灵感卡，可以先生成场景、转折或人物动机。</p>
+          </div>
+        </div>
+      </div>
+    </n-modal>
 
     <n-modal
       :show="versionHistoryVisible"
@@ -1387,6 +1558,57 @@ onBeforeUnmount(() => {
 
 .editor-action-group.danger {
   background: rgba(255, 255, 255, 0.5);
+}
+
+.compact-utility-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
+.compact-utility-button {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.chapters-layout.compact-mode .chapters-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.chapters-layout.compact-mode .editor-topbar {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.chapters-layout.compact-mode .editor-context {
+  width: 100%;
+}
+
+.chapters-layout.compact-mode .editor-context-main {
+  gap: 8px;
+}
+
+.chapters-layout.compact-mode .editor-floating-actions {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.chapters-layout.compact-mode .editor-action-group {
+  max-width: 100%;
+}
+
+.chapters-layout.compact-mode .editor-manuscript {
+  padding: 16px;
+}
+
+.chapters-layout.compact-mode .editor-status {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.chapters-layout.compact-mode .chapter-title {
+  font-size: clamp(24px, 3vw, 32px);
 }
 
 .editor-stage {
@@ -1985,6 +2207,10 @@ onBeforeUnmount(() => {
   padding-top: 0;
 }
 
+.editor-body.compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .editor-column {
   display: flex;
   align-items: stretch;
@@ -2048,6 +2274,36 @@ onBeforeUnmount(() => {
 .arc-version-modal :deep(.n-card__content) {
   max-height: min(72vh, 720px);
   overflow: hidden;
+}
+
+.compact-panel-modal :deep(.n-card__content) {
+  max-height: min(76vh, 780px);
+  overflow: hidden;
+}
+
+.compact-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.compact-panel-summary {
+  margin-bottom: 0;
+}
+
+.compact-panel-groups,
+.compact-panel-insights {
+  min-height: 0;
+  max-height: min(64vh, 680px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.compact-panel-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .version-list {
@@ -2118,102 +2374,4 @@ onBeforeUnmount(() => {
   min-height: 220px;
 }
 
-@media (max-width: 1500px) {
-  .chapters-shell {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
-  }
-
-  .chapter-groups {
-    max-height: 280px;
-  }
-
-  .chapter-sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--chapter-border-strong);
-  }
-
-  .editor-manuscript-head {
-    flex-direction: column;
-  }
-
-  .editor-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .editor-insights-rail {
-    position: static;
-    max-height: none;
-    overflow: visible;
-  }
-
-  .reading-content {
-    min-height: clamp(480px, 65vh, 860px);
-  }
-}
-
-@media (max-width: 720px) {
-  .chapter-side-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .chapter-group-head,
-  .editor-topbar,
-  .version-card-head {
-    flex-direction: column;
-  }
-
-  .editor-shell {
-    padding: 0;
-  }
-
-  .editor-manuscript {
-    padding: 20px 18px;
-  }
-
-  .editor-body {
-    gap: 14px;
-  }
-
-  .editor-action-group {
-    width: auto;
-    max-width: 100%;
-  }
-
-  .editor-status {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .editor-stage.reading-mode,
-  .editor-manuscript.reading-mode {
-    padding: 14px;
-  }
-
-  .reading-content {
-    min-height: 56vh;
-    padding: 22px 18px 28px;
-    font-size: 16px;
-    line-height: 1.9;
-  }
-
-  .reading-heading h1 {
-    font-size: 30px;
-  }
-
-  .reading-footer {
-    grid-template-columns: 1fr;
-  }
-
-  .editor-floating-actions {
-    gap: 8px;
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .assistant-toggle {
-    min-width: 0;
-  }
-}
 </style>

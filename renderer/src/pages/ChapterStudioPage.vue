@@ -39,19 +39,7 @@ import ChaptersPanel from '@/components/ChaptersPanel.vue'
   flex: 1;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   padding: clamp(16px, 2vw, 24px);
-}
-
-@media (max-width: 1360px) {
-  .chapter-studio-main {
-    min-height: 0;
-  }
-}
-
-@media (max-width: 720px) {
-  .studio-body {
-    padding: 12px;
-  }
 }
 </style>
