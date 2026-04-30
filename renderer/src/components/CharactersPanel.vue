@@ -4,6 +4,7 @@ import { MoreVertical, Network, Plus, Search, Sparkles } from 'lucide-vue-next'
 import { NButton, NDropdown, NDynamicTags, NForm, NFormItem, NInput, NModal, NTag, useDialog, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import type { CharacterCard } from '@/types/app'
 import type { DropdownOption } from 'naive-ui'
 
@@ -81,7 +82,7 @@ async function handleGenerateCharacter(): Promise<void> {
   isGenerating.value = true
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'character-card',
       settings: appStore.appSettings,
       context: {
@@ -101,7 +102,7 @@ async function handleGenerateCharacter(): Promise<void> {
           description: character.description
         }))
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? 'AI 生成角色失败，请检查模型配置')

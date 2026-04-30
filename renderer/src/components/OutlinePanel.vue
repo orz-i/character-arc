@@ -7,6 +7,7 @@ import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/contex
 import { useAppStore } from '@/stores/app'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
 import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import type { DropdownOption, SelectOption } from 'naive-ui'
 import type { OutlineItem, OutlineItemStatus, OutlineVolume } from '@/types/app'
 
@@ -98,7 +99,7 @@ async function handleExpandOutline(): Promise<void> {
   isExpanding.value = true
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'outline-item',
       settings: appStore.appSettings,
       context: {
@@ -109,7 +110,7 @@ async function handleExpandOutline(): Promise<void> {
         outlineTitles: appStore.outlineItems.map((item) => item.title),
         worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title)
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? 'AI 扩写大纲失败，请检查模型配置')
@@ -147,7 +148,7 @@ async function handleExpandVolumeOutline(volume: OutlineVolume): Promise<void> {
   expandingVolumeId.value = volume.id
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'outline-batch',
       settings: appStore.appSettings,
       context: {
@@ -176,7 +177,7 @@ async function handleExpandVolumeOutline(volume: OutlineVolume): Promise<void> {
         projectSkills: await loadEnabledProjectSkillsContext(appStore.currentProject, 'outline'),
         userPrompt: '请优先补足当前分卷从现有节点往后最需要的 3 到 5 个剧情节点。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '分卷批量大纲生成失败，请检查模型配置')

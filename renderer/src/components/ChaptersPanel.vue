@@ -25,6 +25,7 @@ import { pickRelevantInspirationEntries } from '@/features/inspiration/relevance
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
 import { useAppStore } from '@/stores/app'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
 import type { ChapterDraft, ChapterVersion } from '@/types/app'
 import type { DropdownOption, SelectOption } from 'naive-ui'
@@ -404,7 +405,7 @@ async function requestChapterInspiration(focusType: (typeof chapterInspirationFo
   isGeneratingInspiration.value = true
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'inspiration-pack',
       settings: appStore.appSettings,
       context: {
@@ -424,7 +425,7 @@ async function requestChapterInspiration(focusType: (typeof chapterInspirationFo
         organizationMemberships: appStore.organizationMemberships,
         outlineItems: appStore.outlineItems
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '本章灵感生成失败，请检查模型配置')
@@ -550,7 +551,7 @@ async function generateNextOutlineChain(): Promise<void> {
   isGeneratingOutlineChain.value = true
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'outline-chain',
       settings: appStore.appSettings,
       context: {
@@ -587,7 +588,7 @@ async function generateNextOutlineChain(): Promise<void> {
         projectSkills: await loadEnabledProjectSkillsContext(appStore.currentProject, 'draft'),
         userPrompt: '请紧接当前章节之后，连续规划下一段剧情链。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '后续剧情链生成失败，请检查模型配置')

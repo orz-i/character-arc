@@ -6,6 +6,7 @@ import { workflowStageDocumentMap } from '@/features/novelWorkflow/documents'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { novelWorkflowStageDefinitions } from '@/features/novelWorkflow/stages'
 import { useAppStore } from '@/stores/app'
+import { toIpcPayload } from '@/utils/ipcPayload'
 import type { NovelWorkflowStageId, PanelName, WorkflowDocumentKey } from '@/types/app'
 
 const appStore = useAppStore()
@@ -131,7 +132,7 @@ async function generateReferenceInsights(): Promise<void> {
 
   isGeneratingReferenceInsights.value = true
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'workflow-documents',
       settings: appStore.appSettings,
       context: {
@@ -150,7 +151,7 @@ async function generateReferenceInsights(): Promise<void> {
         projectSkills: await loadEnabledProjectSkillsContext(currentProject.value, 'reference'),
         userPrompt: '请重点提炼当前参考作品的风格共性、题材爆点、平台偏好，并写成适合后续立项使用的 findings 与 task_plan。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '参考阶段提炼失败')
@@ -180,7 +181,7 @@ async function generatePremiseInsights(): Promise<void> {
 
   isGeneratingPremiseInsights.value = true
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'workflow-documents',
       settings: appStore.appSettings,
       context: {
@@ -202,7 +203,7 @@ async function generatePremiseInsights(): Promise<void> {
           premiseDraft.value.trim() ||
           '请生成适合当前小说项目的故事背景、主角路线、外挂或金手指方向，并写入 current_status 与 novel_setting。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '故事立项生成失败')
@@ -232,7 +233,7 @@ async function generateSettingInsights(): Promise<void> {
 
   isGeneratingSettingInsights.value = true
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'workflow-documents',
       settings: appStore.appSettings,
       context: {
@@ -268,7 +269,7 @@ async function generateSettingInsights(): Promise<void> {
           settingDraft.value.trim() ||
           '请生成当前小说项目的势力框架、关键角色骨架、关系盘初稿，并写入 novel_setting、character_relationships 与 findings。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '设定搭建生成失败')
@@ -299,7 +300,7 @@ async function generateWorkflowDocuments(): Promise<void> {
   isGeneratingWorkflowDocuments.value = true
 
   try {
-    const result = await window.characterArc.generateAi({
+    const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'workflow-documents',
       settings: appStore.appSettings,
       context: {
@@ -339,7 +340,7 @@ async function generateWorkflowDocuments(): Promise<void> {
         projectSkills: await loadEnabledProjectSkillsContext(currentProject.value, activeStage.value.id),
         userPrompt: '请生成适合当前项目继续创作使用的第一版流程文件。'
       }
-    })
+    }))
 
     if (!result.success || !result.result) {
       throw new Error(result.error ?? '流程文件生成失败')

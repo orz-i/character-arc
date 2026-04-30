@@ -2,25 +2,12 @@
 import { computed, ref } from 'vue'
 import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Network, Palette, PenTool, PlugZap, Save, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NModal, NSelect, useMessage } from 'naive-ui'
-import {
-  buildPromptTemplateDraft,
-  chapterAssistantLengthOptions,
-  chapterAssistantModeOptions,
-  duplicateChapterAssistantTemplate,
-  getResolvedChapterAssistantTemplates,
-  removeProjectChapterAssistantTemplate,
-  resolveTemplateGroupLabel,
-  resolveTemplateLengthLabel,
-  resolveTemplateModeLabel,
-  upsertProjectChapterAssistantTemplate
-} from '@/features/ai/chapterAssistantOptions'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { buildProjectWritingStyleContext, writingStylePresets } from '@/features/writingStyles/presets'
 import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
 import type {
-  ChapterAssistantPromptTemplate,
   CharacterArcExportEnvelope,
   ImportConflictMode,
   ImportExportModuleType,
@@ -141,9 +128,6 @@ const activeProviderPreset = computed(
 )
 // 当前项目的写作风格配置
 const activeWritingStyle = computed(() => buildProjectWritingStyleContext(appStore.currentProject))
-const chapterAssistantTemplates = computed(() => getResolvedChapterAssistantTemplates(appStore.currentProject))
-const modeSelectOptions = [...chapterAssistantModeOptions]
-const lengthSelectOptions = [...chapterAssistantLengthOptions]
 // 导入冲突策略选项
 const importConflictOptions = [
   { label: '新建副本', value: 'copy' as const },
@@ -181,78 +165,6 @@ function updateWritingStylePrompt(prompt: string): void {
   })
 }
 
-function updatePromptTemplate(templateId: string, patch: Partial<ChapterAssistantPromptTemplate>): void {
-  if (!appStore.currentProject?.id) {
-    return
-  }
-
-  const draft = buildPromptTemplateDraft(appStore.currentProject, templateId)
-  if (!draft) {
-    return
-  }
-
-  const nextTemplate: ChapterAssistantPromptTemplate = {
-    ...draft,
-    ...patch
-  }
-
-  appStore.updateProject(appStore.currentProject.id, {
-    chapterAssistantTemplates: upsertProjectChapterAssistantTemplate(
-      appStore.currentProject.chapterAssistantTemplates,
-      nextTemplate
-    )
-  })
-}
-
-function resetPromptTemplate(templateId: string): void {
-  if (!appStore.currentProject?.id) {
-    return
-  }
-
-  appStore.updateProject(appStore.currentProject.id, {
-    chapterAssistantTemplates: appStore.currentProject.chapterAssistantTemplates.filter((template) => template.id !== templateId)
-  })
-}
-
-function duplicatePromptTemplate(templateId: string): void {
-  if (!appStore.currentProject?.id) {
-    return
-  }
-
-  const duplicated = duplicateChapterAssistantTemplate(appStore.currentProject, templateId)
-  if (!duplicated) {
-    return
-  }
-
-  appStore.updateProject(appStore.currentProject.id, {
-    chapterAssistantTemplates: [...appStore.currentProject.chapterAssistantTemplates, duplicated]
-  })
-  message.success(`已复制模板：${duplicated.label}`)
-}
-
-function deletePromptTemplate(templateId: string): void {
-  if (!appStore.currentProject?.id) {
-    return
-  }
-
-  appStore.updateProject(appStore.currentProject.id, {
-    chapterAssistantTemplates: removeProjectChapterAssistantTemplate(appStore.currentProject.chapterAssistantTemplates, templateId)
-  })
-  message.success('自定义模板已删除')
-}
-
-function updatePromptTemplateMode(templateId: string, value: string | null, fallback: ChapterAssistantPromptTemplate['mode']): void {
-  updatePromptTemplate(templateId, { mode: (value ?? fallback) as ChapterAssistantPromptTemplate['mode'] })
-}
-
-function updatePromptTemplateLength(templateId: string, value: string | null, fallback: ChapterAssistantPromptTemplate['length']): void {
-  updatePromptTemplate(templateId, { length: (value ?? fallback) as ChapterAssistantPromptTemplate['length'] })
-}
-
-function updatePromptTemplateSelection(templateId: string, value: string | null): void {
-  updatePromptTemplate(templateId, { requiresSelection: (value ?? 'optional') === 'required' })
-}
-
 // 根据供应商名称解析默认的模型和 Base URL 配置
 function resolveProviderDefaults(provider: string): { model: string; baseUrl: string } {
   const preset = providerPresets.find((item) => item.value === provider)
@@ -284,7 +196,8 @@ async function handleTestAiConnection(): Promise<void> {
   isTestingAiConnection.value = true
 
   try {
-    const result = await window.characterArc.testAiConnection(appStore.appSettings)
+    const safeSettings = JSON.parse(JSON.stringify(appStore.appSettings))
+    const result = await window.characterArc.testAiConnection(safeSettings)
     if (!result.success) {
       throw new Error(result.error ?? '模型连接测试失败')
     }
@@ -736,80 +649,6 @@ function closeImportModal(): void {
       <n-card class="setting-card" :bordered="false">
         <template #header>
           <div class="block-title">
-            <Lightbulb :size="18" />
-            <span>Prompt 模板</span>
-          </div>
-        </template>
-        <div class="prompt-template-hero">
-          <div>
-            <strong>项目级章节 AI 模板</strong>
-            <p>这里的修改会覆盖内置快捷动作，但不会影响其他项目。适合把常用写法、口吻和工作流固定下来。</p>
-          </div>
-          <span class="style-hero-badge">轻量模板版</span>
-        </div>
-        <div class="prompt-template-list">
-          <article v-for="template in chapterAssistantTemplates" :key="template.id" class="prompt-template-card">
-            <div class="prompt-template-head">
-              <div>
-                <div class="prompt-template-title-row">
-                  <strong>{{ template.label }}</strong>
-                  <span class="prompt-template-badge" :class="{ custom: !template.isBuiltIn }">
-                    {{ template.isBuiltIn ? '内置模板' : '项目模板' }}
-                  </span>
-                </div>
-                <p>{{ resolveTemplateGroupLabel(template.group) }} · {{ template.task === 'outline-draft' ? '结构化大纲任务' : '普通对话任务' }}</p>
-              </div>
-              <div class="prompt-template-head-actions">
-                <n-button round strong secondary @click="duplicatePromptTemplate(template.id)">复制为新模板</n-button>
-                <n-button v-if="template.isBuiltIn" round strong secondary @click="resetPromptTemplate(template.id)">恢复默认</n-button>
-                <n-button v-else round strong secondary @click="deletePromptTemplate(template.id)">删除模板</n-button>
-              </div>
-            </div>
-            <div class="prompt-template-controls">
-              <n-form-item label="模式">
-                <n-select
-                  :value="template.mode"
-                  :options="modeSelectOptions"
-                  @update:value="(value) => updatePromptTemplateMode(template.id, value, template.mode)"
-                />
-              </n-form-item>
-              <n-form-item label="长度">
-                <n-select
-                  :value="template.length"
-                  :options="lengthSelectOptions"
-                  @update:value="(value) => updatePromptTemplateLength(template.id, value, template.length)"
-                />
-              </n-form-item>
-              <n-form-item label="选中文本">
-                <n-select
-                  :value="template.requiresSelection ? 'required' : 'optional'"
-                  :options="[
-                    { label: '需要先选中', value: 'required' },
-                    { label: '无需选中', value: 'optional' }
-                  ]"
-                  @update:value="(value) => updatePromptTemplateSelection(template.id, value)"
-                />
-              </n-form-item>
-            </div>
-            <n-form-item label="模板提示词">
-              <n-input
-                type="textarea"
-                :autosize="{ minRows: 4, maxRows: 8 }"
-                :value="template.prompt"
-                @update:value="(value) => updatePromptTemplate(template.id, { prompt: value })"
-              />
-            </n-form-item>
-            <div class="prompt-template-footnote">
-              当前模板：{{ resolveTemplateModeLabel(template.mode) }} · {{ resolveTemplateLengthLabel(template.length) }} ·
-              {{ template.requiresSelection ? '先选中文本' : '可直接触发' }}
-            </div>
-          </article>
-        </div>
-      </n-card>
-
-      <n-card class="setting-card" :bordered="false">
-        <template #header>
-          <div class="block-title">
             <Palette :size="18" />
             <span>主题色</span>
           </div>
@@ -1004,110 +843,6 @@ function closeImportModal(): void {
 
 .style-footnote {
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.prompt-template-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(253, 224, 71, 0.18), transparent 36%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 250, 245, 0.96));
-  padding: 16px 18px;
-  margin-bottom: 16px;
-}
-
-.prompt-template-hero strong {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--arc-text-primary);
-  font-size: 15px;
-}
-
-.prompt-template-hero p {
-  margin: 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  line-height: 1.75;
-}
-
-.prompt-template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.prompt-template-card {
-  border: 1px solid rgba(226, 232, 240, 0.86);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.98);
-  padding: 16px;
-}
-
-.prompt-template-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.prompt-template-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.prompt-template-head strong {
-  display: block;
-  color: var(--arc-text-primary);
-  font-size: 15px;
-}
-
-.prompt-template-head p {
-  margin: 4px 0 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-}
-
-.prompt-template-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: rgba(241, 245, 249, 0.94);
-  color: var(--arc-text-hint);
-  font-size: 11px;
-  font-weight: 800;
-  padding: 5px 8px;
-}
-
-.prompt-template-badge.custom {
-  background: rgba(219, 234, 254, 0.94);
-  color: #1d4ed8;
-}
-
-.prompt-template-head-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.prompt-template-controls {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.prompt-template-footnote {
-  color: var(--arc-text-hint);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -1315,15 +1050,6 @@ function closeImportModal(): void {
 
 @media (max-width: 760px) {
   .style-preset-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .prompt-template-hero,
-  .prompt-template-head {
-    flex-direction: column;
-  }
-
-  .prompt-template-controls {
     grid-template-columns: 1fr;
   }
 
