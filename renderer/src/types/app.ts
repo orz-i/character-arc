@@ -4,6 +4,38 @@ export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 /** 工作台面板名称，对应 8 个功能面板 */
 export type PanelName = 'overview' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'chapters' | 'settings'
 
+/** 章节 AI 模板分组 */
+export type ChapterAssistantTemplateGroup = 'write' | 'rewrite' | 'planning' | 'reference'
+
+/** 章节 AI 回复模式 */
+export type ChapterAssistantResponseMode = 'freeform' | 'polish' | 'continue' | 'suggest' | 'reference'
+
+/** 章节 AI 回复长度 */
+export type ChapterAssistantResponseLength = 'short' | 'medium' | 'long'
+
+/** 章节 AI 模板任务类型 */
+export type ChapterAssistantTemplateTask = 'chat' | 'outline-draft'
+
+/** 项目级章节 AI Prompt 模板 */
+export interface ChapterAssistantPromptTemplate {
+  /** 模板唯一标识，对应内置动作 ID */
+  id: string
+  /** 模板显示名称 */
+  label: string
+  /** 所属分组 */
+  group: ChapterAssistantTemplateGroup
+  /** 实际提示词 */
+  prompt: string
+  /** 回复模式 */
+  mode: ChapterAssistantResponseMode
+  /** 回复长度 */
+  length: ChapterAssistantResponseLength
+  /** 任务类型 */
+  task: ChapterAssistantTemplateTask
+  /** 是否要求先选中文本 */
+  requiresSelection: boolean
+}
+
 /** 项目摘要信息，用于项目列表页展示 */
 export interface ProjectSummary {
   /** 项目唯一标识 */
@@ -22,6 +54,8 @@ export interface ProjectSummary {
   writingStylePresetId: string
   /** 自定义写作风格提示词 */
   writingStylePrompt: string
+  /** 项目级章节 AI 模板覆盖 */
+  chapterAssistantTemplates: ChapterAssistantPromptTemplate[]
 }
 
 /** 世界观设定条目 */
@@ -229,6 +263,8 @@ export interface ChapterSelectionState {
 export interface ChapterDraft {
   /** 章节唯一标识 */
   id: string
+  /** 来源大纲节点 ID，可为空 */
+  outlineItemId: string
   /** 所属分卷 ID */
   volumeId: string
   /** 章节标题 */

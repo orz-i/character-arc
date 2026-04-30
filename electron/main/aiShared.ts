@@ -18,6 +18,8 @@ export type AiTaskName =
   | 'worldview-entry'     // 生成一条世界观设定
   | 'character-card'      // 生成一个角色卡
   | 'outline-item'        // 生成一条剧情大纲节点
+  | 'outline-batch'       // 批量生成多条剧情大纲节点
+  | 'outline-chain'       // 基于当前章节生成连续剧情链
   | 'chapter-assistant'   // 章节创作助理（支持流式）
   | 'project-bootstrap'   // 项目初始化，批量生成世界观 + 大纲
   | 'chapter-analysis'    // 章节质量分析
@@ -65,6 +67,12 @@ export type OutlineResult = {
   conflict: string
   /** 剧情推进摘要 */
   summary: string
+}
+
+/** AI 返回的批量剧情大纲节点结构 */
+export type OutlineBatchResult = {
+  /** 3-5 条大纲节点 */
+  entries: OutlineResult[]
 }
 
 /** AI 返回的章节助理文本结果（用于流式/非流式章节助理） */
@@ -122,6 +130,7 @@ export type AiTaskResult =
   | WorldviewResult
   | CharacterResult
   | OutlineResult
+  | OutlineBatchResult
   | ChapterAssistantResult
   | ProjectBootstrapResult
   | ChapterAnalysisResult
@@ -233,6 +242,8 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
       return 1500
     case 'chapter-analysis':
     case 'inspiration-pack':
+    case 'outline-batch':
+    case 'outline-chain':
       // 分析和灵感包输出中等长度
       return 1200
     case 'chapter-assistant':

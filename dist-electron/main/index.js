@@ -138,6 +138,71 @@ ${outlineItems || "暂无"}
 返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
     };
   }
+  if (task.task === "outline-batch") {
+    return {
+      system: "你是小说分卷大纲规划助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 entries，entries 中每项都必须包含 title、wordTarget、conflict、summary。",
+      user: `请基于以下上下文，为当前分卷连续补充 3 到 5 个新的剧情大纲节点。
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前分卷：${String(context.chapterVolumeTitle ?? "")}
+当前分卷摘要：${String(context.chapterVolumeSummary ?? "")}
+当前分卷目标字数：${String(context.chapterVolumeWordTarget ?? "")}
+当前分卷已有节点：${JSON.stringify(context.currentVolumeOutlineItems ?? [])}
+全局已有大纲标题：${JSON.stringify(context.outlineTitles ?? [])}
+世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}
+角色参考：${JSON.stringify(context.characters ?? [])}
+补充要求：${String(context.userPrompt ?? "")}
+
+要求：
+1. entries 返回 3 到 5 条新节点，按顺序推进，不要重复已有节点
+2. 每条都必须包含 title、wordTarget、conflict、summary
+3. title 要体现章节推进关系，避免空泛命名
+4. wordTarget 使用"预估 xxxx字"格式
+5. conflict 用一句话概括该节点最核心的矛盾或压力
+6. summary 用中文描述剧情推进，80 到 180 字
+7. 各节点之间要形成连续节奏，不能像互相无关的散点
+8. 如果当前分卷已有节点偏少，优先补桥接节点；如果已有节点较多，优先补冲突升级和转折节点
+9. 必须保持与当前分卷摘要、已有角色关系和世界观一致
+10. ${writingStyleInstruction}
+
+返回格式：{"entries":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+    };
+  }
+  if (task.task === "outline-chain") {
+    return {
+      system: "你是小说剧情链规划助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 entries，entries 中每项都必须包含 title、wordTarget、conflict、summary。",
+      user: `请基于以下上下文，为当前章节之后连续规划 2 到 4 个后续剧情大纲节点。
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前分卷：${String(context.chapterVolumeTitle ?? "")}
+当前分卷摘要：${String(context.chapterVolumeSummary ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节摘要：${String(context.chapterSummary ?? "")}
+当前章节状态：${String(context.chapterStatus ?? "")}
+当前章节正文：
+${String(context.chapterContent ?? "")}
+当前关联大纲节点：${JSON.stringify(context.currentOutlineItem ?? {})}
+当前分卷已有节点：${JSON.stringify(context.currentVolumeOutlineItems ?? [])}
+世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}
+角色参考：${JSON.stringify(context.characters ?? [])}
+补充要求：${String(context.userPrompt ?? "")}
+
+要求：
+1. entries 返回 2 到 4 个后续节点，必须严格体现“当前章节之后”的连续推进
+2. 每条都必须包含 title、wordTarget、conflict、summary
+3. 第一条要紧贴当前章节收束后的直接后果或下一步动作
+4. 后续条目之间要形成递进，至少包含一次冲突升级或转折
+5. wordTarget 使用"预估 xxxx字"格式
+6. summary 用中文描述剧情推进，80 到 180 字
+7. 不要重复当前分卷中已有节点标题和主要推进
+8. 必须保持与当前角色关系、组织立场和世界观一致
+9. ${writingStyleInstruction}
+
+返回格式：{"entries":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+    };
+  }
   if (task.task === "inspiration-pack") {
     const worldviewEntries = Array.isArray(context.worldviewEntries) ? context.worldviewEntries.slice(0, 8).map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "";
     const characters = Array.isArray(context.characters) ? context.characters.slice(0, 8).map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "";
@@ -509,6 +574,8 @@ function resolveMaxTokens(task) {
       return 1500;
     case "chapter-analysis":
     case "inspiration-pack":
+    case "outline-batch":
+    case "outline-chain":
       return 1200;
     case "chapter-assistant":
       switch (String(task.context.responseLength ?? "medium")) {
@@ -803,6 +870,13 @@ function normalizeOutlineResult(result) {
     summary: item.summary?.trim() || "AI 未返回有效剧情摘要"
   };
 }
+function normalizeOutlineBatchResult(result) {
+  const payload = result;
+  const entries = Array.isArray(payload.entries) ? payload.entries.slice(0, 5).map((entry) => normalizeOutlineResult(entry)) : [];
+  return {
+    entries
+  };
+}
 function normalizeProjectBootstrapResult(result) {
   const payload = result;
   const worldviewEntries = Array.isArray(payload.worldviewEntries) ? payload.worldviewEntries.slice(0, 3).map((entry) => normalizeWorldviewResult(entry)) : [];
@@ -866,6 +940,10 @@ function isTaskResultUsable(task, result) {
     const payload = result;
     return payload.entries.length > 0;
   }
+  if (task.task === "outline-batch" || task.task === "outline-chain") {
+    const payload = result;
+    return payload.entries.length > 0;
+  }
   if (task.task === "worldview-entry") {
     const entry = result;
     return Boolean(entry.title.trim() && entry.content.trim());
@@ -889,6 +967,9 @@ function normalizeTaskResult(task, rawText) {
       return normalizeCharacterResult(parsed);
     case "project-bootstrap":
       return normalizeProjectBootstrapResult(parsed);
+    case "outline-batch":
+    case "outline-chain":
+      return normalizeOutlineBatchResult(parsed);
     case "chapter-analysis":
       return normalizeChapterAnalysisResult(parsed);
     case "inspiration-pack":
@@ -1339,6 +1420,9 @@ function ensureAppSettingsColumns(db) {
 function ensureChapterColumns(db) {
   const columns = db.prepare(`PRAGMA table_info('chapters')`).all();
   const columnNames = new Set(columns.map((column) => column.name));
+  if (!columnNames.has("outline_item_id")) {
+    db.exec(`ALTER TABLE chapters ADD COLUMN outline_item_id TEXT NOT NULL DEFAULT '';`);
+  }
   if (!columnNames.has("summary")) {
     db.exec(`ALTER TABLE chapters ADD COLUMN summary TEXT NOT NULL DEFAULT '待补充章节摘要';`);
   }
@@ -1369,6 +1453,11 @@ function ensureVolumeColumns(db) {
       db.exec(`ALTER TABLE ${tableName} ADD COLUMN volume_id TEXT NOT NULL DEFAULT '${defaultVolumeId}';`);
     }
   }
+  const outlineColumns = db.prepare(`PRAGMA table_info('outline_items')`).all();
+  const outlineColumnNames = new Set(outlineColumns.map((column) => column.name));
+  if (!outlineColumnNames.has("status")) {
+    db.exec(`ALTER TABLE outline_items ADD COLUMN status TEXT NOT NULL DEFAULT 'planned';`);
+  }
 }
 async function migrateLegacyWorkspaceFile(db) {
   const hasProject = db.prepare("SELECT id FROM projects LIMIT 1").get();
@@ -1390,6 +1479,9 @@ function ensureProjectColumns(db) {
   }
   if (!columnNames.has("writing_style_prompt")) {
     db.exec(`ALTER TABLE projects ADD COLUMN writing_style_prompt TEXT NOT NULL DEFAULT '';`);
+  }
+  if (!columnNames.has("chapter_assistant_templates_json")) {
+    db.exec(`ALTER TABLE projects ADD COLUMN chapter_assistant_templates_json TEXT NOT NULL DEFAULT '[]';`);
   }
 }
 function normalizeAppSettings(settings) {
@@ -1420,7 +1512,8 @@ function normalizeProjectRecord(project) {
     lastEdited: project.lastEdited || "刚刚更新",
     cover: project.cover || "linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)",
     writingStylePresetId: project.writingStylePresetId || "cinematic-cool",
-    writingStylePrompt: project.writingStylePrompt || ""
+    writingStylePrompt: project.writingStylePrompt || "",
+    chapterAssistantTemplates: Array.isArray(project.chapterAssistantTemplates) ? project.chapterAssistantTemplates : []
   };
 }
 function normalizeWorkspacePayload(payload) {
@@ -1476,10 +1569,12 @@ function normalizeWorkspacePayload(payload) {
         outlineItems: project.id === selectedProjectId ? (legacyPayload.outlineItems ?? []).map((item, index) => ({
           ...item,
           volumeId: item.volumeId || legacyPayload.outlineVolumes?.[0]?.id || "volume-legacy-default",
+          status: item.status || "planned",
           sortOrder: item.sortOrder ?? index
         })) : [],
         chapters: project.id === selectedProjectId ? (legacyPayload.chapters ?? []).map((chapter) => ({
           ...chapter,
+          outlineItemId: chapter.outlineItemId || "",
           volumeId: chapter.volumeId || legacyPayload.outlineVolumes?.[0]?.id || "volume-legacy-default"
         })) : [],
         chapterVersions: project.id === selectedProjectId ? legacyPayload.chapterVersions ?? [] : [],
@@ -1496,13 +1591,26 @@ function normalizeWorkspacePayload(payload) {
   };
 }
 function readWorkspaceSnapshot(db) {
-  const projects = db.prepare(`
+  const projectRows = db.prepare(`
     SELECT id, title, genre, word_count AS wordCount, last_edited AS lastEdited, cover,
       writing_style_preset_id AS writingStylePresetId,
-      writing_style_prompt AS writingStylePrompt
+      writing_style_prompt AS writingStylePrompt,
+      chapter_assistant_templates_json AS chapterAssistantTemplatesJson
     FROM projects
     ORDER BY rowid ASC
   `).all();
+  const projects = projectRows.map(
+    (project) => normalizeProjectRecord({
+      ...project,
+      chapterAssistantTemplates: (() => {
+        try {
+          return JSON.parse(project.chapterAssistantTemplatesJson || "[]");
+        } catch {
+          return [];
+        }
+      })()
+    })
+  );
   if (projects.length === 0) {
     return null;
   }
@@ -1561,12 +1669,12 @@ function readWorkspaceSnapshot(db) {
     ORDER BY project_id ASC, sort_order ASC
   `).all();
   const outlineItems = db.prepare(`
-    SELECT project_id AS projectId, volume_id AS volumeId, id, title, word_target AS wordTarget, conflict, summary, sort_order AS sortOrder
+    SELECT project_id AS projectId, volume_id AS volumeId, id, title, word_target AS wordTarget, conflict, summary, status, sort_order AS sortOrder
     FROM outline_items
     ORDER BY project_id ASC, sort_order ASC
   `).all();
   const chapters = db.prepare(`
-    SELECT project_id AS projectId, volume_id AS volumeId, id, title, summary, status, word_target AS wordTarget, content
+    SELECT project_id AS projectId, volume_id AS volumeId, outline_item_id AS outlineItemId, id, title, summary, status, word_target AS wordTarget, content
     FROM chapters
     ORDER BY project_id ASC, sort_order ASC
   `).all();
@@ -1643,8 +1751,8 @@ function writeWorkspaceSnapshot(db, payload) {
       DELETE FROM app_settings;
     `);
     const insertProject = db.prepare(`
-      INSERT INTO projects (id, title, genre, word_count, last_edited, cover, writing_style_preset_id, writing_style_prompt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, title, genre, word_count, last_edited, cover, writing_style_preset_id, writing_style_prompt, chapter_assistant_templates_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const project of payload.projects) {
       insertProject.run(
@@ -1655,7 +1763,8 @@ function writeWorkspaceSnapshot(db, payload) {
         project.lastEdited,
         project.cover,
         project.writingStylePresetId,
-        project.writingStylePrompt
+        project.writingStylePrompt,
+        JSON.stringify(project.chapterAssistantTemplates ?? [])
       );
     }
     const insertWorldview = db.prepare(`
@@ -1687,12 +1796,12 @@ function writeWorkspaceSnapshot(db, payload) {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     const insertOutline = db.prepare(`
-      INSERT INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, status, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertChapter = db.prepare(`
-      INSERT INTO chapters (id, project_id, volume_id, title, summary, status, word_target, content, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO chapters (id, project_id, volume_id, outline_item_id, title, summary, status, word_target, content, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertChapterVersion = db.prepare(`
       INSERT INTO chapter_versions (id, project_id, chapter_id, title, summary, status, word_target, content, created_at)
@@ -1801,6 +1910,7 @@ function writeWorkspaceSnapshot(db, payload) {
           item.wordTarget,
           item.conflict,
           item.summary,
+          item.status,
           item.sortOrder ?? index
         );
       });
@@ -1809,6 +1919,7 @@ function writeWorkspaceSnapshot(db, payload) {
           chapter.id,
           project.id,
           chapter.volumeId,
+          chapter.outlineItemId,
           chapter.title,
           chapter.summary,
           chapter.status,
@@ -1947,7 +2058,7 @@ function validateImportedWorkspace(payload) {
     const invalidOutlineItem = data.outlineItems.find((item) => {
       if (!item || typeof item !== "object") return true;
       const outlineItem = item;
-      return typeof outlineItem.title !== "string" || outlineItem.volumeId !== void 0 && typeof outlineItem.volumeId !== "string" || outlineItem.wordTarget !== void 0 && typeof outlineItem.wordTarget !== "string" || outlineItem.conflict !== void 0 && typeof outlineItem.conflict !== "string" || outlineItem.summary !== void 0 && typeof outlineItem.summary !== "string" || outlineItem.sortOrder !== void 0 && typeof outlineItem.sortOrder !== "number";
+      return typeof outlineItem.title !== "string" || outlineItem.volumeId !== void 0 && typeof outlineItem.volumeId !== "string" || outlineItem.wordTarget !== void 0 && typeof outlineItem.wordTarget !== "string" || outlineItem.conflict !== void 0 && typeof outlineItem.conflict !== "string" || outlineItem.summary !== void 0 && typeof outlineItem.summary !== "string" || outlineItem.status !== void 0 && typeof outlineItem.status !== "string" || outlineItem.sortOrder !== void 0 && typeof outlineItem.sortOrder !== "number";
     });
     if (invalidOutlineItem) {
       return { valid: false, message: "outlineItems 中存在字段缺失或格式错误的大纲节点。" };
@@ -1957,7 +2068,7 @@ function validateImportedWorkspace(payload) {
     const invalidChapter = data.chapters.find((item) => {
       if (!item || typeof item !== "object") return true;
       const chapter = item;
-      return typeof chapter.title !== "string" || typeof chapter.content !== "string" || chapter.volumeId !== void 0 && typeof chapter.volumeId !== "string" || chapter.summary !== void 0 && typeof chapter.summary !== "string" || chapter.status !== void 0 && typeof chapter.status !== "string" || chapter.wordTarget !== void 0 && typeof chapter.wordTarget !== "string";
+      return typeof chapter.title !== "string" || typeof chapter.content !== "string" || chapter.outlineItemId !== void 0 && typeof chapter.outlineItemId !== "string" || chapter.volumeId !== void 0 && typeof chapter.volumeId !== "string" || chapter.summary !== void 0 && typeof chapter.summary !== "string" || chapter.status !== void 0 && typeof chapter.status !== "string" || chapter.wordTarget !== void 0 && typeof chapter.wordTarget !== "string";
     });
     if (invalidChapter) {
       return { valid: false, message: "chapters 中存在字段缺失或格式错误的章节项。" };

@@ -489,6 +489,10 @@ function ensureChapterColumns(db: DatabaseSync): void {
   const columns = db.prepare(`PRAGMA table_info('chapters')`).all() as Array<{ name: string }>
   const columnNames = new Set(columns.map((column) => column.name))
 
+  if (!columnNames.has('outline_item_id')) {
+    db.exec(`ALTER TABLE chapters ADD COLUMN outline_item_id TEXT NOT NULL DEFAULT '';`)
+  }
+
   if (!columnNames.has('summary')) {
     db.exec(`ALTER TABLE chapters ADD COLUMN summary TEXT NOT NULL DEFAULT '待补充章节摘要';`)
   }
@@ -534,6 +538,12 @@ function ensureVolumeColumns(db: DatabaseSync): void {
       db.exec(`ALTER TABLE ${tableName} ADD COLUMN volume_id TEXT NOT NULL DEFAULT '${defaultVolumeId}';`)
     }
   }
+
+  const outlineColumns = db.prepare(`PRAGMA table_info('outline_items')`).all() as Array<{ name: string }>
+  const outlineColumnNames = new Set(outlineColumns.map((column) => column.name))
+  if (!outlineColumnNames.has('status')) {
+    db.exec(`ALTER TABLE outline_items ADD COLUMN status TEXT NOT NULL DEFAULT 'planned';`)
+  }
 }
 
 /**
@@ -568,6 +578,16 @@ type WorkspacePayload = {
     cover: string
     writingStylePresetId: string
     writingStylePrompt: string
+    chapterAssistantTemplates: Array<{
+      id: string
+      label: string
+      group: 'write' | 'rewrite' | 'planning' | 'reference'
+      prompt: string
+      mode: 'freeform' | 'polish' | 'continue' | 'suggest' | 'reference'
+      length: 'short' | 'medium' | 'long'
+      task: 'chat' | 'outline-draft'
+      requiresSelection: boolean
+    }>
   }>
   workspaces: Record<
     string,
@@ -643,10 +663,12 @@ type WorkspacePayload = {
         wordTarget: string
         conflict: string
         summary: string
+        status: 'idea' | 'planned' | 'drafting' | 'done'
         sortOrder: number
       }>
       chapters: Array<{
         id: string
+        outlineItemId: string
         volumeId: string
         title: string
         summary: string
@@ -692,6 +714,10 @@ function ensureProjectColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('writing_style_prompt')) {
     db.exec(`ALTER TABLE projects ADD COLUMN writing_style_prompt TEXT NOT NULL DEFAULT '';`)
+  }
+
+  if (!columnNames.has('chapter_assistant_templates_json')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN chapter_assistant_templates_json TEXT NOT NULL DEFAULT '[]';`)
   }
 }
 
@@ -767,10 +793,12 @@ type LegacyWorkspacePayload = Omit<WorkspacePayload, 'workspaces'> & {
     wordTarget: string
     conflict: string
     summary: string
+    status?: 'idea' | 'planned' | 'drafting' | 'done'
     sortOrder?: number
   }>
   chapters?: Array<{
     id: string
+    outlineItemId?: string
     volumeId?: string
     title: string
     summary: string
@@ -832,7 +860,8 @@ function normalizeProjectRecord(project: Partial<WorkspacePayload['projects'][nu
     lastEdited: project.lastEdited || '刚刚更新',
     cover: project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
     writingStylePresetId: project.writingStylePresetId || 'cinematic-cool',
-    writingStylePrompt: project.writingStylePrompt || ''
+    writingStylePrompt: project.writingStylePrompt || '',
+    chapterAssistantTemplates: Array.isArray(project.chapterAssistantTemplates) ? project.chapterAssistantTemplates : []
   }
 }
 
@@ -916,6 +945,7 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
             ? (legacyPayload.outlineItems ?? []).map((item, index) => ({
                 ...item,
                 volumeId: item.volumeId || legacyPayload.outlineVolumes?.[0]?.id || 'volume-legacy-default',
+                status: item.status || 'planned',
                 sortOrder: item.sortOrder ?? index
               }))
             : [],
@@ -923,6 +953,7 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
           project.id === selectedProjectId
             ? (legacyPayload.chapters ?? []).map((chapter) => ({
                 ...chapter,
+                outlineItemId: chapter.outlineItemId || '',
                 volumeId: chapter.volumeId || legacyPayload.outlineVolumes?.[0]?.id || 'volume-legacy-default'
               }))
             : [],
@@ -947,13 +978,27 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
  * 数据库为空时返回 null。
  */
 function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
-  const projects = db.prepare(`
+  const projectRows = db.prepare(`
     SELECT id, title, genre, word_count AS wordCount, last_edited AS lastEdited, cover,
       writing_style_preset_id AS writingStylePresetId,
-      writing_style_prompt AS writingStylePrompt
+      writing_style_prompt AS writingStylePrompt,
+      chapter_assistant_templates_json AS chapterAssistantTemplatesJson
     FROM projects
     ORDER BY rowid ASC
-  `).all() as WorkspacePayload['projects']
+  `).all() as Array<Omit<WorkspacePayload['projects'][number], 'chapterAssistantTemplates'> & { chapterAssistantTemplatesJson?: string }>
+
+  const projects = projectRows.map((project) =>
+    normalizeProjectRecord({
+      ...project,
+      chapterAssistantTemplates: (() => {
+        try {
+          return JSON.parse(project.chapterAssistantTemplatesJson || '[]')
+        } catch {
+          return []
+        }
+      })()
+    })
+  )
 
   if (projects.length === 0) {
     return null
@@ -1021,13 +1066,13 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
   `).all() as Array<WorkspacePayload['workspaces'][string]['outlineVolumes'][number] & { projectId: string }>
 
   const outlineItems = db.prepare(`
-    SELECT project_id AS projectId, volume_id AS volumeId, id, title, word_target AS wordTarget, conflict, summary, sort_order AS sortOrder
+    SELECT project_id AS projectId, volume_id AS volumeId, id, title, word_target AS wordTarget, conflict, summary, status, sort_order AS sortOrder
     FROM outline_items
     ORDER BY project_id ASC, sort_order ASC
   `).all() as Array<WorkspacePayload['workspaces'][string]['outlineItems'][number] & { projectId: string }>
 
   const chapters = db.prepare(`
-    SELECT project_id AS projectId, volume_id AS volumeId, id, title, summary, status, word_target AS wordTarget, content
+    SELECT project_id AS projectId, volume_id AS volumeId, outline_item_id AS outlineItemId, id, title, summary, status, word_target AS wordTarget, content
     FROM chapters
     ORDER BY project_id ASC, sort_order ASC
   `).all() as Array<WorkspacePayload['workspaces'][string]['chapters'][number] & { projectId: string }>
@@ -1149,8 +1194,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
     `)
 
     const insertProject = db.prepare(`
-      INSERT INTO projects (id, title, genre, word_count, last_edited, cover, writing_style_preset_id, writing_style_prompt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, title, genre, word_count, last_edited, cover, writing_style_preset_id, writing_style_prompt, chapter_assistant_templates_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const project of payload.projects) {
       insertProject.run(
@@ -1161,7 +1206,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
         project.lastEdited,
         project.cover,
         project.writingStylePresetId,
-        project.writingStylePrompt
+        project.writingStylePrompt,
+        JSON.stringify(project.chapterAssistantTemplates ?? [])
       )
     }
 
@@ -1201,13 +1247,13 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
     `)
 
     const insertOutline = db.prepare(`
-      INSERT INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, status, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertChapter = db.prepare(`
-      INSERT INTO chapters (id, project_id, volume_id, title, summary, status, word_target, content, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO chapters (id, project_id, volume_id, outline_item_id, title, summary, status, word_target, content, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertChapterVersion = db.prepare(`
@@ -1327,6 +1373,7 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
           item.wordTarget,
           item.conflict,
           item.summary,
+          item.status,
           item.sortOrder ?? index
         )
       })
@@ -1336,6 +1383,7 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
           chapter.id,
           project.id,
           chapter.volumeId,
+          chapter.outlineItemId,
           chapter.title,
           chapter.summary,
           chapter.status,
@@ -1571,6 +1619,7 @@ function validateImportedWorkspace(payload: unknown): { valid: true } | { valid:
         (outlineItem.wordTarget !== undefined && typeof outlineItem.wordTarget !== 'string') ||
         (outlineItem.conflict !== undefined && typeof outlineItem.conflict !== 'string') ||
         (outlineItem.summary !== undefined && typeof outlineItem.summary !== 'string') ||
+        (outlineItem.status !== undefined && typeof outlineItem.status !== 'string') ||
         (outlineItem.sortOrder !== undefined && typeof outlineItem.sortOrder !== 'number')
       )
     })
@@ -1586,6 +1635,7 @@ function validateImportedWorkspace(payload: unknown): { valid: true } | { valid:
       return (
         typeof chapter.title !== 'string' ||
         typeof chapter.content !== 'string' ||
+        (chapter.outlineItemId !== undefined && typeof chapter.outlineItemId !== 'string') ||
         (chapter.volumeId !== undefined && typeof chapter.volumeId !== 'string') ||
         (chapter.summary !== undefined && typeof chapter.summary !== 'string') ||
         (chapter.status !== undefined && typeof chapter.status !== 'string') ||

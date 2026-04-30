@@ -13,6 +13,8 @@ import {
   defaultProjects,
   loadStoredState,
   normalizeAppSettings,
+  normalizeChapterAssistantTemplates,
+  normalizeProjectSummary,
   normalizeChapterDraft,
   normalizeChapterVersion,
   normalizeProjectWorkspaceData,
@@ -60,6 +62,7 @@ interface ProjectWorkspacePayload {
     cover?: string
     writingStylePresetId?: string
     writingStylePrompt?: string
+    chapterAssistantTemplates?: ProjectSummary['chapterAssistantTemplates']
   }
   worldviewEntries?: WorldviewEntry[]
   characters?: CharacterCard[]
@@ -395,7 +398,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     theme.value = payload.theme ?? 'ocean'
-    projects.value = payload.projects?.length ? payload.projects : defaultProjects
+    projects.value = payload.projects?.length ? payload.projects.map(normalizeProjectSummary) : defaultProjects
 
     const fallbackProjectId = projects.value[0]?.id ?? defaultProjects[0].id
     selectedProjectId.value = payload.selectedProjectId ?? fallbackProjectId
@@ -521,7 +524,8 @@ export const useAppStore = defineStore('app', () => {
       lastEdited: '刚刚导入',
       cover: payload.project?.cover || 'linear-gradient(135deg, #9be15d 0%, #00e3ae 100%)',
       writingStylePresetId: payload.project?.writingStylePresetId?.trim() || 'cinematic-cool',
-      writingStylePrompt: payload.project?.writingStylePrompt?.trim() || ''
+      writingStylePrompt: payload.project?.writingStylePrompt?.trim() || '',
+      chapterAssistantTemplates: normalizeChapterAssistantTemplates(payload.project?.chapterAssistantTemplates)
     }
 
     projects.value = [project, ...projects.value]
@@ -841,7 +845,7 @@ export const useAppStore = defineStore('app', () => {
     const nextVolumes = payload.outlineVolumes?.length ? payload.outlineVolumes : [createWorkspaceVolume()]
     const nextChapters = payload.chapters?.length ? payload.chapters : [buildStarterChapter(nextVolumes[0].id)]
 
-    projects.value.unshift({
+    projects.value.unshift(normalizeProjectSummary({
       id: projectId,
       title: payload.project.title,
       genre: payload.project.genre,
@@ -849,8 +853,9 @@ export const useAppStore = defineStore('app', () => {
       lastEdited: '刚刚创建',
       cover: payload.project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
       writingStylePresetId: payload.project.writingStylePresetId?.trim() || 'cinematic-cool',
-      writingStylePrompt: payload.project.writingStylePrompt?.trim() || ''
-    })
+      writingStylePrompt: payload.project.writingStylePrompt?.trim() || '',
+      chapterAssistantTemplates: normalizeChapterAssistantTemplates(payload.project.chapterAssistantTemplates)
+    }))
 
     // A new project gets its own isolated workspace instead of reusing the previous project's draft state.
     projectWorkspaces.value = {
@@ -924,7 +929,11 @@ export const useAppStore = defineStore('app', () => {
             cover: payload.cover || project.cover,
             writingStylePresetId: payload.writingStylePresetId?.trim() || project.writingStylePresetId,
             writingStylePrompt:
-              payload.writingStylePrompt !== undefined ? payload.writingStylePrompt.trim() : project.writingStylePrompt
+              payload.writingStylePrompt !== undefined ? payload.writingStylePrompt.trim() : project.writingStylePrompt,
+            chapterAssistantTemplates:
+              payload.chapterAssistantTemplates !== undefined
+                ? normalizeChapterAssistantTemplates(payload.chapterAssistantTemplates)
+                : project.chapterAssistantTemplates
           }
         : project
     )
@@ -1368,6 +1377,7 @@ export const useAppStore = defineStore('app', () => {
       const nextIndex = getChapterSequenceInVolume(workspace.chapters, targetVolumeId)
       const nextChapter: ChapterDraft = {
         id: `chapter-${Date.now()}`,
+        outlineItemId: '',
         volumeId: targetVolumeId,
         title: `第${nextIndex}章：新章节`,
         summary: '待补充章节摘要',
@@ -1391,12 +1401,13 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /** 从大纲节点创建章节，继承标题、摘要和字数目标 */
-  function createChapterFromOutlineItem(item: Pick<OutlineItem, 'volumeId' | 'title' | 'summary' | 'wordTarget'>): void {
+  function createChapterFromOutlineItem(item: Pick<OutlineItem, 'id' | 'volumeId' | 'title' | 'summary' | 'wordTarget'>): void {
     let nextChapterId = ''
     updateCurrentWorkspace((workspace) => {
       const targetVolumeId = item.volumeId || getWorkspacePrimaryVolumeId(workspace)
       const nextChapter: ChapterDraft = {
         id: `chapter-${Date.now()}`,
+        outlineItemId: item.id,
         volumeId: targetVolumeId,
         title: item.title?.trim() || '新章节',
         summary: item.summary?.trim() || '待补充章节摘要',
@@ -1456,12 +1467,49 @@ export const useAppStore = defineStore('app', () => {
         summary:
           payload?.summary?.trim() ||
           '这里是新的剧情大纲节点草稿，可以继续补充剧情推进、角色目标和关键转折。',
+        status: payload?.status || 'planned',
         sortOrder: payload?.sortOrder ?? workspace.outlineItems.length
       }
 
       return {
         ...workspace,
         outlineItems: reindexOutlineItems(insertIntoVolumeSection(workspace.outlineItems, nextItem))
+      }
+    })
+    schedulePersist('fast')
+  }
+
+  function createOutlineItemsAfter(anchorOutlineId: string, payloads: Array<Partial<OutlineItem>>): void {
+    if (!payloads.length) {
+      return
+    }
+
+    updateCurrentWorkspace((workspace) => {
+      const anchorIndex = workspace.outlineItems.findIndex((item) => item.id === anchorOutlineId)
+      if (anchorIndex === -1) {
+        return workspace
+      }
+
+      const anchorItem = workspace.outlineItems[anchorIndex]
+      const insertedItems = payloads.map((payload, index) => ({
+        id: `outline-${Date.now()}-${index + 1}`,
+        volumeId: payload.volumeId || anchorItem.volumeId,
+        title: payload.title?.trim() || `第${anchorIndex + index + 2}章：新剧情节点`,
+        wordTarget: payload.wordTarget?.trim() || '预估 3000字',
+        conflict: payload.conflict?.trim() || '新的冲突正在酝酿。',
+        summary:
+          payload.summary?.trim() ||
+          '这里是新的剧情大纲节点草稿，可以继续补充剧情推进、角色目标和关键转折。',
+        status: payload.status || 'planned',
+        sortOrder: anchorIndex + index + 1
+      }))
+
+      const nextItems = [...workspace.outlineItems]
+      nextItems.splice(anchorIndex + 1, 0, ...insertedItems)
+
+      return {
+        ...workspace,
+        outlineItems: reindexOutlineItems(nextItems)
       }
     })
     schedulePersist('fast')
@@ -1480,7 +1528,8 @@ export const useAppStore = defineStore('app', () => {
         title: payload.title?.trim() || currentItem.title,
         wordTarget: payload.wordTarget?.trim() || currentItem.wordTarget,
         conflict: payload.conflict?.trim() || currentItem.conflict,
-        summary: payload.summary?.trim() || currentItem.summary
+        summary: payload.summary?.trim() || currentItem.summary,
+        status: payload.status || currentItem.status
       }
 
       const remainingItems = workspace.outlineItems.filter((item) => item.id !== outlineId)
@@ -1593,6 +1642,7 @@ export const useAppStore = defineStore('app', () => {
         chapter.id === chapterId
           ? normalizeChapterDraft({
               ...chapter,
+              outlineItemId: payload.outlineItemId !== undefined ? payload.outlineItemId : chapter.outlineItemId,
               volumeId: payload.volumeId || chapter.volumeId,
               title: payload.title?.trim() || chapter.title,
               summary: payload.summary !== undefined ? payload.summary.trim() || chapter.summary : chapter.summary,
@@ -1923,6 +1973,7 @@ export const useAppStore = defineStore('app', () => {
     createOrganization,
     createOrganizationMembership,
     createOutlineItem,
+    createOutlineItemsAfter,
     createOutlineVolume,
     createWorldviewEntry,
     createChapter,

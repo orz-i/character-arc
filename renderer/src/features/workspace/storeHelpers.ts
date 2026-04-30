@@ -3,6 +3,7 @@ import { createOutlineVolume as createWorkspaceVolume } from '@/features/workspa
 import { createDemoWorkspace, normalizeWorkspace } from '@/features/workspace/projectWorkspace'
 import type {
   AppSettings,
+  ChapterAssistantPromptTemplate,
   ChapterDraft,
   ChapterVersion,
   ChatMessage,
@@ -57,9 +58,36 @@ export const defaultProjects: ProjectSummary[] = [
     lastEdited: '10分钟前编辑',
     cover: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
     writingStylePresetId: 'cinematic-cool',
-    writingStylePrompt: ''
+    writingStylePrompt: '',
+    chapterAssistantTemplates: []
   }
 ]
+
+export function normalizeChapterAssistantTemplates(
+  templates?: ChapterAssistantPromptTemplate[] | null
+): ChapterAssistantPromptTemplate[] {
+  return Array.isArray(templates)
+    ? templates.map((template) => ({
+        ...template,
+        label: template.label?.trim() || '未命名模板',
+        prompt: template.prompt?.trim() || '',
+        group: template.group,
+        mode: template.mode,
+        length: template.length,
+        task: template.task,
+        requiresSelection: Boolean(template.requiresSelection)
+      }))
+    : []
+}
+
+export function normalizeProjectSummary(project: ProjectSummary): ProjectSummary {
+  return {
+    ...project,
+    writingStylePresetId: project.writingStylePresetId?.trim() || 'cinematic-cool',
+    writingStylePrompt: project.writingStylePrompt?.trim() || '',
+    chapterAssistantTemplates: normalizeChapterAssistantTemplates(project.chapterAssistantTemplates)
+  }
+}
 
 // 默认应用设置：使用 DeepSeek API，5分钟自动保存
 export const defaultAppSettings: AppSettings = {
@@ -100,6 +128,7 @@ export function loadStoredState(): StoredState {
 export function normalizeChapterDraft(chapter: ChapterDraft): ChapterDraft {
   return {
     ...chapter,
+    outlineItemId: chapter.outlineItemId ?? '',
     summary: chapter.summary?.trim() || '待补充章节摘要',
     status: chapter.status ?? 'draft',
     wordTarget: chapter.wordTarget?.trim() || '预估 3000字'
@@ -142,6 +171,7 @@ export function normalizeProjectWorkspaceData(
 export function buildStarterChapter(volumeId: string, title = '第1章：开篇'): ChapterDraft {
   return {
     id: `chapter-${Date.now()}`,
+    outlineItemId: '',
     volumeId,
     title,
     summary: '待补充章节摘要',

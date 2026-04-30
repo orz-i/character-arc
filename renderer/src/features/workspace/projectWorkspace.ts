@@ -458,6 +458,7 @@ const demoInspiration: InspirationEntry[] = [
 const demoChapters: ChapterDraft[] = [
   {
     id: 'chapter-1',
+    outlineItemId: 'outline-1',
     volumeId: 'volume-1',
     title: '第1章：义体回收站的雨夜',
     summary: '李雷在雨夜的义体回收站救下被追杀的艾达，平静生活由此被撕开缺口。',
@@ -468,6 +469,7 @@ const demoChapters: ChapterDraft[] = [
   },
   {
     id: 'chapter-2',
+    outlineItemId: 'outline-2',
     volumeId: 'volume-1',
     title: '第2章：走私芯片',
     summary: '李雷藏起艾达并请老鬼救治，同时躲避公司杀手对贫民窟的搜查。',
@@ -477,6 +479,7 @@ const demoChapters: ChapterDraft[] = [
   },
   {
     id: 'chapter-3',
+    outlineItemId: '',
     volumeId: 'volume-1',
     title: '第3章：公司狗的觉醒',
     summary: '李雷逐步意识到艾达带来的秘密不只是麻烦，也可能改变整座夜城。',

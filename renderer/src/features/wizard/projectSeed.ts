@@ -34,6 +34,7 @@ export interface ProjectWorkspaceSeed {
     cover: string
     writingStylePresetId: string
     writingStylePrompt: string
+    chapterAssistantTemplates: import('@/types/app').ChapterAssistantPromptTemplate[]
   }
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
@@ -64,6 +65,7 @@ function normalizeTargetWordCount(value: string): string {
 function buildBlankStarterChapter(values: ProjectWizardValues, timestamp: number, volumeId: string): ChapterDraft {
   return {
     id: createSeedId('chapter', 0, timestamp),
+    outlineItemId: '',
     volumeId,
     title: '第1章：开篇',
     summary: values.premise.trim() || '待补充章节摘要',
@@ -104,6 +106,7 @@ export function createProjectWorkspaceSeed(
     wordTarget: item.wordTarget?.trim() || `预估 ${normalizeTargetWordCount(values.targetWordCount)}`,
     conflict: item.conflict?.trim() || '新的冲突正在酝酿。',
     summary: item.summary?.trim() || '待补充剧情摘要。',
+    status: 'planned' as const,
     sortOrder: index
   }))
 
@@ -122,6 +125,7 @@ export function createProjectWorkspaceSeed(
   const chapters = outlineItems.length
     ? outlineItems.map((item, index) => ({
         id: createSeedId('chapter', index, timestamp),
+        outlineItemId: item.id,
         volumeId: item.volumeId,
         title: item.title,
         summary: item.summary,
@@ -138,7 +142,8 @@ export function createProjectWorkspaceSeed(
       wordCount: `目标 ${normalizeTargetWordCount(values.targetWordCount)}`,
       cover: DEFAULT_PROJECT_COVER,
       writingStylePresetId: 'cinematic-cool', // 默认使用冷峻电影感写作风格
-      writingStylePrompt: ''
+      writingStylePrompt: '',
+      chapterAssistantTemplates: []
     },
     worldviewEntries,
     characters: [],  // 初始项目无角色，由用户后续添加

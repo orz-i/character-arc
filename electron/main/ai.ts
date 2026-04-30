@@ -15,6 +15,7 @@ import {
   type CharacterResult,
   type InspirationPackResult,
   type InspirationResult,
+  type OutlineBatchResult,
   type OutlineResult,
   type ProjectBootstrapResult,
   type WorldviewResult
@@ -88,6 +89,18 @@ function normalizeOutlineResult(result: AiTaskResult): OutlineResult {
     wordTarget: item.wordTarget?.trim() || '预估 3000字',
     conflict: item.conflict?.trim() || '新的冲突正在酝酿。',
     summary: item.summary?.trim() || 'AI 未返回有效剧情摘要'
+  }
+}
+
+/** 标准化批量大纲节点结果，限制最多 5 条 */
+function normalizeOutlineBatchResult(result: AiTaskResult): OutlineBatchResult {
+  const payload = result as Partial<OutlineBatchResult>
+  const entries = Array.isArray(payload.entries)
+    ? payload.entries.slice(0, 5).map((entry) => normalizeOutlineResult(entry as AiTaskResult))
+    : []
+
+  return {
+    entries
   }
 }
 
@@ -196,6 +209,11 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
     return payload.entries.length > 0
   }
 
+  if (task.task === 'outline-batch' || task.task === 'outline-chain') {
+    const payload = result as OutlineBatchResult
+    return payload.entries.length > 0
+  }
+
   if (task.task === 'worldview-entry') {
     const entry = result as WorldviewResult
     return Boolean(entry.title.trim() && entry.content.trim())
@@ -228,6 +246,9 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
       return normalizeCharacterResult(parsed)
     case 'project-bootstrap':
       return normalizeProjectBootstrapResult(parsed)
+    case 'outline-batch':
+    case 'outline-chain':
+      return normalizeOutlineBatchResult(parsed)
     case 'chapter-analysis':
       return normalizeChapterAnalysisResult(parsed)
     case 'inspiration-pack':

@@ -82,6 +82,24 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     }
   }
 
+  // ── 当前分卷批量补全大纲任务 ──
+  if (task.task === 'outline-batch') {
+    return {
+      system:
+        '你是小说分卷大纲规划助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 entries，entries 中每项都必须包含 title、wordTarget、conflict、summary。',
+      user: `请基于以下上下文，为当前分卷连续补充 3 到 5 个新的剧情大纲节点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前分卷目标字数：${String(context.chapterVolumeWordTarget ?? '')}\n当前分卷已有节点：${JSON.stringify(context.currentVolumeOutlineItems ?? [])}\n全局已有大纲标题：${JSON.stringify(context.outlineTitles ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n角色参考：${JSON.stringify(context.characters ?? [])}\n补充要求：${String(context.userPrompt ?? '')}\n\n要求：\n1. entries 返回 3 到 5 条新节点，按顺序推进，不要重复已有节点\n2. 每条都必须包含 title、wordTarget、conflict、summary\n3. title 要体现章节推进关系，避免空泛命名\n4. wordTarget 使用"预估 xxxx字"格式\n5. conflict 用一句话概括该节点最核心的矛盾或压力\n6. summary 用中文描述剧情推进，80 到 180 字\n7. 各节点之间要形成连续节奏，不能像互相无关的散点\n8. 如果当前分卷已有节点偏少，优先补桥接节点；如果已有节点较多，优先补冲突升级和转折节点\n9. 必须保持与当前分卷摘要、已有角色关系和世界观一致\n10. ${writingStyleInstruction}\n\n返回格式：{"entries":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+    }
+  }
+
+  // ── 基于当前章节生成后续剧情链任务 ──
+  if (task.task === 'outline-chain') {
+    return {
+      system:
+        '你是小说剧情链规划助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 entries，entries 中每项都必须包含 title、wordTarget、conflict、summary。',
+      user: `请基于以下上下文，为当前章节之后连续规划 2 到 4 个后续剧情大纲节点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n当前关联大纲节点：${JSON.stringify(context.currentOutlineItem ?? {})}\n当前分卷已有节点：${JSON.stringify(context.currentVolumeOutlineItems ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n角色参考：${JSON.stringify(context.characters ?? [])}\n补充要求：${String(context.userPrompt ?? '')}\n\n要求：\n1. entries 返回 2 到 4 个后续节点，必须严格体现“当前章节之后”的连续推进\n2. 每条都必须包含 title、wordTarget、conflict、summary\n3. 第一条要紧贴当前章节收束后的直接后果或下一步动作\n4. 后续条目之间要形成递进，至少包含一次冲突升级或转折\n5. wordTarget 使用"预估 xxxx字"格式\n6. summary 用中文描述剧情推进，80 到 180 字\n7. 不要重复当前分卷中已有节点标题和主要推进\n8. 必须保持与当前角色关系、组织立场和世界观一致\n9. ${writingStyleInstruction}\n\n返回格式：{"entries":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+    }
+  }
+
   // ── 灵感卡片批量生成任务 ──
   if (task.task === 'inspiration-pack') {
     const worldviewEntries = Array.isArray(context.worldviewEntries)

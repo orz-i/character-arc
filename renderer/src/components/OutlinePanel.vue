@@ -2,11 +2,12 @@
 import { computed, reactive, ref } from 'vue'
 import { FilePlus2, GripVertical, MoreVertical, Plus, Rows3, Sparkles } from 'lucide-vue-next'
 import { NButton, NDropdown, NForm, NFormItem, NInput, NModal, NSelect, useDialog, useMessage } from 'naive-ui'
+import { getChapterCharacterCount } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
 import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
 import type { DropdownOption, SelectOption } from 'naive-ui'
-import type { OutlineItem, OutlineVolume } from '@/types/app'
+import type { OutlineItem, OutlineItemStatus, OutlineVolume } from '@/types/app'
 
 const props = defineProps<{
   searchQuery?: string // 全局搜索关键词
@@ -17,6 +18,7 @@ const dialog = useDialog()
 const message = useMessage()
 const writingStyle = computed(() => buildProjectWritingStyleContext(appStore.currentProject))
 const isExpanding = ref(false) // AI 扩写大纲时的加载状态
+const expandingVolumeId = ref<string | null>(null)
 const editorVisible = ref(false) // 控制大纲节点编辑弹窗
 const volumeEditorVisible = ref(false) // 控制分卷编辑弹窗
 const editingOutlineId = ref<string | null>(null) // 当前编辑的大纲节点 ID
@@ -29,7 +31,8 @@ const form = reactive({
   title: '',
   wordTarget: '',
   conflict: '',
-  summary: ''
+  summary: '',
+  status: 'planned' as OutlineItemStatus
 })
 // 分卷编辑表单
 const volumeForm = reactive({
@@ -48,6 +51,12 @@ const volumeOptions = computed<SelectOption[]>(() =>
     value: volume.id
   }))
 )
+const outlineStatusOptions: SelectOption[] = [
+  { label: '点子', value: 'idea' },
+  { label: '已规划', value: 'planned' },
+  { label: '写作中', value: 'drafting' },
+  { label: '已完成', value: 'done' }
+]
 // 按分卷分组过滤大纲节点，搜索时在标题、冲突和剧情描述中匹配
 const filteredOutlineGroups = computed(() => {
   const query = props.searchQuery?.trim().toLowerCase() ?? ''
@@ -75,6 +84,7 @@ function handleCreateOutline(volumeId = appStore.outlineVolumes[0]?.id): void {
   form.wordTarget = '预估 3000字'
   form.conflict = ''
   form.summary = ''
+  form.status = 'planned'
   editorVisible.value = true
 }
 
@@ -117,13 +127,88 @@ async function handleExpandOutline(): Promise<void> {
       title: item.title ?? `第${appStore.outlineItems.length + 1}章：新剧情节点`,
       wordTarget: item.wordTarget ?? '预估 3000字',
       conflict: item.conflict ?? '新的冲突正在酝酿。',
-      summary: item.summary ?? 'AI 未返回有效剧情摘要'
+      summary: item.summary ?? 'AI 未返回有效剧情摘要',
+      status: 'planned'
     })
     message.success('AI 已补充新的大纲节点')
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'AI 扩写大纲失败，请检查模型配置')
   } finally {
     isExpanding.value = false
+  }
+}
+
+async function handleExpandVolumeOutline(volume: OutlineVolume): Promise<void> {
+  if (expandingVolumeId.value) {
+    return
+  }
+
+  expandingVolumeId.value = volume.id
+
+  try {
+    const result = await window.characterArc.generateAi({
+      task: 'outline-batch',
+      settings: appStore.appSettings,
+      context: {
+        projectTitle: appStore.currentProject?.title,
+        projectGenre: appStore.currentProject?.genre,
+        writingStyleLabel: writingStyle.value.label,
+        writingStylePrompt: writingStyle.value.prompt,
+        chapterVolumeTitle: volume.title,
+        chapterVolumeSummary: volume.summary,
+        chapterVolumeWordTarget: volume.wordTarget,
+        outlineTitles: appStore.outlineItems.map((item) => item.title),
+        worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title),
+        characters: appStore.characters.map((character) => ({
+          name: character.name,
+          role: character.role,
+          description: character.description
+        })),
+        currentVolumeOutlineItems: appStore.outlineItems
+          .filter((item) => item.volumeId === volume.id)
+          .map((item) => ({
+            title: item.title,
+            conflict: item.conflict,
+            summary: item.summary,
+            status: item.status
+          })),
+        userPrompt: '请优先补足当前分卷从现有节点往后最需要的 3 到 5 个剧情节点。'
+      }
+    })
+
+    if (!result.success || !result.result) {
+      throw new Error(result.error ?? '分卷批量大纲生成失败，请检查模型配置')
+    }
+
+    const payload = result.result as {
+      entries?: Array<{
+        title?: string
+        wordTarget?: string
+        conflict?: string
+        summary?: string
+      }>
+    }
+    const entries = Array.isArray(payload.entries) ? payload.entries : []
+    if (!entries.length) {
+      throw new Error('AI 没有返回有效的大纲节点')
+    }
+
+    entries.forEach((entry) => {
+      appStore.createOutlineItem({
+        volumeId: volume.id,
+        title: entry.title,
+        wordTarget: entry.wordTarget,
+        conflict: entry.conflict,
+        summary: entry.summary,
+        status: 'planned'
+      })
+    })
+
+    message.success(`已为 ${volume.title} 补充 ${entries.length} 个大纲节点`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '分卷批量大纲生成失败，请稍后重试')
+  } finally {
+    expandingVolumeId.value = null
   }
 }
 
@@ -135,6 +220,7 @@ function openEditor(item?: OutlineItem): void {
   form.wordTarget = item?.wordTarget ?? '预估 3000字'
   form.conflict = item?.conflict ?? ''
   form.summary = item?.summary ?? ''
+  form.status = item?.status ?? 'planned'
   editorVisible.value = true
 }
 
@@ -193,7 +279,77 @@ function handleCreateChapterFromOutline(item: OutlineItem): void {
   // Carry the outline node's core planning fields straight into a fresh chapter
   // draft so the writer can continue from structure into prose immediately.
   appStore.createChapterFromOutlineItem(item)
+  appStore.updateOutlineItem(item.id, {
+    status: item.status === 'done' ? 'done' : 'drafting'
+  })
   message.success('已根据大纲节点创建章节草稿')
+}
+
+function openLinkedChapter(item: OutlineItem): void {
+  const chapter = resolveLinkedChapter(item)
+  if (!chapter) {
+    handleCreateChapterFromOutline(item)
+    return
+  }
+
+  appStore.openChapterStudio(chapter.id)
+}
+
+function resolveOutlineStatusMeta(status: OutlineItemStatus): { label: string; tone: string } {
+  switch (status) {
+    case 'idea':
+      return { label: '点子', tone: 'ghost' }
+    case 'drafting':
+      return { label: '写作中', tone: 'primary' }
+    case 'done':
+      return { label: '已完成', tone: 'success' }
+    case 'planned':
+    default:
+      return { label: '已规划', tone: 'neutral' }
+  }
+}
+
+function resolveLinkedChapter(item: OutlineItem) {
+  return (
+    appStore.chapters.find((chapter) => chapter.outlineItemId === item.id) ??
+    appStore.chapters.find((chapter) => chapter.title.trim() === item.title.trim()) ??
+    null
+  )
+}
+
+function resolveLinkedChapterMeta(item: OutlineItem): { label: string; tone: string } {
+  const chapter = resolveLinkedChapter(item)
+  if (!chapter) {
+    return { label: '未生成章节', tone: 'ghost' }
+  }
+
+  switch (chapter.status) {
+    case 'final':
+      return { label: '章节已定稿', tone: 'success' }
+    case 'polish':
+      return { label: '章节待润色', tone: 'warning' }
+    case 'review':
+      return { label: '章节审阅中', tone: 'neutral' }
+    case 'draft':
+    default:
+      return { label: '章节写作中', tone: 'primary' }
+  }
+}
+
+function resolveLinkedChapterProgress(item: OutlineItem): { actual: number; target: number; percent: number } {
+  const chapter = resolveLinkedChapter(item)
+  if (!chapter) {
+    return { actual: 0, target: 0, percent: 0 }
+  }
+
+  const actual = getChapterCharacterCount(chapter.content)
+  const wanMatch = chapter.wordTarget.match(/(\d+(?:\.\d+)?)\s*万/)
+  const target = wanMatch
+    ? Math.round(Number(wanMatch[1]) * 10000)
+    : Math.round(Number(chapter.wordTarget.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/)?.[1] ?? 0))
+
+  const percent = target ? Math.min(100, Math.max(0, Math.round((actual / target) * 100))) : 0
+  return { actual, target, percent }
 }
 
 // --- 拖拽排序相关函数 ---
@@ -300,6 +456,15 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
           </div>
           <div class="volume-actions">
             <n-button round secondary strong @click="openVolumeEditor(group.volume)">编辑分卷</n-button>
+            <n-button
+              round
+              strong
+              secondary
+              :disabled="Boolean(expandingVolumeId)"
+              @click="handleExpandVolumeOutline(group.volume)"
+            >
+              {{ expandingVolumeId === group.volume.id ? '补全中...' : 'AI补本卷' }}
+            </n-button>
             <n-button round type="primary" strong @click="handleCreateOutline(group.volume.id)">新增节点</n-button>
           </div>
         </div>
@@ -325,14 +490,38 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
                 <span class="outline-grip" aria-hidden="true">
                   <GripVertical :size="14" />
                 </span>
-                <span class="outline-title">{{ item.title }}</span>
+                <div class="outline-title-copy">
+                  <span class="outline-title">{{ item.title }}</span>
+                  <div class="outline-meta-row">
+                    <span class="outline-status-pill" :class="resolveOutlineStatusMeta(item.status).tone">
+                      {{ resolveOutlineStatusMeta(item.status).label }}
+                    </span>
+                    <span class="outline-status-pill chapter" :class="resolveLinkedChapterMeta(item).tone">
+                      {{ resolveLinkedChapterMeta(item).label }}
+                    </span>
+                  </div>
+                  <div v-if="resolveLinkedChapter(item)" class="outline-progress-row">
+                    <span class="outline-progress-copy">
+                      实际 {{ resolveLinkedChapterProgress(item).actual }} 字
+                      <template v-if="resolveLinkedChapterProgress(item).target">
+                        / 目标 {{ resolveLinkedChapterProgress(item).target }} 字
+                      </template>
+                    </span>
+                    <span class="outline-progress-copy emphasis">
+                      {{ resolveLinkedChapterProgress(item).target ? `${resolveLinkedChapterProgress(item).percent}%` : '自由字数' }}
+                    </span>
+                    <span v-if="resolveLinkedChapterProgress(item).target" class="outline-progress-track">
+                      <span :style="{ width: `${resolveLinkedChapterProgress(item).percent}%` }"></span>
+                    </span>
+                  </div>
+                </div>
               </div>
               <div class="outline-actions">
-                <n-button tertiary size="small" @click.stop="handleCreateChapterFromOutline(item)">
+                <n-button tertiary size="small" @click.stop="openLinkedChapter(item)">
                   <template #icon>
                     <FilePlus2 :size="14" />
                   </template>
-                  创建章节
+                  {{ resolveLinkedChapter(item) ? '打开章节' : '创建章节' }}
                 </n-button>
                 <span class="outline-word">{{ item.wordTarget }}</span>
                 <n-dropdown :options="menuOptions" placement="bottom-end" @select="(key) => handleMenuSelect(key, item)">
@@ -375,6 +564,9 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
         </n-form-item>
         <n-form-item label="预估字数">
           <n-input v-model:value="form.wordTarget" placeholder="例如：预估 3200字" />
+        </n-form-item>
+        <n-form-item label="推进状态">
+          <n-select v-model:value="form.status" :options="outlineStatusOptions" placeholder="选择当前节点所处阶段" />
         </n-form-item>
         <n-form-item label="核心冲突">
           <n-input v-model:value="form.conflict" placeholder="概括这一节点的核心矛盾..." />
@@ -632,12 +824,98 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
   flex: 1;
 }
 
+.outline-title-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .outline-title-row {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 10px;
   flex: 1;
+}
+
+.outline-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.outline-progress-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(120px, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.outline-progress-copy {
+  color: var(--arc-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.outline-progress-copy.emphasis {
+  color: var(--arc-text-primary);
+  font-weight: 800;
+}
+
+.outline-progress-track {
+  display: inline-flex;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.92);
+}
+
+.outline-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #93c5fd 0%, #2563eb 100%);
+}
+
+.outline-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.outline-status-pill.ghost {
+  background: rgba(241, 245, 249, 0.96);
+  color: var(--arc-text-hint);
+}
+
+.outline-status-pill.neutral {
+  background: rgba(219, 234, 254, 0.9);
+  color: #1d4ed8;
+}
+
+.outline-status-pill.primary {
+  background: rgba(219, 234, 254, 0.98);
+  color: #2563eb;
+}
+
+.outline-status-pill.warning {
+  background: rgba(254, 243, 199, 0.95);
+  color: #b45309;
+}
+
+.outline-status-pill.success {
+  background: rgba(220, 252, 231, 0.96);
+  color: #15803d;
+}
+
+.outline-status-pill.chapter {
+  border: 1px solid rgba(226, 232, 240, 0.76);
 }
 
 .outline-grip {

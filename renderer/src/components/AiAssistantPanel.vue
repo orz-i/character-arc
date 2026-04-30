@@ -7,7 +7,7 @@ import {
   chapterAssistantLengthOptions,
   chapterAssistantModeOptions,
   chapterAssistantQuickActionGroups,
-  chapterAssistantQuickActions,
+  getResolvedChapterAssistantTemplates,
   type ChapterAssistantQuickAction
 } from '@/features/ai/chapterAssistantOptions'
 import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
@@ -106,6 +106,7 @@ const activeModeLabel = computed(
 const activeLengthLabel = computed(
   () => chapterAssistantLengthOptions.find((option) => option.value === responseLength.value)?.label ?? '适中'
 )
+const quickActions = computed(() => getResolvedChapterAssistantTemplates(currentProject.value))
 // 工具箱折叠状态的摘要文本（如"模式 自由提问 · 长度 适中 · 含选中文本"）
 const toolboxSummary = computed(() => {
   const summary = [`模式 ${activeModeLabel.value}`, `长度 ${activeLengthLabel.value}`]
@@ -120,7 +121,7 @@ const quickActionGroups = computed(() =>
   chapterAssistantQuickActionGroups
     .map((group) => ({
       ...group,
-      actions: chapterAssistantQuickActions.filter((action) => action.group === group.key)
+      actions: quickActions.value.filter((action) => action.group === group.key)
     }))
     .filter((group) => group.actions.length)
 )

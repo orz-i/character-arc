@@ -50,6 +50,7 @@ const saveState = ref<'typing' | 'idle'>('idle') // 输入状态指示：typing 
 const editorVisible = ref(false) // 控制章节信息编辑弹窗
 const versionHistoryVisible = ref(false) // 控制历史版本弹窗
 const isGeneratingInspiration = ref(false) // AI 生成章节灵感时的加载状态
+const isGeneratingOutlineChain = ref(false)
 const readingMode = ref(false) // 是否处于阅读模式
 const compactSidebarVisible = ref(false) // 紧凑模式下章节目录抽屉的显示状态
 const compactInsightsVisible = ref(false) // 紧凑模式下章节参考抽屉的显示状态
@@ -58,6 +59,7 @@ const dragTargetChapterId = ref<string | null>(null) // 拖拽目标位置的章
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth) // 当前视口宽度，用于响应式布局判断
 // 章节编辑表单
 const chapterForm = reactive({
+  outlineItemId: '',
   volumeId: '',
   title: '',
   summary: '',
@@ -83,6 +85,37 @@ const volumeOptions = computed<SelectOption[]>(() =>
     value: volume.id
   }))
 )
+const outlineBindingOptions = computed<SelectOption[]>(() => {
+  const currentChapterId = appStore.selectedChapter?.id
+  const targetVolumeId = chapterForm.volumeId || appStore.selectedChapter?.volumeId || ''
+
+  const baseOptions: SelectOption[] = [
+    {
+      label: '不绑定大纲节点',
+      value: ''
+    }
+  ]
+
+  const scopedItems = appStore.outlineItems.filter((item) => !targetVolumeId || item.volumeId === targetVolumeId)
+  const linkedChapterMap = new Map(
+    appStore.chapters
+      .filter((chapter) => chapter.outlineItemId)
+      .map((chapter) => [chapter.outlineItemId, chapter])
+  )
+
+  return [
+    ...baseOptions,
+    ...scopedItems.map((item) => {
+      const linkedChapter = linkedChapterMap.get(item.id)
+      const occupiedByOtherChapter = linkedChapter && linkedChapter.id !== currentChapterId
+      return {
+        label: occupiedByOtherChapter ? `${item.title} · 已绑定到「${linkedChapter.title}」` : item.title,
+        value: item.id,
+        disabled: Boolean(occupiedByOtherChapter)
+      }
+    })
+  ]
+})
 // 当前章节的字数统计（基于富文本内容计算）
 const currentWordCount = computed(() => getChapterCharacterCount(appStore.selectedChapter?.content ?? ''))
 // 当前章节的纯文本内容（用于 AI 上下文和灵感关联）
@@ -162,6 +195,33 @@ const currentProgressPercent = computed(() => {
 })
 // 当前章节摘要文本，为空时显示占位提示
 const currentSummaryText = computed(() => appStore.selectedChapter?.summary?.trim() || '待补充章节摘要')
+const linkedOutlineItem = computed(() => {
+  const chapter = appStore.selectedChapter
+  if (!chapter) {
+    return null
+  }
+
+  return (
+    appStore.outlineItems.find((item) => item.id === chapter.outlineItemId) ??
+    appStore.outlineItems.find((item) => item.title.trim() === chapter.title.trim()) ??
+    null
+  )
+})
+const linkedOutlineStatusMeta = computed(() => {
+  switch (linkedOutlineItem.value?.status) {
+    case 'idea':
+      return { label: '点子', tone: 'ghost' }
+    case 'drafting':
+      return { label: '写作中', tone: 'primary' }
+    case 'done':
+      return { label: '已完成', tone: 'success' }
+    case 'planned':
+      return { label: '已规划', tone: 'neutral' }
+    default:
+      return { label: '未绑定大纲节点', tone: 'ghost' }
+  }
+})
+const canSyncOutlineBack = computed(() => Boolean(linkedOutlineItem.value && appStore.selectedChapter))
 // 章节灵感的焦点类型：用于 AI 生成灵感时指定方向
 const chapterInspirationFocuses = ['场景火花', '剧情转折', '人物动机'] as const
 // 从全局灵感池中选取与当前章节最相关的灵感卡片（最多 4 张）
@@ -420,11 +480,133 @@ function openChapterMetaEditor(chapter?: ChapterDraft | null): void {
   }
 
   chapterForm.volumeId = chapter.volumeId
+  chapterForm.outlineItemId = chapter.outlineItemId
   chapterForm.title = chapter.title
   chapterForm.summary = chapter.summary
   chapterForm.status = chapter.status
   chapterForm.wordTarget = chapter.wordTarget
   editorVisible.value = true
+}
+
+function mapChapterStatusToOutlineStatus(status: ChapterDraft['status']) {
+  switch (status) {
+    case 'final':
+      return 'done' as const
+    case 'polish':
+    case 'review':
+    case 'draft':
+    default:
+      return 'drafting' as const
+  }
+}
+
+function syncChapterBackToOutline(): void {
+  const chapter = appStore.selectedChapter
+  const outline = linkedOutlineItem.value
+  if (!chapter || !outline) {
+    return
+  }
+
+  appStore.updateOutlineItem(outline.id, {
+    summary: chapter.summary?.trim() || outline.summary,
+    status: mapChapterStatusToOutlineStatus(chapter.status)
+  })
+  message.success('已把当前章节摘要与推进状态同步回大纲节点')
+}
+
+function jumpBackToOutline(): void {
+  appStore.backToWorkbench()
+  appStore.setPanel('outline')
+}
+
+async function generateNextOutlineChain(): Promise<void> {
+  const chapter = appStore.selectedChapter
+  const outline = linkedOutlineItem.value
+  const volume = appStore.selectedChapterVolume
+  if (!chapter || !outline || !volume) {
+    message.warning('当前章节还没有稳定绑定到大纲节点')
+    return
+  }
+
+  if (isGeneratingOutlineChain.value) {
+    return
+  }
+
+  isGeneratingOutlineChain.value = true
+
+  try {
+    const result = await window.characterArc.generateAi({
+      task: 'outline-chain',
+      settings: appStore.appSettings,
+      context: {
+        projectTitle: appStore.currentProject?.title,
+        projectGenre: appStore.currentProject?.genre,
+        writingStyleLabel: writingStyle.value.label,
+        writingStylePrompt: writingStyle.value.prompt,
+        chapterVolumeTitle: volume.title,
+        chapterVolumeSummary: volume.summary,
+        chapterTitle: chapter.title,
+        chapterSummary: chapter.summary,
+        chapterStatus: chapter.status,
+        chapterContent: currentPlainContent.value,
+        currentOutlineItem: {
+          title: outline.title,
+          conflict: outline.conflict,
+          summary: outline.summary,
+          status: outline.status
+        },
+        currentVolumeOutlineItems: appStore.outlineItems
+          .filter((item) => item.volumeId === volume.id)
+          .map((item) => ({
+            title: item.title,
+            conflict: item.conflict,
+            summary: item.summary,
+            status: item.status
+          })),
+        worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title),
+        characters: appStore.characters.map((character) => ({
+          name: character.name,
+          role: character.role,
+          description: character.description
+        })),
+        userPrompt: '请紧接当前章节之后，连续规划下一段剧情链。'
+      }
+    })
+
+    if (!result.success || !result.result) {
+      throw new Error(result.error ?? '后续剧情链生成失败，请检查模型配置')
+    }
+
+    const payload = result.result as {
+      entries?: Array<{
+        title?: string
+        wordTarget?: string
+        conflict?: string
+        summary?: string
+      }>
+    }
+    const entries = Array.isArray(payload.entries) ? payload.entries : []
+    if (!entries.length) {
+      throw new Error('AI 没有返回有效的后续剧情链')
+    }
+
+    appStore.createOutlineItemsAfter(
+      outline.id,
+      entries.map((entry) => ({
+        volumeId: volume.id,
+        title: entry.title,
+        wordTarget: entry.wordTarget,
+        conflict: entry.conflict,
+        summary: entry.summary,
+        status: 'planned' as const
+      }))
+    )
+    message.success(`已在当前节点后补充 ${entries.length} 个后续剧情节点`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '后续剧情链生成失败，请稍后重试')
+  } finally {
+    isGeneratingOutlineChain.value = false
+  }
 }
 
 // 格式化版本创建时间为中文简短格式
@@ -492,6 +674,7 @@ function submitChapterMeta(): void {
   }
 
   appStore.updateChapter(chapter.id, {
+    outlineItemId: chapterForm.outlineItemId,
     volumeId: chapterForm.volumeId,
     title: chapterForm.title,
     summary: chapterForm.summary,
@@ -876,6 +1059,43 @@ onBeforeUnmount(() => {
                     @input="appStore.updateChapterTitle(($event.target as HTMLInputElement).value)"
                   />
                 </div>
+                <div v-if="linkedOutlineItem" class="outline-origin-card">
+                  <div class="outline-origin-head">
+                    <span class="outline-origin-kicker">来源大纲节点</span>
+                    <div class="outline-origin-head-actions">
+                      <button v-if="canSyncOutlineBack" class="outline-origin-link secondary" @click="syncChapterBackToOutline()">
+                        同步回大纲
+                      </button>
+                      <button
+                        v-if="linkedOutlineItem"
+                        class="outline-origin-link secondary"
+                        :disabled="isGeneratingOutlineChain"
+                        @click="generateNextOutlineChain()"
+                      >
+                        {{ isGeneratingOutlineChain ? '生成中...' : '生成后续剧情链' }}
+                      </button>
+                      <button class="outline-origin-link secondary" @click="openChapterMetaEditor(appStore.selectedChapter)">
+                        调整绑定
+                      </button>
+                      <button class="outline-origin-link" @click="jumpBackToOutline()">
+                        回到大纲
+                      </button>
+                    </div>
+                  </div>
+                  <div class="outline-origin-meta">
+                    <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
+                    <span class="outline-origin-status" :class="linkedOutlineStatusMeta.tone">
+                      {{ linkedOutlineStatusMeta.label }}
+                    </span>
+                    <span class="outline-origin-status ghost">目标 {{ linkedOutlineItem.wordTarget }}</span>
+                  </div>
+                  <p class="outline-origin-summary">
+                    <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict }}
+                    <br />
+                    <strong>剧情推进：</strong>{{ linkedOutlineItem.summary }}
+                  </p>
+                  <p class="outline-origin-hint">同步回大纲会更新该节点的剧情摘要，并根据当前章节状态推进到“写作中 / 已完成”。</p>
+                </div>
               </div>
             </div>
 
@@ -1152,6 +1372,13 @@ onBeforeUnmount(() => {
       <n-form label-placement="top">
         <n-form-item label="所属分卷">
           <n-select v-model:value="chapterForm.volumeId" :options="volumeOptions" placeholder="选择这一章所在的分卷" />
+        </n-form-item>
+        <n-form-item label="绑定大纲节点">
+          <n-select
+            v-model:value="chapterForm.outlineItemId"
+            :options="outlineBindingOptions"
+            placeholder="可手动绑定或解绑当前章节对应的大纲节点"
+          />
         </n-form-item>
         <n-form-item label="章节标题">
           <n-input v-model:value="chapterForm.title" placeholder="例如：第4章：夜城回响" />
@@ -1932,6 +2159,113 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.outline-origin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.86);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at right top, rgba(219, 234, 254, 0.28), transparent 42%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+  padding: 14px 16px;
+}
+
+.outline-origin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.outline-origin-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.outline-origin-kicker {
+  color: var(--arc-text-hint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.outline-origin-link {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+  background: white;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.outline-origin-link.secondary {
+  border-color: rgba(191, 219, 254, 0.78);
+  background: rgba(239, 246, 255, 0.94);
+  color: #1d4ed8;
+}
+
+.outline-origin-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.outline-origin-title {
+  color: var(--arc-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.outline-origin-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.outline-origin-status.ghost {
+  background: rgba(241, 245, 249, 0.96);
+  color: var(--arc-text-hint);
+}
+
+.outline-origin-status.neutral {
+  background: rgba(219, 234, 254, 0.9);
+  color: #1d4ed8;
+}
+
+.outline-origin-status.primary {
+  background: rgba(219, 234, 254, 0.98);
+  color: #2563eb;
+}
+
+.outline-origin-status.success {
+  background: rgba(220, 252, 231, 0.96);
+  color: #15803d;
+}
+
+.outline-origin-summary {
+  margin: 0;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.outline-origin-hint {
+  margin: 0;
+  color: var(--arc-text-hint);
+  font-size: 11px;
+  line-height: 1.7;
 }
 
 .manuscript-overline {
