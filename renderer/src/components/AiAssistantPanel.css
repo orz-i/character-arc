@@ -216,45 +216,44 @@
   cursor: not-allowed;
 }
 
-.assistant-quick-groups {
+.assistant-quick-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px 12px;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 12px 18px 0;
 }
 
-.assistant-quick-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.quick-tab {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--assistant-border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.58);
-  padding: 12px;
-}
-
-.assistant-quick-group-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.assistant-quick-group-head strong {
-  color: #111827;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.assistant-quick-group-head span {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
   color: var(--assistant-muted);
+  cursor: pointer;
   font-size: 11px;
-  line-height: 1.5;
+  font-weight: 700;
+  padding: 6px 12px;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.quick-tab:hover {
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
+  color: var(--arc-primary);
+}
+
+.quick-tab.active {
+  border-color: color-mix(in srgb, var(--arc-primary) 20%, white);
+  background: color-mix(in srgb, var(--arc-primary) 10%, white);
+  color: var(--arc-primary);
 }
 
 .assistant-quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
+  padding: 10px 18px 12px;
 }
 
 .assistant-controls {
@@ -338,19 +337,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
-  min-height: 42px;
+  gap: 6px;
+  min-height: 36px;
   min-width: 0;
   border: 1px solid var(--assistant-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 249, 246, 0.94));
   color: #334155;
   cursor: pointer;
   font-size: 11px;
   font-weight: 650;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
-  padding: 10px 11px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
+  padding: 8px 10px;
   text-align: left;
   transition: all 0.22s ease;
 }

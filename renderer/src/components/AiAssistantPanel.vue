@@ -30,6 +30,8 @@ const responseMode = ref<'freeform' | 'polish' | 'continue' | 'suggest' | 'refer
 const responseLength = ref<'short' | 'medium' | 'long'>('medium')
 // 工具箱是否折叠（独立窗口模式下默认折叠）
 const isToolboxCollapsed = ref(isAssistantWindow)
+// 当前选中的快捷操作分组 Tab
+const activeQuickGroup = ref<string>('write')
 let removeAiStreamListener: (() => void) | null = null // AI 流式事件监听器的清理函数
 
 // 将数据深拷贝为 IPC 可传输的格式（去掉 Vue 响应式代理）
@@ -122,6 +124,11 @@ const quickActionGroups = computed(() =>
     }))
     .filter((group) => group.actions.length)
 )
+// 当前激活分组的快捷动作列表
+const activeGroupActions = computed(() => {
+  const group = quickActionGroups.value.find((item) => item.key === activeQuickGroup.value)
+  return group?.actions ?? quickActionGroups.value[0]?.actions ?? []
+})
 
 // 将消息列表滚动到底部（等待 DOM 更新后执行）
 async function scrollToBottom(): Promise<void> {
@@ -515,31 +522,31 @@ watch(
 
     <div class="assistant-toolbox" :class="{ collapsed: isToolboxCollapsed }">
       <div class="assistant-toolbox-inner">
-        <div class="assistant-quick-groups">
-          <section
+        <div class="assistant-quick-tabs">
+          <button
             v-for="group in quickActionGroups"
             :key="group.key"
-            class="assistant-quick-group"
+            class="quick-tab"
+            :class="{ active: activeQuickGroup === group.key }"
+            :title="group.description"
+            @click="activeQuickGroup = group.key"
           >
-            <div class="assistant-quick-group-head">
-              <strong>{{ group.label }}</strong>
-              <span>{{ group.description }}</span>
-            </div>
+            {{ group.label }}
+          </button>
+        </div>
 
-            <div class="assistant-quick-actions">
-              <button
-                v-for="action in group.actions"
-                :key="action.label"
-                class="quick-action"
-                :title="action.requiresSelection && !selectedExcerpt ? '请先在正文中选中需要处理的内容' : action.label"
-                :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
-                @click="handleQuickAction(action)"
-              >
-                <component :is="action.icon" :size="14" />
-                <span>{{ action.label }}</span>
-              </button>
-            </div>
-          </section>
+        <div class="assistant-quick-actions">
+          <button
+            v-for="action in activeGroupActions"
+            :key="action.label"
+            class="quick-action"
+            :title="action.requiresSelection && !selectedExcerpt ? '请先在正文中选中需要处理的内容' : action.label"
+            :disabled="isResponding || (action.requiresSelection && !selectedExcerpt)"
+            @click="handleQuickAction(action)"
+          >
+            <component :is="action.icon" :size="14" />
+            <span>{{ action.label }}</span>
+          </button>
         </div>
 
         <div class="assistant-controls">
