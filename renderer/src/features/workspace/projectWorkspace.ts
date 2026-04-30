@@ -5,6 +5,7 @@ import type {
   CharacterRelationship,
   CharacterCard,
   InspirationEntry,
+  OutlineItemStatus,
   OrganizationEntry,
   OrganizationMembership,
   OutlineItem,
@@ -51,8 +52,21 @@ function normalizeOutlineItems(outlineItems?: OutlineItem[]): OutlineItem[] {
 
   return sortedItems.map(({ item }, index) => ({
     ...item,
+    status: normalizeOutlineItemStatus(item.status),
     sortOrder: index
   }))
+}
+
+function normalizeOutlineItemStatus(status?: string): OutlineItemStatus {
+  switch (status) {
+    case 'idea':
+    case 'planned':
+    case 'drafting':
+    case 'done':
+      return status
+    default:
+      return 'planned'
+  }
 }
 
 // 校正灵感条目：排序、清理标签、规范化来源类型并确保时间戳
@@ -177,6 +191,42 @@ const demoCharacters: CharacterCard[] = [
       { label: '黑市医生' },
       { label: '中立', tone: 'warning' }
     ]
+  },
+  {
+    id: 'char-4',
+    name: '沈鸦',
+    role: '灰巷执行人',
+    avatar: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
+    description:
+      '灰巷互助会出身的执行人，擅长近距离突入和街区撤离。她对李雷一直保持观察，怀疑艾达会把整个互助会拖进企业清洗。',
+    tags: [
+      { label: '执行人' },
+      { label: '互助会骨干', tone: 'success' }
+    ]
+  },
+  {
+    id: 'char-5',
+    name: '顾北辰',
+    role: '荒坂现场主管',
+    avatar: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)',
+    description:
+      '负责追捕艾达的现场主管，做事冷静克制，习惯把人当作可替换资产处理。他知道李雷只是偶然卷入，但不会因此留手。',
+    tags: [
+      { label: '企业猎犬', tone: 'danger' },
+      { label: '追捕主管' }
+    ]
+  },
+  {
+    id: 'char-6',
+    name: '唐雾',
+    role: '数据掮客',
+    avatar: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)',
+    description:
+      '游走于灰巷互助会和多家中介势力之间的数据掮客，表面向谁都卖情报，实际上长期替互助会筛掉最危险的委托。',
+    tags: [
+      { label: '情报贩子' },
+      { label: '双面中介', tone: 'warning' }
+    ]
   }
 ]
 
@@ -200,6 +250,7 @@ const demoOutline: OutlineItem[] = [
     conflict: '平凡生活被打破。',
     summary:
       '李雷在回收站关门时，救下了头部受重伤且被追杀的公司女高管艾达。发现她脑内的军用级接口，李雷面临交出她还是藏匿她的抉择。',
+    status: 'drafting',
     sortOrder: 0
   },
   {
@@ -210,6 +261,7 @@ const demoOutline: OutlineItem[] = [
     conflict: '公司杀手搜查贫民窟。',
     summary:
       '李雷利用回收站的铅板密室躲避了第一波搜查，并请老鬼来为艾达稳定伤情。老鬼警告李雷惹上了大麻烦。',
+    status: 'planned',
     sortOrder: 1
   }
 ]
@@ -237,6 +289,17 @@ const demoOrganizations: OrganizationEntry[] = [
     sortOrder: 1,
     createdAt: '2026-04-28T08:14:00.000Z',
     updatedAt: '2026-04-28T08:14:00.000Z'
+  },
+  {
+    id: 'org-3',
+    name: '港区黑帆中介站',
+    type: '灰色中介',
+    description: '活跃在港区和霓虹区之间的中介网络，负责走私情报、人员转移和一次性身份清洗。',
+    motto: '消息从不免费，活路也一样。',
+    color: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+    sortOrder: 2,
+    createdAt: '2026-04-28T08:16:00.000Z',
+    updatedAt: '2026-04-28T08:16:00.000Z'
   }
 ]
 
@@ -261,6 +324,56 @@ const demoRelationships: CharacterRelationship[] = [
     intensity: 81,
     createdAt: '2026-04-28T08:24:00.000Z',
     updatedAt: '2026-04-28T08:24:00.000Z'
+  },
+  {
+    id: 'rel-3',
+    fromCharacterId: 'char-3',
+    toCharacterId: 'char-4',
+    type: '长期搭档',
+    description: '老鬼和沈鸦在互助会里负责同一条撤离线，一个救人，一个断后，配合多年但经常为风险判断争执。',
+    intensity: 76,
+    createdAt: '2026-04-28T08:25:00.000Z',
+    updatedAt: '2026-04-28T08:25:00.000Z'
+  },
+  {
+    id: 'rel-4',
+    fromCharacterId: 'char-4',
+    toCharacterId: 'char-1',
+    type: '戒备合作',
+    description: '沈鸦把李雷视作不稳定变量，但在互助会决定保下艾达后，她不得不与李雷临时协作。',
+    intensity: 69,
+    createdAt: '2026-04-28T08:26:00.000Z',
+    updatedAt: '2026-04-28T08:26:00.000Z'
+  },
+  {
+    id: 'rel-5',
+    fromCharacterId: 'char-2',
+    toCharacterId: 'char-5',
+    type: '旧上级',
+    description: '顾北辰曾是艾达在特研部的直接主管之一，掌握她的研究路径与逃亡习惯，因此追捕最为精准。',
+    intensity: 88,
+    createdAt: '2026-04-28T08:27:00.000Z',
+    updatedAt: '2026-04-28T08:27:00.000Z'
+  },
+  {
+    id: 'rel-6',
+    fromCharacterId: 'char-6',
+    toCharacterId: 'char-4',
+    type: '情报往来',
+    description: '唐雾向沈鸦提供港区情报和撤离路线，两人互相利用，但在关键节点上也会替对方遮掩痕迹。',
+    intensity: 64,
+    createdAt: '2026-04-28T08:28:00.000Z',
+    updatedAt: '2026-04-28T08:28:00.000Z'
+  },
+  {
+    id: 'rel-7',
+    fromCharacterId: 'char-6',
+    toCharacterId: 'char-5',
+    type: '交易对手',
+    description: '唐雾曾向顾北辰卖过假线索，从此被对方盯上。两人都知道彼此不是可靠盟友，却又经常被迫交易。',
+    intensity: 71,
+    createdAt: '2026-04-28T08:29:00.000Z',
+    updatedAt: '2026-04-28T08:29:00.000Z'
   }
 ]
 
@@ -283,6 +396,33 @@ const demoMemberships: OrganizationMembership[] = [
     notes: '叛逃前参与意识上传项目，是企业内部追捕的核心目标。',
     createdAt: '2026-04-28T08:28:00.000Z',
     updatedAt: '2026-04-28T08:28:00.000Z'
+  },
+  {
+    id: 'membership-3',
+    characterId: 'char-4',
+    organizationId: 'org-1',
+    role: '外勤执行人',
+    notes: '负责街区撤离、人员保护和临时反追踪。对互助会安全边界极其敏感。',
+    createdAt: '2026-04-28T08:29:00.000Z',
+    updatedAt: '2026-04-28T08:29:00.000Z'
+  },
+  {
+    id: 'membership-4',
+    characterId: 'char-5',
+    organizationId: 'org-2',
+    role: '现场主管',
+    notes: '负责特研部在霓虹区的回收与追捕任务，权限覆盖情报调配和临时封锁。',
+    createdAt: '2026-04-28T08:30:00.000Z',
+    updatedAt: '2026-04-28T08:30:00.000Z'
+  },
+  {
+    id: 'membership-5',
+    characterId: 'char-6',
+    organizationId: 'org-3',
+    role: '情报掮客',
+    notes: '负责中介站的高风险消息撮合和假身份流转，是港区多条灰色线路的关键节点。',
+    createdAt: '2026-04-28T08:31:00.000Z',
+    updatedAt: '2026-04-28T08:31:00.000Z'
   }
 ]
 

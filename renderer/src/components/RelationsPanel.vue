@@ -6,15 +6,18 @@ import {
   Network,
   PencilLine,
   Plus,
+  Rows3,
   Search,
   Shield,
   Trash2,
   UserRoundCog,
   Users
 } from 'lucide-vue-next'
-import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSlider, useDialog, useMessage } from 'naive-ui'
+import { NButton, NDynamicTags, NForm, NFormItem, NInput, NModal, NSelect, NSlider, useDialog, useMessage } from 'naive-ui'
+import RelationsGraphView from '@/components/RelationsGraphView.vue'
+import { buildRelationsGraphData } from '@/features/relations/graph'
 import { useAppStore } from '@/stores/app'
-import type { CharacterRelationship, OrganizationEntry, OrganizationMembership } from '@/types/app'
+import type { CharacterCard, CharacterRelationship, OrganizationEntry, OrganizationMembership } from '@/types/app'
 
 const props = defineProps<{
   searchQuery?: string // 全局搜索关键词
@@ -24,6 +27,17 @@ const appStore = useAppStore()
 const message = useMessage()
 const dialog = useDialog()
 const keyword = ref('') // 本面板内的本地搜索关键词
+const viewMode = ref<'list' | 'graph'>('list')
+
+// --- 角色编辑器状态 ---
+const characterEditorVisible = ref(false)
+const editingCharacterId = ref<string | null>(null)
+const characterForm = reactive({
+  name: '',
+  role: '',
+  description: '',
+  tags: [] as string[]
+})
 
 // --- 组织编辑器状态 ---
 const organizationEditorVisible = ref(false) // 控制组织编辑弹窗的显示
@@ -77,6 +91,14 @@ const organizationOptions = computed(() =>
 const characterMap = computed(() => new Map(appStore.characters.map((character) => [character.id, character])))
 // 组织 ID 到组织对象的映射表
 const organizationMap = computed(() => new Map(appStore.organizations.map((organization) => [organization.id, organization])))
+const relationsGraph = computed(() =>
+  buildRelationsGraphData({
+    characters: appStore.characters,
+    organizations: appStore.organizations,
+    characterRelationships: appStore.characterRelationships,
+    organizationMemberships: appStore.organizationMemberships
+  })
+)
 
 // 顶部统计卡片数据：组织数量、关系数量、归属数量
 const stats = computed(() => [
@@ -174,6 +196,42 @@ function openOrganizationEditor(organization?: OrganizationEntry): void {
   organizationForm.motto = organization?.motto ?? ''
   organizationForm.color = organization?.color ?? ''
   organizationEditorVisible.value = true
+}
+
+function openCharacterEditor(character?: CharacterCard): void {
+  editingCharacterId.value = character?.id ?? null
+  characterForm.name = character?.name ?? ''
+  characterForm.role = character?.role ?? ''
+  characterForm.description = character?.description ?? ''
+  characterForm.tags = character?.tags.map((tag) => tag.label) ?? []
+  characterEditorVisible.value = true
+}
+
+function submitCharacter(): void {
+  if (!characterForm.name.trim() || !characterForm.description.trim()) {
+    message.warning('请完整填写角色名称和角色简介')
+    return
+  }
+
+  if (editingCharacterId.value) {
+    appStore.updateCharacter(editingCharacterId.value, {
+      name: characterForm.name,
+      role: characterForm.role,
+      description: characterForm.description,
+      tags: characterForm.tags.map((label) => ({ label }))
+    })
+    message.success('角色信息已更新')
+  } else {
+    appStore.createCharacter({
+      name: characterForm.name,
+      role: characterForm.role,
+      description: characterForm.description,
+      tags: characterForm.tags.map((label) => ({ label }))
+    })
+    message.success('已新增角色')
+  }
+
+  characterEditorVisible.value = false
 }
 
 // 提交组织表单：校验必填项后调用 store 保存
@@ -317,6 +375,30 @@ function confirmDeleteMembership(membership: { id: string; characterName: string
     }
   })
 }
+
+function setViewMode(mode: 'list' | 'graph'): void {
+  viewMode.value = mode
+}
+
+function revealNodeInList(label: string): void {
+  viewMode.value = 'list'
+  keyword.value = label
+}
+
+function openGraphNodeEditor(payload: { kind: 'character' | 'organization'; entityId: string }): void {
+  if (payload.kind === 'character') {
+    const character = appStore.characters.find((item) => item.id === payload.entityId)
+    if (character) {
+      openCharacterEditor(character)
+    }
+    return
+  }
+
+  const organization = appStore.organizations.find((item) => item.id === payload.entityId)
+  if (organization) {
+    openOrganizationEditor(organization)
+  }
+}
 </script>
 
 <template>
@@ -334,6 +416,16 @@ function confirmDeleteMembership(membership: { id: string; characterName: string
         <div class="search-input">
           <Search :size="16" />
           <input v-model="keyword" type="text" placeholder="搜索组织、关系或成员归属..." />
+        </div>
+        <div class="view-switch" role="tablist" aria-label="关系视图切换">
+          <button class="view-switch-button" :class="{ active: viewMode === 'list' }" @click="setViewMode('list')">
+            <Rows3 :size="15" />
+            <span>列表视图</span>
+          </button>
+          <button class="view-switch-button" :class="{ active: viewMode === 'graph' }" @click="setViewMode('graph')">
+            <Network :size="15" />
+            <span>图谱视图</span>
+          </button>
         </div>
         <n-button strong secondary round @click="openOrganizationEditor()">
           <template #icon>
@@ -379,11 +471,22 @@ function confirmDeleteMembership(membership: { id: string; characterName: string
       <Shield :size="18" />
       <div>
         <strong>结构已经按“组织 / 关系 / 归属”拆分</strong>
-        <p>现在就能服务角色设定和章节冲突推进，后续接关系图、阵营时间线或 AI 上下文时也不需要重做数据模型。</p>
+        <p>
+          现在就能服务角色设定和章节冲突推进，图谱视图也直接复用了这套数据结构，后续接阵营时间线或 AI
+          分析能力时不需要重做模型。
+        </p>
       </div>
     </div>
 
-    <div class="panel-grid">
+    <RelationsGraphView
+      v-if="viewMode === 'graph'"
+      :graph="relationsGraph"
+      :query="mergedQuery"
+      @reveal-in-list="revealNodeInList"
+      @open-node="openGraphNodeEditor"
+    />
+
+    <div v-else class="panel-grid">
       <section class="module-card">
         <div class="module-head">
           <div>
@@ -503,6 +606,44 @@ function confirmDeleteMembership(membership: { id: string; characterName: string
         </div>
       </section>
     </div>
+
+    <n-modal
+      :show="characterEditorVisible"
+      preset="card"
+      class="arc-editor-modal"
+      :title="editingCharacterId ? '编辑角色' : '新建角色'"
+      :bordered="false"
+      @close="characterEditorVisible = false"
+    >
+      <n-form label-placement="top">
+        <n-form-item label="角色名称">
+          <n-input v-model:value="characterForm.name" placeholder="例如：林渡 / 宴川 / 白砚" />
+        </n-form-item>
+        <n-form-item label="角色定位">
+          <n-input v-model:value="characterForm.role" placeholder="例如：情报中间人 / 家族继承人 / 小队领袖" />
+        </n-form-item>
+        <n-form-item label="角色简介">
+          <n-input
+            v-model:value="characterForm.description"
+            type="textarea"
+            :autosize="{ minRows: 4, maxRows: 7 }"
+            placeholder="补充人物动机、关系张力、过往经历和当前立场..."
+          />
+        </n-form-item>
+        <n-form-item label="角色标签">
+          <n-dynamic-tags v-model:value="characterForm.tags" />
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <div class="arc-modal-actions">
+          <n-button round strong @click="characterEditorVisible = false">取消</n-button>
+          <n-button type="primary" round strong @click="submitCharacter">
+            {{ editingCharacterId ? '保存修改' : '创建角色' }}
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
 
     <n-modal
       :show="organizationEditorVisible"
@@ -687,6 +828,44 @@ function confirmDeleteMembership(membership: { id: string; characterName: string
   justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 4px;
+}
+
+.view-switch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+
+.view-switch-button:hover {
+  color: var(--arc-primary);
+  transform: translateY(-1px);
+}
+
+.view-switch-button.active {
+  background: color-mix(in srgb, var(--arc-primary) 12%, white);
+  color: var(--arc-primary);
 }
 
 .search-input {

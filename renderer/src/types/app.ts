@@ -161,6 +161,8 @@ export interface OutlineVolume {
 }
 
 /** 大纲剧情节点 */
+export type OutlineItemStatus = 'idea' | 'planned' | 'drafting' | 'done'
+
 export interface OutlineItem {
   /** 节点唯一标识 */
   id: string
@@ -174,6 +176,8 @@ export interface OutlineItem {
   conflict: string
   /** 剧情推进摘要 */
   summary: string
+  /** 节点推进状态：点子 / 已规划 / 写作中 / 已完成 */
+  status: OutlineItemStatus
   /** 排序权重 */
   sortOrder: number
 }
