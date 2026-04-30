@@ -2422,6 +2422,7 @@ ipcMain.handle('characterarc:load-workspace', async () => {
       payload: workspace
     }
   } catch (error) {
+    console.error('[workspace] loadWorkspace failed:', error)
     return {
       success: false,
       payload: null,
@@ -2476,6 +2477,7 @@ ipcMain.handle('characterarc:save-workspace', async (_event, payload: unknown) =
       success: true
     }
   } catch (error) {
+    console.error('[workspace] saveWorkspace failed:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown workspace save error'

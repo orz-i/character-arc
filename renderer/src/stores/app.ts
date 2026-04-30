@@ -92,6 +92,12 @@ function toIsoTimestamp(value?: string): string {
   return new Date().toISOString()
 }
 
+let nextIdCounter = 0
+/** 生成基于时间戳+自增序号的唯一 ID，保证同毫秒内也不重复 */
+function uniqueId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${++nextIdCounter}`
+}
+
 /** 重新编排世界观条目的 sortOrder，确保连续递增 */
 function reindexWorldviewEntries(entries: WorldviewEntry[]): WorldviewEntry[] {
   return entries.map((entry, index) => ({
@@ -450,7 +456,9 @@ export const useAppStore = defineStore('app', () => {
       applyWorkspaceState(result.payload as Partial<StoredState>)
       persistenceError.value = null
     } else {
-      persistenceError.value = result.error ?? null
+      const err = result.error ?? null
+      console.error('[workspace] loadWorkspace failed:', err)
+      persistenceError.value = err
     }
 
     await syncAssistantWindowState()
@@ -483,6 +491,9 @@ export const useAppStore = defineStore('app', () => {
     }
 
     const result = await window.characterArc.saveWorkspace(serializeWorkspaceState())
+    if (!result.success) {
+      console.error('[workspace] saveWorkspace failed:', result.error)
+    }
     persistenceError.value = result.success ? null : result.error ?? '保存失败'
     if (result.success) {
       scheduledPersistAt.value = null
@@ -522,7 +533,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** 导入完整项目数据：创建新项目、分配独立工作区、切换到工作台 */
   function importProjectData(payload: ProjectImportPayload): void {
-    const projectId = `project-${Date.now()}`
+    const projectId = uniqueId('project')
     const project: ProjectSummary = {
       id: projectId,
       title: payload.project?.title?.trim() || '导入项目',
@@ -852,7 +863,7 @@ export const useAppStore = defineStore('app', () => {
   // ── 项目 CRUD ──
   /** 从向导创建完整项目工作区：分配 ID、设置默认分卷和章节、切换到工作台 */
   function createProjectWorkspace(payload: ProjectWorkspacePayload): void {
-    const projectId = `project-${Date.now()}`
+    const projectId = uniqueId('project')
     const nextVolumes = payload.outlineVolumes?.length ? payload.outlineVolumes : [createWorkspaceVolume()]
     const nextChapters = payload.chapters?.length ? payload.chapters : [buildStarterChapter(nextVolumes[0].id)]
 
@@ -1041,7 +1052,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       worldviewEntries: reindexWorldviewEntries([
         {
-          id: `world-${Date.now()}`,
+          id: uniqueId('world'),
           type: payload?.type?.trim() || '地理',
           title: payload?.title?.trim() || `新设定条目 ${workspace.worldviewEntries.length + 1}`,
           content:
@@ -1092,7 +1103,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       characters: [
         {
-          id: `char-${Date.now()}`,
+          id: uniqueId('char'),
           name: payload?.name?.trim() || `新角色 ${workspace.characters.length + 1}`,
           role: payload?.role?.trim() || '待设定',
           avatar: payload?.avatar || 'linear-gradient(135deg, #9be15d 0%, #00e3ae 100%)',
@@ -1155,7 +1166,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       organizations: reindexOrganizations([
         {
-          id: `org-${Date.now()}`,
+          id: uniqueId('org'),
           name: payload?.name?.trim() || `新组织 ${workspace.organizations.length + 1}`,
           type: payload?.type?.trim() || '中立势力',
           description:
@@ -1224,7 +1235,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       characterRelationships: [
         {
-          id: `relationship-${Date.now()}`,
+          id: uniqueId('relationship'),
           fromCharacterId: fallbackFromCharacterId,
           toCharacterId: fallbackToCharacterId,
           type: payload?.type?.trim() || '待定义关系',
@@ -1287,7 +1298,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       organizationMemberships: [
         {
-          id: `membership-${Date.now()}`,
+          id: uniqueId('membership'),
           characterId: payload?.characterId || workspace.characters[0]?.id || '',
           organizationId: payload?.organizationId || workspace.organizations[0]?.id || '',
           role: payload?.role?.trim() || '普通成员',
@@ -1346,7 +1357,7 @@ export const useAppStore = defineStore('app', () => {
       ...workspace,
       inspirationEntries: reindexInspirationEntries([
         {
-          id: `inspiration-${Date.now()}`,
+        id: uniqueId('inspiration'),
           type: payload?.type?.trim() || '场景火花',
           title: payload?.title?.trim() || `灵感卡片 ${workspace.inspirationEntries.length + 1}`,
           content:
@@ -1406,7 +1417,7 @@ export const useAppStore = defineStore('app', () => {
   /** 创建新的大纲分卷，返回新分卷 ID */
   function createOutlineVolume(payload?: Partial<OutlineVolume>): string {
     const nextVolume = createWorkspaceVolume({
-      id: `volume-${Date.now()}`,
+      id: uniqueId('volume'),
       title: payload?.title?.trim() || `分卷 ${outlineVolumes.value.length + 1}`,
       wordTarget: payload?.wordTarget?.trim(),
       summary: payload?.summary?.trim()
@@ -1467,7 +1478,7 @@ export const useAppStore = defineStore('app', () => {
       const targetVolumeId = volumeId || getWorkspacePrimaryVolumeId(workspace)
       const nextIndex = getChapterSequenceInVolume(workspace.chapters, targetVolumeId)
       const nextChapter: ChapterDraft = {
-        id: `chapter-${Date.now()}`,
+        id: uniqueId('chapter'),
         outlineItemId: '',
         volumeId: targetVolumeId,
         title: `第${nextIndex}章：新章节`,
@@ -1497,7 +1508,7 @@ export const useAppStore = defineStore('app', () => {
     updateCurrentWorkspace((workspace) => {
       const targetVolumeId = item.volumeId || getWorkspacePrimaryVolumeId(workspace)
       const nextChapter: ChapterDraft = {
-        id: `chapter-${Date.now()}`,
+        id: uniqueId('chapter'),
         outlineItemId: item.id,
         volumeId: targetVolumeId,
         title: item.title?.trim() || '新章节',
@@ -1550,7 +1561,7 @@ export const useAppStore = defineStore('app', () => {
       const targetVolumeId = payload?.volumeId || selectedChapter.value?.volumeId || getWorkspacePrimaryVolumeId(workspace)
       const nextIndex = getOutlineSequenceInVolume(workspace.outlineItems, targetVolumeId)
       const nextItem: OutlineItem = {
-        id: `outline-${Date.now()}`,
+        id: uniqueId('outline'),
         volumeId: targetVolumeId,
         title: payload?.title?.trim() || `第${nextIndex}章：新剧情节点`,
         wordTarget: payload?.wordTarget?.trim() || '预估 3000字',
@@ -1583,7 +1594,7 @@ export const useAppStore = defineStore('app', () => {
 
       const anchorItem = workspace.outlineItems[anchorIndex]
       const insertedItems = payloads.map((payload, index) => ({
-        id: `outline-${Date.now()}-${index + 1}`,
+        id: uniqueId('outline'),
         volumeId: payload.volumeId || anchorItem.volumeId,
         title: payload.title?.trim() || `第${anchorIndex + index + 2}章：新剧情节点`,
         wordTarget: payload.wordTarget?.trim() || '预估 3000字',
@@ -1766,7 +1777,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     const version = normalizeChapterVersion({
-      id: `chapter-version-${Date.now()}`,
+      id: uniqueId('chapter-version'),
       chapterId: chapter.id,
       title: chapter.title,
       summary: chapter.summary,
@@ -1869,7 +1880,7 @@ export const useAppStore = defineStore('app', () => {
   /** 向助手窗口发送提示词请求，若助手窗口未打开则先打开 */
   function queueAssistantPrompt(prompt: string, quickAction?: string): void {
     const request = {
-      id: `assistant-${Date.now()}`,
+      id: uniqueId('assistant'),
       prompt,
       quickAction
     }
@@ -1909,7 +1920,7 @@ export const useAppStore = defineStore('app', () => {
       messages: [
         ...workspace.messages,
         {
-          id: `msg-${Date.now()}`,
+          id: uniqueId('msg'),
           role: 'user',
           content
         }
@@ -1924,7 +1935,7 @@ export const useAppStore = defineStore('app', () => {
       messages: [
         ...workspace.messages,
         {
-          id: `msg-${Date.now()}-assistant`,
+          id: uniqueId('msg'),
           role: 'assistant',
           content
         }
@@ -1947,7 +1958,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     pendingChapterInsertion.value = {
-      id: `insert-${Date.now()}`,
+      id: uniqueId('insert'),
       chapterId: chapter.id,
       content: insertion,
       mode
