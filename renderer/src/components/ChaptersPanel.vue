@@ -514,6 +514,7 @@ function syncChapterBackToOutline(): void {
     status: mapChapterStatusToOutlineStatus(chapter.status)
   })
   appStore.appendWorkflowDocumentEntry(
+    chapter.volumeId,
     'progress',
     `章节回写：${chapter.title}`,
     [
@@ -523,6 +524,7 @@ function syncChapterBackToOutline(): void {
     ].join('\n')
   )
   appStore.appendWorkflowDocumentEntry(
+    chapter.volumeId,
     'findings',
     `章节推进结论：${chapter.title}`,
     `- 当前章节已回写到大纲，节点状态调整为：${mapChapterStatusToOutlineStatus(chapter.status)}。`
@@ -619,6 +621,7 @@ async function generateNextOutlineChain(): Promise<void> {
       }))
     )
     appStore.appendWorkflowDocumentEntry(
+      volume.id,
       'task_plan',
       `后续剧情链：${chapter.title}`,
       [
@@ -627,6 +630,7 @@ async function generateNextOutlineChain(): Promise<void> {
       ].join('\n')
     )
     appStore.appendWorkflowDocumentEntry(
+      volume.id,
       'pending_hooks',
       `新剧情链钩子：${chapter.title}`,
       entries.map((entry) => `- ${entry.title ?? '后续节点'}：${entry.conflict ?? '待补充核心冲突'}`).join('\n')

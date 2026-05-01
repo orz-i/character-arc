@@ -265,6 +265,8 @@ export interface OutlineVolume {
   wordTarget: string
   /** 分卷整体剧情摘要 */
   summary: string
+  /** 分卷级流程文件，每卷独立维护一套 */
+  workflowDocuments?: WorkflowDocument[]
 }
 
 /** 大纲剧情节点 */

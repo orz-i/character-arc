@@ -52,24 +52,8 @@ export interface LegacyStoredState {
   appSettings?: AppSettings
 }
 
-// 默认项目列表：包含一个赛博朋克主题的示例项目，供新用户首次使用
-export const defaultProjects: ProjectSummary[] = [
-  {
-    id: 'project-1',
-    title: '赛博飞升指南',
-    genre: '科幻 / 赛博朋克',
-    wordCount: '12.5万字',
-    lastEdited: '10分钟前编辑',
-    cover: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
-    writingStylePresetId: 'cinematic-cool',
-    writingStylePrompt: '',
-    chapterAssistantTemplates: [],
-    novelWorkflowStages: createDefaultNovelWorkflowStages(),
-    projectSkills: [],
-    targetPlatform: '',
-    referenceWorks: []
-  }
-]
+// 默认项目列表：空列表，新用户通过向导创建第一个项目
+export const defaultProjects: ProjectSummary[] = []
 
 export function normalizeChapterAssistantTemplates(
   templates?: ChapterAssistantPromptTemplate[] | null
@@ -125,11 +109,11 @@ export function normalizeReferenceWorks(works?: ReferenceWorkItem[] | null): Ref
     : []
 }
 
-// 默认应用设置：使用 DeepSeek API，5分钟自动保存
+// 默认应用设置：5分钟自动保存，API 信息由用户在设置中填写
 export const defaultAppSettings: AppSettings = {
   provider: 'deepseek',
   model: 'deepseek-chat',
-  apiKey: 'sk-1234567890abcdef',
+  apiKey: '',
   baseUrl: 'https://api.deepseek.com/v1',
   autoSaveInterval: '5m',
   uiScale: 1
@@ -147,15 +131,13 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
   }
 }
 
-// 加载本地持久化的应用状态，当前实现为返回包含默认数据的初始状态
+// 加载本地持久化的应用状态，当前实现为返回空初始状态
 export function loadStoredState(): StoredState {
   return {
     theme: 'ocean',
-    selectedProjectId: defaultProjects[0].id,
+    selectedProjectId: '',
     projects: defaultProjects,
-    workspaces: {
-      [defaultProjects[0].id]: createDemoWorkspace()
-    },
+    workspaces: {},
     appSettings: defaultAppSettings
   }
 }
@@ -184,10 +166,9 @@ export function normalizeChapterVersion(version: ChapterVersion): ChapterVersion
 
 // 标准化整个工作区数据：先通过 normalizeWorkspace 校正集合，再对章节和版本做额外规范化
 export function normalizeProjectWorkspaceData(
-  workspace?: Partial<ProjectWorkspaceData> | null,
-  options?: { fallbackToDemo?: boolean }
+  workspace?: Partial<ProjectWorkspaceData> | null
 ): ProjectWorkspaceData {
-  const normalized = normalizeWorkspace(workspace, options)
+  const normalized = normalizeWorkspace(workspace)
   return {
     worldviewEntries: normalized.worldviewEntries,
     characters: normalized.characters,
@@ -274,8 +255,7 @@ export function buildWorkspaceMapFromLegacy(
             chapterVersions: payload.chapterVersions,
             messages: payload.messages
           }
-        : undefined,
-      { fallbackToDemo: index === 0 && project.id === defaultProjects[0].id }
+        : undefined
     )
   ]) ?? []
 

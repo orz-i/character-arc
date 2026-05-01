@@ -1,4 +1,5 @@
-import type { ChapterDraft, OutlineItem, OutlineVolume } from '@/types/app'
+import type { ChapterDraft, OutlineItem, OutlineVolume, WorkflowDocument } from '@/types/app'
+import { createDefaultWorkflowDocuments, normalizeWorkflowDocuments } from '@/features/novelWorkflow/documents'
 
 // 中文数字映射表，用于将卷序号转为"第一卷"、"第二卷"等中文格式
 const CHINESE_NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -32,13 +33,29 @@ export function createOutlineVolume(overrides?: Partial<OutlineVolume>): Outline
     id: overrides?.id ?? `volume-${Date.now()}`,
     title: overrides?.title?.trim() || '故事开端',
     wordTarget: overrides?.wordTarget?.trim() || DEFAULT_VOLUME_WORD_TARGET,
-    summary: overrides?.summary?.trim() || DEFAULT_VOLUME_SUMMARY
+    summary: overrides?.summary?.trim() || DEFAULT_VOLUME_SUMMARY,
+    workflowDocuments: overrides?.workflowDocuments ?? createDefaultWorkflowDocuments()
   }
 }
 
-// 浅拷贝分卷列表
+// 深拷贝分卷列表（包含 workflowDocuments 的浅拷贝）
 export function cloneOutlineVolumes(outlineVolumes?: OutlineVolume[]): OutlineVolume[] {
-  return outlineVolumes?.length ? outlineVolumes.map((volume) => ({ ...volume })) : []
+  return outlineVolumes?.length
+    ? outlineVolumes.map((volume) => ({
+        ...volume,
+        workflowDocuments: volume.workflowDocuments
+          ? volume.workflowDocuments.map((doc: WorkflowDocument) => ({ ...doc }))
+          : createDefaultWorkflowDocuments()
+      }))
+    : []
+}
+
+// 对分卷的流程文件做规范化处理，保留现有有效内容，用默认值填补缺失字段
+export function normalizeVolumeWorkflowDocuments(volume: OutlineVolume, fallbackDocs?: WorkflowDocument[]): WorkflowDocument[] {
+  if (volume.workflowDocuments?.length) {
+    return normalizeWorkflowDocuments(volume.workflowDocuments)
+  }
+  return normalizeWorkflowDocuments(fallbackDocs)
 }
 
 // 标准化分卷标题：空白时回退为"分卷 N"格式

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ArrowRight, BookOpenText, Compass, GitBranch, LibraryBig, Save, Sparkles, ScrollText, Users2 } from 'lucide-vue-next'
 import { NButton, NInput, useMessage } from 'naive-ui'
 import { workflowStageDocumentMap } from '@/features/novelWorkflow/documents'
+import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { novelWorkflowStageDefinitions } from '@/features/novelWorkflow/stages'
 import { useAppStore } from '@/stores/app'
@@ -27,6 +28,9 @@ const premiseDraft = ref('')
 const settingDraft = ref('')
 
 const currentProject = computed(() => appStore.currentProject)
+const outlineVolumes = computed(() => appStore.outlineVolumes)
+const activeWorkflowVolumeId = computed(() => appStore.activeWorkflowVolumeId)
+const activeWorkflowVolume = computed(() => appStore.activeWorkflowVolume)
 const workflowStageStates = computed(() => currentProject.value?.novelWorkflowStages ?? [])
 const workflowStages = computed(() =>
   novelWorkflowStageDefinitions.map((definition) => ({
@@ -54,6 +58,18 @@ const stageDocuments = computed(() =>
   (workflowStageDocumentMap[activeStage.value.id] ?? []).map((key) => workflowDocuments.value.find((document) => document.key === key)).filter(Boolean)
 )
 
+// 分卷切换时同步文档内容
+watch(
+  () => activeWorkflowVolumeId.value,
+  () => {
+    const firstDocKey = workflowStageDocumentMap[activeStage.value.id]?.[0]
+    if (firstDocKey) {
+      activeDocumentKey.value = firstDocKey
+    }
+    draftContent.value = workflowDocuments.value.find((d) => d.key === activeDocumentKey.value)?.content ?? ''
+  }
+)
+
 if (activeDocument.value) {
   draftContent.value = activeDocument.value.content
 }
@@ -61,6 +77,10 @@ if (activeDocument.value) {
 if (currentProject.value) {
   targetPlatformDraft.value = currentProject.value.targetPlatform
   premiseDraft.value = currentProject.value.writingStylePrompt
+}
+
+function selectVolume(volumeId: string): void {
+  appStore.setActiveWorkflowVolumeId(volumeId)
 }
 
 void scanProjectSkills()
@@ -88,11 +108,11 @@ function setDocument(key: WorkflowDocumentKey): void {
 }
 
 function saveDocument(): void {
-  if (!activeDocument.value) {
+  if (!activeDocument.value || !activeWorkflowVolume.value) {
     return
   }
 
-  appStore.updateWorkflowDocument(activeDocument.value.key, draftContent.value)
+  appStore.updateWorkflowDocument(activeWorkflowVolume.value.id, activeDocument.value.key, draftContent.value)
   message.success(`${activeDocument.value.title} 已更新`)
 }
 
@@ -159,6 +179,7 @@ async function generateReferenceInsights(): Promise<void> {
 
     const payload = result.result as Record<string, string>
     appStore.updateWorkflowDocuments(
+      activeWorkflowVolume.value?.id ?? '',
       workflowStageDocumentMap.reference
         .map((key) => ({
           key,
@@ -211,6 +232,7 @@ async function generatePremiseInsights(): Promise<void> {
 
     const payload = result.result as Record<string, string>
     appStore.updateWorkflowDocuments(
+      activeWorkflowVolume.value?.id ?? '',
       workflowStageDocumentMap.premise
         .map((key) => ({
           key,
@@ -277,6 +299,7 @@ async function generateSettingInsights(): Promise<void> {
 
     const payload = result.result as Record<string, string>
     appStore.updateWorkflowDocuments(
+      activeWorkflowVolume.value?.id ?? '',
       workflowStageDocumentMap.setting
         .map((key) => ({
           key,
@@ -306,10 +329,14 @@ async function generateWorkflowDocuments(): Promise<void> {
       context: {
         projectTitle: currentProject.value.title,
         projectGenre: currentProject.value.genre,
-        projectPlatform: '未指定',
+        projectPlatform: currentProject.value.targetPlatform || '未指定',
         projectPhase: workflowStages.value.find((stage) => stage.state === 'doing')?.title ?? '待立项',
         stageId: activeStage.value.id,
         stageLabel: activeStage.value.title,
+        volumeId: activeWorkflowVolume.value?.id ?? '',
+        volumeTitle: activeWorkflowVolume.value?.title ?? '',
+        volumeSummary: activeWorkflowVolume.value?.summary ?? '',
+        volumeWordTarget: activeWorkflowVolume.value?.wordTarget ?? '',
         requestedDocuments: workflowStageDocumentMap[activeStage.value.id] ?? [],
         workflowDocuments: appStore.workflowDocuments.map((document) => ({
           key: document.key,
@@ -348,6 +375,7 @@ async function generateWorkflowDocuments(): Promise<void> {
 
     const payload = result.result as Record<string, string>
     appStore.updateWorkflowDocuments(
+      activeWorkflowVolume.value?.id ?? '',
       (workflowStageDocumentMap[activeStage.value.id] ?? [])
         .map((key) => ({
           key,
@@ -635,6 +663,18 @@ function resolveStageStatusLabel(status: string): string {
           </div>
         </div>
 
+        <div v-if="outlineVolumes.length > 1" class="workflow-volume-tabs">
+          <button
+            v-for="(volume, index) in outlineVolumes"
+            :key="volume.id"
+            class="doc-tab"
+            :class="{ active: volume.id === activeWorkflowVolumeId || (!activeWorkflowVolumeId && index === 0) }"
+            @click="selectVolume(volume.id)"
+          >
+            {{ formatVolumeLabel(volume, index, 'compact') }}
+          </button>
+        </div>
+
         <div class="workflow-doc-tabs">
           <button
             v-for="document in stageDocuments"
@@ -846,11 +886,18 @@ function resolveStageStatusLabel(status: string): string {
 
 .workflow-stage-status-row,
 .workflow-panel-actions,
-.workflow-doc-tabs {
+.workflow-doc-tabs,
+.workflow-volume-tabs {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.workflow-volume-tabs {
+  margin-bottom: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
 }
 
 .status-chip,

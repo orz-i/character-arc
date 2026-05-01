@@ -208,6 +208,7 @@ async function handleExpandVolumeOutline(volume: OutlineVolume): Promise<void> {
     })
 
     appStore.appendWorkflowDocumentEntry(
+      volume.id,
       'task_plan',
       `分卷补全：${volume.title}`,
       [
@@ -216,6 +217,7 @@ async function handleExpandVolumeOutline(volume: OutlineVolume): Promise<void> {
       ].join('\n')
     )
     appStore.appendWorkflowDocumentEntry(
+      volume.id,
       'pending_hooks',
       `分卷补全后待观察钩子：${volume.title}`,
       entries.map((entry) => `- ${entry.title ?? '新节点'}：${entry.conflict ?? '待补充核心冲突'}`).join('\n')

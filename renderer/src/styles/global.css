@@ -186,6 +186,15 @@ input {
   border-radius: 8px;
 }
 
+.arc-settings-modal {
+  width: min(96vw, 980px);
+  border-radius: 18px;
+}
+
+.arc-settings-modal .n-card {
+  border-radius: 28px;
+}
+
 .arc-modal-actions {
   display: flex;
   justify-content: flex-end;

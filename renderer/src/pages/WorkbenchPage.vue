@@ -248,7 +248,7 @@ watch(searchKeyword, (value) => {
           </span>
           <span v-if="shouldRenderSidebarLabels" class="sidebar-copy">
             <span class="sidebar-label">项目设置</span>
-            <span class="sidebar-hint">主题、自动保存与创作偏好</span>
+            <span class="sidebar-hint">自动保存、导入导出与创作偏好</span>
           </span>
         </button>
       </div>

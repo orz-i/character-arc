@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { FAST_PERSIST_DELAY_MS, formatAutoSaveIntervalLabel, isLiveAutoSaveInterval, resolveAutoSaveDelayMs } from '@/features/settings/autoSave'
+import { createDefaultWorkflowDocuments } from '@/features/novelWorkflow/documents'
 import { createDefaultNovelWorkflowStages } from '@/features/novelWorkflow/stages'
 import {
   buildVolumeGroups,
@@ -176,6 +177,8 @@ export const useAppStore = defineStore('app', () => {
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
   /** 标记是否正在应用远程工作区同步，防止循环同步 */
   let isApplyingRemoteWorkspaceSync = false
+  /** 流程面板当前激活的分卷 ID，空字符串时回退到第一个分卷 */
+  const activeWorkflowVolumeId = ref<string>('')
 
   // ── 计算属性：从当前工作区派生各业务实体列表 ──
   /** 当前项目的工作区数据，项目不存在时返回空工作区 */
@@ -204,8 +207,14 @@ export const useAppStore = defineStore('app', () => {
   const chapterVersions = computed(() => currentWorkspace.value.chapterVersions)
   /** 当前项目的 AI 聊天消息列表 */
   const messages = computed(() => currentWorkspace.value.messages)
-  /** 当前项目的固定流程文件 */
-  const workflowDocuments = computed(() => currentWorkspace.value.workflowDocuments)
+  /** 流程面板当前激活的分卷（回退到第一个分卷） */
+  const activeWorkflowVolume = computed(
+    () => outlineVolumes.value.find((v) => v.id === activeWorkflowVolumeId.value) ?? outlineVolumes.value[0]
+  )
+  /** 当前激活分卷的流程文件（每卷独立维护） */
+  const workflowDocuments = computed(
+    () => activeWorkflowVolume.value?.workflowDocuments ?? createDefaultWorkflowDocuments()
+  )
   /** 自动保存间隔的人类可读标签 */
   const autoSaveIntervalLabel = computed(() => formatAutoSaveIntervalLabel(appSettings.value.autoSaveInterval))
   /** 是否为实时自动保存模式 */
@@ -376,15 +385,15 @@ export const useAppStore = defineStore('app', () => {
     selectedChapterId.value = hasCurrentChapter ? selectedChapterId.value : (chapterList[0]?.id ?? '')
   }
 
-  /** 确保指定项目的工作区数据存在，不存在时创建空工作区或演示数据 */
-  function ensureProjectWorkspace(projectId: string, fallbackToDemo = false): void {
+  /** 确保指定项目的工作区数据存在，不存在时创建空工作区 */
+  function ensureProjectWorkspace(projectId: string): void {
     if (projectWorkspaces.value[projectId]) {
       return
     }
 
     projectWorkspaces.value = {
       ...projectWorkspaces.value,
-      [projectId]: normalizeProjectWorkspaceData(undefined, { fallbackToDemo })
+      [projectId]: normalizeProjectWorkspaceData(undefined)
     }
   }
 
@@ -419,17 +428,15 @@ export const useAppStore = defineStore('app', () => {
     projectWorkspaces.value =
       'workspaces' in payload && payload.workspaces
         ? Object.fromEntries(
-            Object.entries(payload.workspaces).map(([projectId, workspace], index) => [
+            Object.entries(payload.workspaces).map(([projectId, workspace]) => [
               projectId,
-              normalizeProjectWorkspaceData(workspace, {
-                fallbackToDemo: index === 0 && projectId === defaultProjects[0].id
-              })
+              normalizeProjectWorkspaceData(workspace)
             ])
           )
         : buildWorkspaceMapFromLegacy(payload as LegacyStoredState, selectedProjectId.value)
 
-    for (const [index, project] of projects.value.entries()) {
-      ensureProjectWorkspace(project.id, index === 0 && project.id === defaultProjects[0].id)
+    for (const project of projects.value) {
+      ensureProjectWorkspace(project.id)
     }
 
     appSettings.value = normalizeAppSettings(payload.appSettings)
@@ -972,27 +979,28 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
-  function updateWorkflowDocument(documentKey: string, content: string): void {
+  function updateWorkflowDocument(volumeId: string, documentKey: string, content: string): void {
     updateCurrentWorkspace((workspace) => ({
       ...workspace,
-      workflowDocuments: workspace.workflowDocuments.map((document) =>
-        document.key === documentKey
-          ? {
-              ...document,
-              content,
-              updatedAt: new Date().toISOString()
+      outlineVolumes: workspace.outlineVolumes.map((volume) =>
+        volume.id !== volumeId
+          ? volume
+          : {
+              ...volume,
+              workflowDocuments: (volume.workflowDocuments ?? []).map((document) =>
+                document.key === documentKey
+                  ? { ...document, content, updatedAt: new Date().toISOString() }
+                  : document
+              )
             }
-          : document
       )
     }))
     schedulePersist('fast')
   }
 
   function updateWorkflowDocuments(
-    payloads: Array<{
-      key: string
-      content: string
-    }>
+    volumeId: string,
+    payloads: Array<{ key: string; content: string }>
   ): void {
     if (!payloads.length) {
       return
@@ -1001,20 +1009,23 @@ export const useAppStore = defineStore('app', () => {
     const payloadMap = new Map(payloads.map((payload) => [payload.key, payload.content]))
     updateCurrentWorkspace((workspace) => ({
       ...workspace,
-      workflowDocuments: workspace.workflowDocuments.map((document) =>
-        payloadMap.has(document.key)
-          ? {
-              ...document,
-              content: payloadMap.get(document.key) ?? document.content,
-              updatedAt: new Date().toISOString()
+      outlineVolumes: workspace.outlineVolumes.map((volume) =>
+        volume.id !== volumeId
+          ? volume
+          : {
+              ...volume,
+              workflowDocuments: (volume.workflowDocuments ?? []).map((document) =>
+                payloadMap.has(document.key)
+                  ? { ...document, content: payloadMap.get(document.key) ?? document.content, updatedAt: new Date().toISOString() }
+                  : document
+              )
             }
-          : document
       )
     }))
     schedulePersist('fast')
   }
 
-  function appendWorkflowDocumentEntry(documentKey: string, entryTitle: string, body: string): void {
+  function appendWorkflowDocumentEntry(volumeId: string, documentKey: string, entryTitle: string, body: string): void {
     const normalizedBody = body.trim()
     if (!normalizedBody) {
       return
@@ -1022,25 +1033,34 @@ export const useAppStore = defineStore('app', () => {
 
     updateCurrentWorkspace((workspace) => ({
       ...workspace,
-      workflowDocuments: workspace.workflowDocuments.map((document) => {
-        if (document.key !== documentKey) {
-          return document
+      outlineVolumes: workspace.outlineVolumes.map((volume) => {
+        if (volume.id !== volumeId) {
+          return volume
         }
 
-        const header = document.content.split('\n')[0] || `# ${document.title.replace(/\.md$/i, '')}`
-        const isPlaceholder = /待 AI 生成|待补充/.test(document.content) && document.content.trim().split('\n').length <= 3
-        const nextContent = isPlaceholder
-          ? `${header}\n\n## ${entryTitle}\n${normalizedBody}\n`
-          : `${document.content.trim()}\n\n## ${entryTitle}\n${normalizedBody}\n`
-
         return {
-          ...document,
-          content: nextContent,
-          updatedAt: new Date().toISOString()
+          ...volume,
+          workflowDocuments: (volume.workflowDocuments ?? []).map((document) => {
+            if (document.key !== documentKey) {
+              return document
+            }
+
+            const header = document.content.split('\n')[0] || `# ${document.title.replace(/\.md$/i, '')}`
+            const isPlaceholder = /待 AI 生成|待补充/.test(document.content) && document.content.trim().split('\n').length <= 3
+            const nextContent = isPlaceholder
+              ? `${header}\n\n## ${entryTitle}\n${normalizedBody}\n`
+              : `${document.content.trim()}\n\n## ${entryTitle}\n${normalizedBody}\n`
+
+            return { ...document, content: nextContent, updatedAt: new Date().toISOString() }
+          })
         }
       })
     }))
     schedulePersist('fast')
+  }
+
+  function setActiveWorkflowVolumeId(id: string): void {
+    activeWorkflowVolumeId.value = id
   }
 
   // ── 世界观 CRUD ──
@@ -2136,6 +2156,9 @@ export const useAppStore = defineStore('app', () => {
     consumeChapterInsertion,
     updateAppSetting,
     updateProject,
+    activeWorkflowVolumeId,
+    activeWorkflowVolume,
+    setActiveWorkflowVolumeId,
     updateWorkflowDocument,
     updateWorkflowDocuments,
     appendWorkflowDocumentEntry,

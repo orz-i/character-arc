@@ -1,119 +1,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Cpu, Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Network, Palette, PenTool, PlugZap, Save, Users } from 'lucide-vue-next'
+import { Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Network, PenTool, Save, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NModal, NSelect, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { buildProjectWritingStyleContext, writingStylePresets } from '@/features/writingStyles/presets'
-import { themePresets } from '@/theme/presets'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type {
   CharacterArcExportEnvelope,
   ImportConflictMode,
   ImportExportModuleType,
-  ProjectImportPayload,
-  ThemeName
+  ProjectImportPayload
 } from '@/types/app'
 
 const appStore = useAppStore()
 const message = useMessage()
-const isTestingAiConnection = ref(false) // 测试 AI 模型连接时的加载状态
-// 导入冲突处理策略：copy 为新建副本，overwrite 为覆盖当前模块
 const importConflictMode = ref<ImportConflictMode>('copy')
-const importModalVisible = ref(false) // 控制导入确认弹窗
-const pendingImportPayload = ref<ProjectImportPayload | null>(null) // 待导入的数据负载
-const pendingImportMeta = ref<CharacterArcImportMeta | null>(null) // 待导入数据的元信息（版本、模块类型等）
+const importModalVisible = ref(false)
+const pendingImportPayload = ref<ProjectImportPayload | null>(null)
+const pendingImportMeta = ref<CharacterArcImportMeta | null>(null)
 
-// AI 模型供应商预设列表：包含供应商名称、默认模型、默认 Base URL 和使用说明
-type ProviderPreset = {
-  label: string
-  value: string
-  model: string
-  baseUrl: string
-  hint: string
-}
-
-const themeOptions = themePresets.map((preset) => ({ // 主题色选项列表
-  label: preset.label,
-  value: preset.name
-}))
-// AI 模型供应商预设配置：DeepSeek、阿里云、智谱、Moonshot、SiliconFlow、OpenAI、Anthropic、本地 Ollama 和网关
-const providerPresets: ProviderPreset[] = [
-  {
-    label: 'DeepSeek',
-    value: 'deepseek',
-    model: 'deepseek-chat',
-    baseUrl: 'https://api.deepseek.com/v1',
-    hint: '官方直连，适合通用写作和对话。模型示例：deepseek-chat / deepseek-reasoner。'
-  },
-  {
-    label: '阿里云百炼 / 通义千问',
-    value: 'qwen',
-    model: 'qwen-plus',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    hint: 'OpenAI 兼容模式。模型示例：qwen-plus / qwen-max / qwen3-coder-plus。'
-  },
-  {
-    label: '智谱 GLM',
-    value: 'zhipu',
-    model: 'glm-4.7',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    hint: '官方通用端点。模型示例：glm-4.7 / glm-4.5-air。'
-  },
-  {
-    label: 'Moonshot / Kimi',
-    value: 'moonshot',
-    model: 'kimi-k2.5',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    hint: '官方 OpenAI 兼容接口。模型示例：kimi-k2.5 / moonshot-v1-128k。'
-  },
-  {
-    label: 'SiliconFlow',
-    value: 'siliconflow',
-    model: 'Qwen/Qwen2.5-72B-Instruct',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    hint: '聚合大量开源模型，模型名通常使用完整 ID。示例：Qwen/Qwen2.5-72B-Instruct。'
-  },
-  {
-    label: 'OpenAI',
-    value: 'openai',
-    model: 'gpt-4o-mini',
-    baseUrl: 'https://api.openai.com/v1',
-    hint: '官方 OpenAI 接口。'
-  },
-  {
-    label: 'Anthropic',
-    value: 'anthropic',
-    model: 'claude-3-5-sonnet-latest',
-    baseUrl: 'https://api.anthropic.com',
-    hint: 'Claude 原生协议，不走 OpenAI 兼容格式。'
-  },
-  {
-    label: '本地模型 / Ollama',
-    value: 'ollama',
-    model: 'llama3.2',
-    baseUrl: 'http://127.0.0.1:11434/v1',
-    hint: '本地运行，无需外网。模型示例：llama3.2 / qwen2.5 / deepseek-r1。'
-  },
-  {
-    label: 'New API 网关',
-    value: 'new-api',
-    model: 'qwen-plus',
-    baseUrl: 'http://127.0.0.1:3000/v1',
-    hint: '开源聚合网关预设。把官方渠道接进 New API 后，这里填网关 token 即可。'
-  },
-  {
-    label: 'One API 网关',
-    value: 'one-api',
-    model: 'qwen-plus',
-    baseUrl: 'http://127.0.0.1:3000/v1',
-    hint: '开源统一分发网关预设。适合把多家国产模型统一到一个地址下。'
-  }
-]
-const providerOptions = providerPresets.map(({ label, value }) => ({ label, value })) // 供应商下拉选项
-const autoSaveSelectOptions = [...autoSaveOptions] // 自动保存间隔选项
-// UI 缩放比例选项
+const autoSaveSelectOptions = [...autoSaveOptions]
 const uiScaleOptions = [
   { label: '75%', value: 0.75 },
   { label: '85%', value: 0.85 },
@@ -123,11 +31,6 @@ const uiScaleOptions = [
   { label: '140%', value: 1.4 }
 ]
 
-// 当前选中的供应商预设（用于显示提示信息和默认值）
-const activeProviderPreset = computed(
-  () => providerPresets.find((item) => item.value === appStore.appSettings.provider) ?? providerPresets[0]
-)
-// 当前项目的写作风格配置
 const activeWritingStyle = computed(() => buildProjectWritingStyleContext(appStore.currentProject))
 // 导入冲突策略选项
 const importConflictOptions = [
@@ -166,52 +69,6 @@ function updateWritingStylePrompt(prompt: string): void {
   })
 }
 
-// 根据供应商名称解析默认的模型和 Base URL 配置
-function resolveProviderDefaults(provider: string): { model: string; baseUrl: string } {
-  const preset = providerPresets.find((item) => item.value === provider)
-  return preset
-    ? {
-        model: preset.model,
-        baseUrl: preset.baseUrl
-      }
-    : {
-        model: 'deepseek-chat',
-        baseUrl: 'https://api.deepseek.com/v1'
-      }
-}
-
-// 切换模型供应商时，自动填充该供应商的默认模型和 Base URL
-function handleProviderChange(provider: string): void {
-  const defaults = resolveProviderDefaults(provider)
-  appStore.updateAppSetting('provider', provider)
-  appStore.updateAppSetting('model', defaults.model)
-  appStore.updateAppSetting('baseUrl', defaults.baseUrl)
-}
-
-// 测试 AI 模型连接是否可用
-async function handleTestAiConnection(): Promise<void> {
-  if (isTestingAiConnection.value) {
-    return
-  }
-
-  isTestingAiConnection.value = true
-
-  try {
-    const result = await window.characterArc.testAiConnection(toIpcPayload(appStore.appSettings))
-    if (!result.success) {
-      throw new Error(result.error ?? '模型连接测试失败')
-    }
-
-    const payload = result.result as { provider?: string; model?: string } | undefined
-    message.success(`模型连接成功：${payload?.provider ?? appStore.appSettings.provider} / ${payload?.model ?? appStore.appSettings.model}`)
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '模型连接测试失败')
-  } finally {
-    isTestingAiConnection.value = false
-  }
-}
-
-// 构建导出文件名的前缀（项目标题 + 后缀），去除非法字符
 function buildExportStem(suffix: string): string {
   const projectTitle = appStore.currentProject?.title?.trim() || 'characterarc'
   const safeTitle = projectTitle.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-')
@@ -455,62 +312,11 @@ function closeImportModal(): void {
     <div class="section-head">
       <div>
         <h2>项目设置</h2>
-        <p>管理模型连接、主题色和本地备份策略。</p>
+        <p>管理当前项目的备份、导入导出与创作偏好。</p>
       </div>
     </div>
 
     <div class="settings-wrap">
-      <n-card class="setting-card" :bordered="false">
-        <template #header>
-          <div class="block-title">
-            <Cpu :size="18" />
-            <span>AI 模型配置</span>
-          </div>
-        </template>
-        <n-form-item label="模型供应商">
-          <n-select
-            :options="providerOptions"
-            :value="appStore.appSettings.provider"
-            @update:value="(value) => handleProviderChange(value ?? 'deepseek')"
-          />
-        </n-form-item>
-        <div class="provider-hint-block">
-          <strong>{{ activeProviderPreset.label }}</strong>
-          <p>{{ activeProviderPreset.hint }}</p>
-          <code>{{ activeProviderPreset.baseUrl }}</code>
-        </div>
-        <n-form-item label="模型名称">
-          <n-input
-            :value="appStore.appSettings.model"
-            @update:value="(value) => appStore.updateAppSetting('model', value)"
-            :placeholder="`例如：${activeProviderPreset.model}`"
-          />
-        </n-form-item>
-        <n-form-item label="API Key">
-          <n-input
-            type="password"
-            :value="appStore.appSettings.apiKey"
-            @update:value="(value) => appStore.updateAppSetting('apiKey', value)"
-            :placeholder="appStore.appSettings.provider === 'ollama' ? '本地 Ollama 通常不需要 API Key' : '填写对应平台或网关的 Token'"
-          />
-        </n-form-item>
-        <n-form-item label="Base URL (自定义代理)">
-          <n-input
-            :value="appStore.appSettings.baseUrl"
-            @update:value="(value) => appStore.updateAppSetting('baseUrl', value)"
-            placeholder="支持官方接口地址，也支持 OpenAI 兼容网关地址"
-          />
-        </n-form-item>
-        <div class="setting-actions ai-actions">
-          <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
-            <template #icon>
-              <PlugZap :size="16" />
-            </template>
-            {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
-          </n-button>
-        </div>
-      </n-card>
-
       <n-card class="setting-card" :bordered="false">
         <template #header>
           <div class="block-title">
@@ -643,34 +449,6 @@ function closeImportModal(): void {
         </n-form-item>
         <div class="style-footnote">
           当前章节助理、灵感生成、大纲扩写和角色/设定生成都会优先参考这里的项目风格。
-        </div>
-      </n-card>
-
-      <n-card class="setting-card" :bordered="false">
-        <template #header>
-          <div class="block-title">
-            <Palette :size="18" />
-            <span>主题色</span>
-          </div>
-        </template>
-        <n-form-item label="应用主题色">
-          <n-select
-            :options="themeOptions"
-            :value="appStore.theme"
-            @update:value="(value) => appStore.setTheme((value ?? 'ocean') as ThemeName)"
-          />
-        </n-form-item>
-        <div class="theme-swatches">
-          <button
-            v-for="preset in themePresets"
-            :key="preset.name"
-            class="theme-dot"
-            :class="{ active: appStore.theme === preset.name }"
-            :style="{ background: preset.primary }"
-            @click="appStore.setTheme(preset.name)"
-          >
-            <span>{{ preset.label }}</span>
-          </button>
         </div>
       </n-card>
     </div>
@@ -847,33 +625,6 @@ function closeImportModal(): void {
   line-height: 1.7;
 }
 
-.provider-hint-block {
-  margin: -2px 0 14px;
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  border-radius: 12px;
-  background: #f8fafc;
-  padding: 12px 14px;
-}
-
-.provider-hint-block strong {
-  display: block;
-  margin-bottom: 4px;
-  color: #1f2937;
-  font-size: 13px;
-}
-
-.provider-hint-block p {
-  margin: 0 0 8px;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.provider-hint-block code {
-  color: #334155;
-  font-size: 12px;
-}
-
 .block-title {
   display: inline-flex;
   align-items: center;
@@ -1015,31 +766,6 @@ function closeImportModal(): void {
   font-size: 12px;
   font-weight: 700;
   padding: 8px 12px;
-}
-
-.theme-swatches {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.theme-dot {
-  display: flex;
-  width: 58px;
-  height: 58px;
-  align-items: end;
-  justify-content: center;
-  border: 3px solid transparent;
-  border-radius: 18px;
-  color: white;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding-bottom: 8px;
-}
-
-.theme-dot.active {
-  border-color: #1d1d1f;
 }
 
 @media (max-width: 1240px) {
