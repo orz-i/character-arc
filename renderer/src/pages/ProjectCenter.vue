@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, h, ref } from 'vue'
-import { BookOpen, FilePenLine, Trash2 } from 'lucide-vue-next'
 import { useDialog, useMessage } from 'naive-ui'
 import HomepageHero from '@/components/home/HomepageHero.vue'
 import HomepageProjectCollection from '@/components/home/HomepageProjectCollection.vue'
@@ -18,7 +17,6 @@ const editorVisible = ref(false)
 const editingProject = ref<ProjectSummary | null>(null)
 
 const canDeleteProject = computed(() => appStore.projects.length > 1)
-const featuredProject = computed(() => appStore.projects[0] ?? null)
 
 const projectMenuOptions = computed(() => [
   {
@@ -120,16 +118,12 @@ function requestDeleteProject(projectId: string): void {
   <section class="project-center">
     <div class="project-shell">
       <HomepageHero
-        :projects="appStore.projects"
-        :featured-project="featuredProject ?? undefined"
         @create="appStore.openWizard()"
         @open-settings="settingsVisible = true"
-        @open-project="openProject"
       />
 
       <HomepageProjectCollection
         :projects="appStore.projects"
-        :featured-project="featuredProject ?? undefined"
         :menu-options="projectMenuOptions"
         @open="openProject"
         @menu-select="handleMenuSelect"
@@ -164,9 +158,14 @@ function requestDeleteProject(projectId: string): void {
   margin: 0 auto;
   padding:
     calc(var(--arc-titlebar-height) + clamp(20px, 3vw, 28px))
-    max(clamp(16px, 2.6vw, 28px), calc(var(--arc-window-controls-width) + 18px))
-    clamp(28px, 4vw, 44px)
-    clamp(16px, 2.6vw, 28px);
+    clamp(16px, 2.6vw, 28px)
+    clamp(28px, 4vw, 44px);
+}
+
+@supports (padding-right: max(1px, 2px)) {
+  .project-shell {
+    padding-right: max(clamp(16px, 2.6vw, 28px), calc(env(titlebar-area-x, 0px) + env(titlebar-area-width, 100vw) - 100% + 18px));
+  }
 }
 
 :deep(.project-menu-danger-label) {

@@ -51,14 +51,14 @@ function createSeedId(prefix: string, index: number, timestamp: number): string 
   return `${prefix}-${timestamp}-${index + 1}`
 }
 
-// 标准化目标字数，空值回退到默认的 "20万字"
+// 标准化目标字数输入，统一按“万字”单位输出，空值回退到默认的 "20万字"
 function normalizeTargetWordCount(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) {
+  const normalized = value.replace(/\D/g, '').trim()
+  if (!normalized) {
     return '20万字'
   }
 
-  return trimmed
+  return `${normalized}万字`
 }
 
 // 构建空白起始章节，用于没有 AI 生成大纲时的兜底章节

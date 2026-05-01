@@ -5,7 +5,6 @@ import HomepageProjectCard from './HomepageProjectCard.vue'
 
 defineProps<{
   projects: ProjectSummary[]
-  featuredProject?: ProjectSummary
   menuOptions: DropdownOption[]
 }>()
 

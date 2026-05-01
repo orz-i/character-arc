@@ -14,6 +14,16 @@ import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import { createProjectWorkspaceSeed, type ProjectBootstrapResult } from '@/features/wizard/projectSeed'
 
+const DEFAULT_TARGET_WORD_COUNT = '20'
+
+function sanitizeTargetWordCount(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function formatTargetWordCount(value: string): string {
+  return value.trim() ? `${value.trim()}万字` : ''
+}
+
 const appStore = useAppStore()
 const message = useMessage()
 
@@ -26,7 +36,7 @@ const isGenerating = ref(false)
 const formData = reactive({
   title: '',           // 作品名称
   genre: '科幻',       // 题材分类，默认科幻
-  targetWordCount: '20万字', // 目标总字数
+  targetWordCount: DEFAULT_TARGET_WORD_COUNT, // 目标总字数（仅输入数字，单位固定为万字）
   premise: '',         // 故事核心点子/一句话简介
   shouldGenerate: true // 是否调用 AI 自动生成初始世界观与大纲
 })
@@ -55,7 +65,7 @@ function resetWizard(): void {
   isGenerating.value = false
   formData.title = ''
   formData.genre = '科幻'
-  formData.targetWordCount = '20万字'
+  formData.targetWordCount = DEFAULT_TARGET_WORD_COUNT
   formData.premise = ''
   formData.shouldGenerate = true
 }
@@ -72,6 +82,13 @@ function goBack(): void {
   if (!isGenerating.value) {
     appStore.closeWizard()
   }
+}
+
+function handleTargetWordCountInput(event: Event): void {
+  const target = event.target as HTMLInputElement
+  const sanitized = sanitizeTargetWordCount(target.value)
+  formData.targetWordCount = sanitized
+  target.value = sanitized
 }
 
 /** 前进到下一步，或在最后一步执行项目创建（含可选的 AI 生成） */
@@ -99,7 +116,7 @@ async function goNext(): Promise<void> {
         context: {
           projectTitle: formData.title,
           projectGenre: formData.genre,
-          projectWordTarget: formData.targetWordCount,
+          projectWordTarget: formatTargetWordCount(formData.targetWordCount),
           projectPremise: formData.premise
         }
       }))
@@ -172,11 +189,14 @@ async function goNext(): Promise<void> {
               <div class="input-shell">
                 <Target :size="18" class="input-icon" />
                 <input
-                  v-model="formData.targetWordCount"
+                  :value="formData.targetWordCount"
                   type="text"
-                  placeholder="例如：20万字"
-                  class="wizard-input"
+                  inputmode="numeric"
+                  placeholder="例如：20"
+                  class="wizard-input wizard-input-with-suffix"
+                  @input="handleTargetWordCountInput"
                 />
+                <span class="input-suffix">万字</span>
               </div>
             </div>
 
@@ -227,7 +247,7 @@ async function goNext(): Promise<void> {
                   ? (formData.shouldGenerate
                       ? '正在解析核心点子，生成初始世界观与剧情大纲，并同步创建可继续写作的章节草稿。'
                       : '正在创建空白项目工作区，并为你准备第一个章节草稿。')
-                  : `项目名为"${formData.title || '未命名作品'}"，题材为 ${formData.genre}，目标字数 ${formData.targetWordCount}。你可以选择直接创建，或让 AI 先帮你生成初始设定与大纲。`
+                  : `项目名为"${formData.title || '未命名作品'}"，题材为 ${formData.genre}，目标字数 ${formatTargetWordCount(formData.targetWordCount) || '未填写'}。你可以选择直接创建，或让 AI 先帮你生成初始设定与大纲。`
               }}
             </p>
 
@@ -445,6 +465,17 @@ async function goNext(): Promise<void> {
   color: #9ca3af;
 }
 
+.input-suffix {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 .wizard-input,
 .wizard-textarea {
   width: 100%;
@@ -466,6 +497,10 @@ async function goNext(): Promise<void> {
 .wizard-input {
   padding: 18px 18px 18px 48px;
   font-size: 18px;
+}
+
+.wizard-input-with-suffix {
+  padding-right: 74px;
 }
 
 .genre-grid {

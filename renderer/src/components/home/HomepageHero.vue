@@ -1,16 +1,9 @@
 <script setup lang="ts">
 import { Plus, Settings2 } from 'lucide-vue-next'
-import type { ProjectSummary } from '@/types/app'
-
-defineProps<{
-  projects: ProjectSummary[]
-  featuredProject?: ProjectSummary
-}>()
 
 const emit = defineEmits<{
   (e: 'create'): void
   (e: 'openSettings'): void
-  (e: 'openProject', projectId: string): void
 }>()
 </script>
 
