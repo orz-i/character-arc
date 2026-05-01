@@ -46,7 +46,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'polish-selection',
     label: '润色选中',
-    prompt: '请只针对当前选中的正文片段做一版润色，保留原意和剧情信息，提升节奏、画面感与表达准确度。直接输出润色后的最终文本。',
+    prompt: '请只针对当前选中的正文片段做一版润色，保留原意和剧情信息，提升节奏、画面感与表达准确度。直接输出润色后的最终文本。去AI味：避免重复句式、过度高级词汇、机械逻辑结构，保持句式长短交替，用动作和感官落地而非空泛判断。',
     iconKey: 'pen',
     group: 'rewrite',
     mode: 'polish',
@@ -101,7 +101,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'polish-paragraph',
     label: '润色段落',
-    prompt: '请基于当前章节内容给出一版更有节奏感和画面感的润色稿，优先输出可直接插入正文的内容。',
+    prompt: '请基于当前章节内容给出一版更有节奏感和画面感的润色稿，优先输出可直接插入正文的内容。去AI味：避免重复句式、过度高级词汇、机械逻辑结构，保持句式长短交替，用动作和感官落地而非空泛判断。',
     iconKey: 'pen',
     group: 'rewrite',
     mode: 'polish',
@@ -112,7 +112,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'continue-scene',
     label: '续写片段',
-    prompt: '请紧接当前章节正文往后续写一小段，保持人物语气、世界观和剧情方向一致。',
+    prompt: '请紧接当前章节正文往后续写一小段，保持人物语气、世界观和剧情方向一致。续写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源。',
     iconKey: 'sparkles',
     group: 'write',
     mode: 'continue',
@@ -123,7 +123,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'chapter-first-draft',
     label: '本章初稿',
-    prompt: '请基于当前章节标题、章节摘要、分卷定位、已有角色关系和组织上下文，直接生成一版可继续写作的本章初稿，优先输出正文，不要解释。',
+    prompt: '请基于当前章节标题、章节摘要、分卷定位、已有角色关系和组织上下文，直接生成一版可继续写作的本章初稿，优先输出正文，不要解释。先识别本章更接近哪种类型（布局章重试探与利益交换，事件章重行动与资源兑现，过渡章重状态变化与后续钩子，回收章优先回应旧伏笔再打开新问题），再选择对应写法。',
     iconKey: 'sparkles',
     group: 'write',
     mode: 'continue',
@@ -145,7 +145,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'strengthen-conflict',
     label: '强化冲突',
-    prompt: '请基于当前章节内容，输出一版更有冲突推进力的正文或改写建议，优先强化人物立场碰撞、关系张力和场景对抗。',
+    prompt: '请基于当前章节内容，输出一版更有冲突推进力的正文或改写建议，优先强化人物立场碰撞、关系张力和场景对抗。冲突必须由利益驱动，配角和反派必须有反扑、误判和自己的算盘，不能站着等死或为了推剧情而降智。',
     iconKey: 'lightbulb',
     group: 'rewrite',
     mode: 'suggest',
@@ -189,7 +189,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'chapter-analysis',
     label: '章节分析',
-    prompt: '请分析当前章节的节奏、张力、连续性和改稿优先级，并给出可以立刻执行的修改建议。',
+    prompt: '请分析当前章节的节奏、张力、连续性和改稿优先级，并给出可以立刻执行的修改建议。审查维度包括：人物OOC、时间线断裂、利益链不成立、配角工具人化、爽点虚化、台词失真、语言重复、设定冲突、信息越界、伏笔失管、词汇疲劳。按"问题→证据→最小修法"输出，优先修根因。',
     iconKey: 'bot',
     group: 'planning',
     mode: 'suggest',
@@ -211,7 +211,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'diagnose-rewrite',
     label: '诊断改写',
-    prompt: '请先快速判断当前章节的节奏、张力和连续性问题，然后直接输出一版可替换或插入正文的改写结果，优先处理最影响阅读体验的段落。',
+    prompt: '请先快速判断当前章节的节奏、张力和连续性问题，然后直接输出一版可替换或插入正文的改写结果，优先处理最影响阅读体验的段落。优先修根因，不做表面润色；若问题源于动机链断裂或信息越界，先补逻辑链再改表达。',
     iconKey: 'pen',
     group: 'planning',
     mode: 'polish',
@@ -222,7 +222,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
   {
     id: 'relationship-conflict',
     label: '关系冲突',
-    prompt: '请结合当前章节、已有人物关系、组织阵营与成员归属，给出 3 条更能推动剧情的关系驱动冲突建议。每条都要说明冲突双方、阵营立场和可落地到本章或下一章的触发点。',
+    prompt: '请结合当前章节、已有人物关系、组织阵营与成员归属，给出 3 条更能推动剧情的关系驱动冲突建议。每条都要说明冲突双方、阵营立场和可落地到本章或下一章的触发点。冲突必须由利益驱动，不能是心软或圣母；配角必须有反扑，不能站着等死。',
     iconKey: 'lightbulb',
     group: 'reference',
     mode: 'suggest',
