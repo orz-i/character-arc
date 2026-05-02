@@ -82,10 +82,10 @@ const chapterMenuOptions: DropdownOption[] = [ // 章节侧边栏的右键菜单
 ]
 // 分卷选项列表，用于章节信息编辑弹窗中的分卷下拉选择器
 const volumeOptions = computed<SelectOption[]>(() =>
-  appStore.outlineVolumes.map((volume, index) => ({
-    label: formatVolumeLabel(volume, index, 'formal'),
-    value: volume.id
-  }))
+    appStore.outlineVolumes.map((volume, index) => ({
+      label: formatVolumeLabel(volume, index, 'formal'),
+      value: volume.id
+    }))
 )
 const outlineBindingOptions = computed<SelectOption[]>(() => {
   const currentChapterId = appStore.selectedChapter?.id
@@ -100,9 +100,9 @@ const outlineBindingOptions = computed<SelectOption[]>(() => {
 
   const scopedItems = appStore.outlineItems.filter((item) => !targetVolumeId || item.volumeId === targetVolumeId)
   const linkedChapterMap = new Map(
-    appStore.chapters
-      .filter((chapter) => chapter.outlineItemId)
-      .map((chapter) => [chapter.outlineItemId, chapter])
+      appStore.chapters
+          .filter((chapter) => chapter.outlineItemId)
+          .map((chapter) => [chapter.outlineItemId, chapter])
   )
 
   return [
@@ -142,7 +142,7 @@ const currentChapterStatusTone = computed(() => {
 })
 // 当前章节的历史版本列表
 const currentChapterVersions = computed(() =>
-  appStore.selectedChapter ? appStore.getChapterVersions(appStore.selectedChapter.id) : []
+    appStore.selectedChapter ? appStore.getChapterVersions(appStore.selectedChapter.id) : []
 )
 // 当前章节在全书中的序号（从 1 开始）
 const selectedChapterIndex = computed(() => {
@@ -163,7 +163,7 @@ const selectedChapterIndexInVolume = computed(() => {
 })
 // 当前章节所属分卷在所有分卷中的索引
 const currentVolumeIndex = computed(() =>
-  appStore.outlineVolumes.findIndex((volume) => volume.id === appStore.selectedChapterVolume?.id)
+    appStore.outlineVolumes.findIndex((volume) => volume.id === appStore.selectedChapterVolume?.id)
 )
 // 当前分卷的简短标签（如"卷一"）
 const currentVolumeLabel = computed(() => {
@@ -196,7 +196,7 @@ const currentProgressPercent = computed(() => {
   return Math.min(100, Math.max(0, Math.round((currentWordCount.value / currentTargetWordCount.value) * 100)))
 })
 // 当前章节摘要文本，为空时显示占位提示
-const currentSummaryText = computed(() => appStore.selectedChapter?.summary?.trim() || '待补充章节摘要')
+const currentSummaryText = computed(() => appStore.selectedChapter?.summary?.trim() || '未编写此章节的核心定位或摘要。')
 const linkedOutlineItem = computed(() => {
   const chapter = appStore.selectedChapter
   if (!chapter) {
@@ -204,9 +204,9 @@ const linkedOutlineItem = computed(() => {
   }
 
   return (
-    appStore.outlineItems.find((item) => item.id === chapter.outlineItemId) ??
-    appStore.outlineItems.find((item) => item.title.trim() === chapter.title.trim()) ??
-    null
+      appStore.outlineItems.find((item) => item.id === chapter.outlineItemId) ??
+      appStore.outlineItems.find((item) => item.title.trim() === chapter.title.trim()) ??
+      null
   )
 })
 const linkedOutlineStatusMeta = computed(() => {
@@ -228,15 +228,15 @@ const canSyncOutlineBack = computed(() => Boolean(linkedOutlineItem.value && app
 const chapterInspirationFocuses = ['场景火花', '剧情转折', '人物动机'] as const
 // 从全局灵感池中选取与当前章节最相关的灵感卡片（最多 4 张）
 const chapterInspirationEntries = computed(() =>
-  pickRelevantInspirationEntries(
-    appStore.inspirationEntries,
-    {
-      title: appStore.selectedChapter?.title,
-      summary: appStore.selectedChapter?.summary,
-      content: currentPlainContent.value
-    },
-    4
-  )
+    pickRelevantInspirationEntries(
+        appStore.inspirationEntries,
+        {
+          title: appStore.selectedChapter?.title,
+          summary: appStore.selectedChapter?.summary,
+          content: currentPlainContent.value
+        },
+        4
+    )
 )
 // 保存状态的完整文本描述（用于底部状态栏）
 const saveStatusText = computed(() => {
@@ -266,6 +266,8 @@ const saveStatusCompactText = computed(() => {
 const isCompactStudio = computed(() => viewportWidth.value <= 1360)
 // 响应式断点：视口宽度 <= 1180px 时压缩顶部工具栏信息
 const isCondensedTopbar = computed(() => viewportWidth.value <= 1180)
+const isNarrowStudio = computed(() => viewportWidth.value <= 1040)
+const isTinyStudio = computed(() => viewportWidth.value <= 1220)
 // 按分卷分组过滤章节列表，搜索时在标题、摘要、状态、字数目标和正文中匹配
 const filteredChapterGroups = computed(() => {
   const query = props.searchQuery?.trim().toLowerCase() ?? ''
@@ -274,15 +276,15 @@ const filteredChapterGroups = computed(() => {
   }
 
   return appStore.chapterVolumeGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((chapter) =>
-        `${chapter.title} ${chapter.summary} ${chapter.status} ${chapter.wordTarget} ${getPlainTextFromEditorContent(chapter.content)}`
-          .toLowerCase()
-          .includes(query)
-      )
-    }))
-    .filter((group) => group.items.length > 0)
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((chapter) =>
+            `${chapter.title} ${chapter.summary} ${chapter.status} ${chapter.wordTarget} ${getPlainTextFromEditorContent(chapter.content)}`
+                .toLowerCase()
+                .includes(query)
+        )
+      }))
+      .filter((group) => group.items.length > 0)
 })
 // 可见章节总数（过滤后）
 const totalVisibleChapters = computed(() => filteredChapterGroups.value.reduce((count, group) => count + group.items.length, 0))
@@ -290,23 +292,23 @@ const totalVisibleChapters = computed(() => filteredChapterGroups.value.reduce((
 const selectedChapterArrayIndex = computed(() => appStore.chapters.findIndex((chapter) => chapter.id === appStore.selectedChapterId))
 // 上一章（用于阅读模式翻页和顶部导航）
 const previousChapter = computed(() =>
-  selectedChapterArrayIndex.value > 0 ? appStore.chapters[selectedChapterArrayIndex.value - 1] : null
+    selectedChapterArrayIndex.value > 0 ? appStore.chapters[selectedChapterArrayIndex.value - 1] : null
 )
 // 下一章
 const nextChapter = computed(() =>
-  selectedChapterArrayIndex.value >= 0 && selectedChapterArrayIndex.value < appStore.chapters.length - 1
-    ? appStore.chapters[selectedChapterArrayIndex.value + 1]
-    : null
+    selectedChapterArrayIndex.value >= 0 && selectedChapterArrayIndex.value < appStore.chapters.length - 1
+        ? appStore.chapters[selectedChapterArrayIndex.value + 1]
+        : null
 )
 // 阅读模式下正文的 HTML 内容
 const readingContentHtml = computed(() =>
-  ensureEditorHtmlContent(appStore.selectedChapter?.content?.trim() ? appStore.selectedChapter.content : '<p>当前章节还没有正文内容。</p>')
+    ensureEditorHtmlContent(appStore.selectedChapter?.content?.trim() ? appStore.selectedChapter.content : '<p>当前章节还没有正文内容。</p>')
 )
 // 阅读模式下显示的章节字数标签
 const readingWordCountLabel = computed(() => `${currentWordCount.value} 字`)
 // 阅读模式下显示的进度标签
 const readingProgressLabel = computed(() =>
-  currentTargetWordCount.value ? `完成度 ${currentProgressPercent.value}%` : '自由字数模式'
+    currentTargetWordCount.value ? `完成度 ${currentProgressPercent.value}%` : '自由字数模式'
 )
 // 阅读模式下的章节导语（优先使用摘要，否则从正文截取）
 const readingLeadText = computed(() => {
@@ -382,9 +384,9 @@ function openInspirationWorkbench(): void {
 // 将灵感卡片发送给 AI 助手进行扩写或续写，根据 mode 生成不同的 prompt
 function sendInspirationToAssistant(entry: { type: string; title: string; content: string; tags: string[] }, mode: 'expand' | 'continue' = 'expand'): void {
   const prompt =
-    mode === 'continue'
-      ? `请基于这张灵感卡片，紧接当前章节正文继续往后写一段，保持当前人物状态、叙事语气和情节连续性。\n\n灵感类型：${entry.type}\n灵感标题：${entry.title}\n灵感内容：${entry.content}\n灵感标签：${entry.tags.join('、') || '暂无'}`
-      : `请基于这张灵感卡片，为当前章节补一段可直接使用的桥段、台词、动作或场景描写，优先让它自然落进本章。\n\n灵感类型：${entry.type}\n灵感标题：${entry.title}\n灵感内容：${entry.content}\n灵感标签：${entry.tags.join('、') || '暂无'}`
+      mode === 'continue'
+          ? `请基于这张灵感卡片，紧接当前章节正文继续往后写一段，保持当前人物状态、叙事语气和情节连续性。\n\n灵感类型：${entry.type}\n灵感标题：${entry.title}\n灵感内容：${entry.content}\n灵感标签：${entry.tags.join('、') || '暂无'}`
+          : `请基于这张灵感卡片，为当前章节补一段可直接使用的桥段、台词、动作或场景描写，优先让它自然落进本章。\n\n灵感类型：${entry.type}\n灵感标题：${entry.title}\n灵感内容：${entry.content}\n灵感标签：${entry.tags.join('、') || '暂无'}`
 
   appStore.queueAssistantPrompt(prompt, mode === 'continue' ? '灵感续写' : '灵感扩写')
   message.success(mode === 'continue' ? '灵感已发送给 AI 助手继续续写' : '灵感已发送给 AI 助手继续扩写')
@@ -514,20 +516,20 @@ function syncChapterBackToOutline(): void {
     status: mapChapterStatusToOutlineStatus(chapter.status)
   })
   appStore.appendWorkflowDocumentEntry(
-    chapter.volumeId,
-    'progress',
-    `章节回写：${chapter.title}`,
-    [
-      `- 已将当前章节摘要同步回大纲节点。`,
-      `- 章节状态：${currentChapterStatusLabel.value}`,
-      `- 关联大纲节点：${outline.title}`
-    ].join('\n')
+      chapter.volumeId,
+      'progress',
+      `章节回写：${chapter.title}`,
+      [
+        `- 已将当前章节摘要同步回大纲节点。`,
+        `- 章节状态：${currentChapterStatusLabel.value}`,
+        `- 关联大纲节点：${outline.title}`
+      ].join('\n')
   )
   appStore.appendWorkflowDocumentEntry(
-    chapter.volumeId,
-    'findings',
-    `章节推进结论：${chapter.title}`,
-    `- 当前章节已回写到大纲，节点状态调整为：${mapChapterStatusToOutlineStatus(chapter.status)}。`
+      chapter.volumeId,
+      'findings',
+      `章节推进结论：${chapter.title}`,
+      `- 当前章节已回写到大纲，节点状态调整为：${mapChapterStatusToOutlineStatus(chapter.status)}。`
   )
   message.success('已把当前章节摘要与推进状态同步回大纲节点')
 }
@@ -574,13 +576,13 @@ async function generateNextOutlineChain(): Promise<void> {
           status: outline.status
         },
         currentVolumeOutlineItems: appStore.outlineItems
-          .filter((item) => item.volumeId === volume.id)
-          .map((item) => ({
-            title: item.title,
-            conflict: item.conflict,
-            summary: item.summary,
-            status: item.status
-          })),
+            .filter((item) => item.volumeId === volume.id)
+            .map((item) => ({
+              title: item.title,
+              conflict: item.conflict,
+              summary: item.summary,
+              status: item.status
+            })),
         worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title),
         characters: appStore.characters.map((character) => ({
           name: character.name,
@@ -610,30 +612,30 @@ async function generateNextOutlineChain(): Promise<void> {
     }
 
     appStore.createOutlineItemsAfter(
-      outline.id,
-      entries.map((entry) => ({
-        volumeId: volume.id,
-        title: entry.title,
-        wordTarget: entry.wordTarget,
-        conflict: entry.conflict,
-        summary: entry.summary,
-        status: 'planned' as const
-      }))
+        outline.id,
+        entries.map((entry) => ({
+          volumeId: volume.id,
+          title: entry.title,
+          wordTarget: entry.wordTarget,
+          conflict: entry.conflict,
+          summary: entry.summary,
+          status: 'planned' as const
+        }))
     )
     appStore.appendWorkflowDocumentEntry(
-      volume.id,
-      'task_plan',
-      `后续剧情链：${chapter.title}`,
-      [
-        `- 已基于当前章节生成 ${entries.length} 个后续剧情节点。`,
-        ...entries.map((entry, index) => `- 节点${index + 1}：${entry.title ?? `后续节点 ${index + 1}`}`)
-      ].join('\n')
+        volume.id,
+        'task_plan',
+        `后续剧情链：${chapter.title}`,
+        [
+          `- 已基于当前章节生成 ${entries.length} 个后续剧情节点。`,
+          ...entries.map((entry, index) => `- 节点${index + 1}：${entry.title ?? `后续节点 ${index + 1}`}`)
+        ].join('\n')
     )
     appStore.appendWorkflowDocumentEntry(
-      volume.id,
-      'pending_hooks',
-      `新剧情链钩子：${chapter.title}`,
-      entries.map((entry) => `- ${entry.title ?? '后续节点'}：${entry.conflict ?? '待补充核心冲突'}`).join('\n')
+        volume.id,
+        'pending_hooks',
+        `新剧情链钩子：${chapter.title}`,
+        entries.map((entry) => `- ${entry.title ?? '后续节点'}：${entry.conflict ?? '待补充核心冲突'}`).join('\n')
     )
     message.success(`已在当前节点后补充 ${entries.length} 个后续剧情节点`)
   } catch (error) {
@@ -782,24 +784,24 @@ function resetDragState(): void {
 
 // 监听章节标题和内容变化，短暂显示"正在整理草稿"状态后交由自动保存队列接管
 watch(
-  () => [appStore.selectedChapter?.title, appStore.selectedChapter?.content] as const,
-  () => {
-    if (!appStore.selectedChapter) {
-      return
-    }
+    () => [appStore.selectedChapter?.title, appStore.selectedChapter?.content] as const,
+    () => {
+      if (!appStore.selectedChapter) {
+        return
+      }
 
-    saveState.value = 'typing'
+      saveState.value = 'typing'
 
-    // Keep the typing feedback brief, then hand status messaging over to the real autosave queue state.
-    if (saveTimer) {
-      window.clearTimeout(saveTimer)
-    }
+      // Keep the typing feedback brief, then hand status messaging over to the real autosave queue state.
+      if (saveTimer) {
+        window.clearTimeout(saveTimer)
+      }
 
-    saveTimer = window.setTimeout(() => {
-      saveState.value = 'idle'
-    }, 420)
-  },
-  { deep: true }
+      saveTimer = window.setTimeout(() => {
+        saveState.value = 'idle'
+      }, 420)
+    },
+    { deep: true }
 )
 
 watch(isCompactStudio, (compact) => {
@@ -823,7 +825,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="chapters-layout" :class="{ 'reading-mode': readingMode, 'compact-mode': isCompactStudio && !readingMode }">
+  <section class="chapters-layout" :class="{ 'reading-mode': readingMode, 'compact-mode': isCompactStudio && !readingMode, 'narrow-mode': isNarrowStudio && !readingMode, 'tiny-mode': isTinyStudio && !readingMode }">
     <div class="chapters-shell" :class="{ 'reading-mode': readingMode }">
       <aside v-if="!readingMode && !isCompactStudio" class="chapter-sidebar">
         <div class="chapter-side-head">
@@ -866,20 +868,20 @@ onBeforeUnmount(() => {
 
             <div class="chapter-items">
               <button
-                v-for="chapter in group.items"
-                :key="chapter.id"
-                class="chapter-pill"
-                :class="{
+                  v-for="chapter in group.items"
+                  :key="chapter.id"
+                  class="chapter-pill"
+                  :class="{
                   active: appStore.selectedChapterId === chapter.id,
                   dragging: draggingChapterId === chapter.id,
                   'drop-target': dragTargetChapterId === chapter.id && draggingChapterId !== chapter.id
                 }"
-                draggable="true"
-                @click="appStore.selectChapter(chapter.id)"
-                @dragstart="handleDragStart(chapter.id, $event)"
-                @dragover="handleDragOver(chapter.id, $event)"
-                @drop="handleDrop(chapter.id, $event)"
-                @dragend="resetDragState"
+                  draggable="true"
+                  @click="appStore.selectChapter(chapter.id)"
+                  @dragstart="handleDragStart(chapter.id, $event)"
+                  @dragover="handleDragOver(chapter.id, $event)"
+                  @drop="handleDrop(chapter.id, $event)"
+                  @dragend="resetDragState"
               >
                 <span class="chapter-pill-grip" @click.stop>
                   <GripVertical :size="14" />
@@ -907,25 +909,26 @@ onBeforeUnmount(() => {
       </aside>
 
       <section class="editor-shell" :class="{ 'reading-mode': readingMode }">
-        <div class="editor-topbar">
+        <div class="editor-topbar" :class="{ condensed: isCondensedTopbar, narrow: isNarrowStudio, tiny: isTinyStudio }">
           <div class="editor-context">
             <div class="editor-context-main">
               <strong>{{ readingMode ? currentChapterTitle : currentVolumeLabel }}</strong>
               <span v-if="readingMode">全书第 {{ selectedChapterIndex }} 章</span>
               <span v-else class="save-status-inline" :title="saveStatusText">{{ saveStatusCompactText }}</span>
               <span v-if="readingMode">{{ readingWordCountLabel }}</span>
-              <span v-else class="progress-inline">
+              <span v-if="!readingMode && !isTinyStudio" class="progress-inline">
                 {{ currentWordCount }} / {{ currentTargetWordCount || '自由字数' }} · {{ currentProgressPercent }}%
               </span>
+              <span v-else-if="!readingMode" class="meta-chip neutral">进度 {{ currentProgressPercent }}%</span>
               <span class="meta-chip" :class="currentChapterStatusTone">{{ currentChapterStatusLabel }}</span>
-              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip neutral">目标 {{ currentTargetWordCount || '自由字数' }}</span>
-              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
-              <span v-if="!isCondensedTopbar || readingMode" class="meta-chip ghost">全书第 {{ selectedChapterIndex }} 章</span>
+              <span v-if="(!isCondensedTopbar || readingMode) && !isTinyStudio" class="meta-chip neutral">目标 {{ currentTargetWordCount || '自由字数' }}</span>
+              <span v-if="(!isCondensedTopbar || readingMode) && !isTinyStudio" class="meta-chip ghost">本卷第 {{ selectedChapterIndexInVolume }} 章</span>
+              <span v-if="(!isCondensedTopbar || readingMode) && !isTinyStudio" class="meta-chip ghost">全书第 {{ selectedChapterIndex }} 章</span>
             </div>
           </div>
 
           <div class="editor-floating-actions">
-            <div v-if="isCompactStudio && !readingMode" class="compact-utility-cluster">
+            <div v-if="isCompactStudio && !readingMode" class="compact-utility-cluster" :class="{ narrow: isNarrowStudio }">
               <button class="tool-badge neutral compact-back-button" @click="appStore.backToWorkbench()">
                 <span class="compact-back-icon">
                   <ChevronLeft :size="14" />
@@ -935,16 +938,16 @@ onBeforeUnmount(() => {
 
               <div class="compact-utility-switcher">
                 <button
-                  class="compact-utility-tab"
-                  :class="{ active: compactSidebarVisible }"
-                  @click="openCompactSidebar"
+                    class="compact-utility-tab"
+                    :class="{ active: compactSidebarVisible }"
+                    @click="openCompactSidebar"
                 >
                   <span>章节目录</span>
                 </button>
                 <button
-                  class="compact-utility-tab"
-                  :class="{ active: compactInsightsVisible }"
-                  @click="openCompactInsights"
+                    class="compact-utility-tab"
+                    :class="{ active: compactInsightsVisible }"
+                    @click="openCompactInsights"
                 >
                   <span>章节参考</span>
                 </button>
@@ -977,71 +980,71 @@ onBeforeUnmount(() => {
               </n-tooltip>
             </template>
             <template v-else>
-            <div class="editor-action-group">
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <button class="tool-badge" @click="saveCurrentVersion">
-                    <Save :size="16" />
-                  </button>
-                </template>
-                手动保存版本
-              </n-tooltip>
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <button class="tool-badge neutral" @click="openVersionHistory">
-                    <History :size="16" />
-                  </button>
-                </template>
-                历史版本
-              </n-tooltip>
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <button class="tool-badge neutral" @click="openChapterMetaEditor(appStore.selectedChapter)">
-                    <FilePenLine :size="16" />
-                  </button>
-                </template>
-                编辑章节信息
-              </n-tooltip>
-            </div>
+              <div class="editor-action-group topbar-group topbar-group-primary">
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button class="tool-badge" @click="saveCurrentVersion">
+                      <Save :size="16" />
+                    </button>
+                  </template>
+                  手动保存版本
+                </n-tooltip>
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button class="tool-badge neutral" @click="openVersionHistory">
+                      <History :size="16" />
+                    </button>
+                  </template>
+                  历史版本
+                </n-tooltip>
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button class="tool-badge neutral" @click="openChapterMetaEditor(appStore.selectedChapter)">
+                      <FilePenLine :size="16" />
+                    </button>
+                  </template>
+                  编辑章节信息
+                </n-tooltip>
+              </div>
 
-            <div class="editor-action-group emphasis">
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <button
-                    class="tool-badge neutral assistant-toggle"
-                    :class="{ active: appStore.aiVisible }"
-                    @click="appStore.toggleAi()"
-                  >
+              <div class="editor-action-group emphasis topbar-group topbar-group-assistant">
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button
+                        class="tool-badge neutral assistant-toggle"
+                        :class="{ active: appStore.aiVisible }"
+                        @click="appStore.toggleAi()"
+                    >
                     <span class="assistant-toggle-icons" aria-hidden="true">
                       <Bot :size="16" />
                     </span>
-                    <span class="assistant-toggle-copy">
+                      <span class="assistant-toggle-copy">
                       <span class="assistant-toggle-label">AI 助手</span>
                       <span class="assistant-toggle-state">
                         <span class="assistant-toggle-indicator" :class="{ active: appStore.aiVisible }"></span>
                         {{ appStore.aiVisible ? '已打开' : '已关闭' }}
                       </span>
                     </span>
-                  </button>
-                </template>
-                {{ appStore.aiVisible ? '关闭 AI 助手窗口' : '打开 AI 助手窗口' }}
-              </n-tooltip>
-            </div>
+                    </button>
+                  </template>
+                  {{ appStore.aiVisible ? '关闭 AI 助手窗口' : '打开 AI 助手窗口' }}
+                </n-tooltip>
+              </div>
 
-            <div class="editor-action-group danger">
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <button
-                    class="tool-badge neutral danger"
-                    :disabled="appStore.chapters.length <= 1"
-                    @click="requestDeleteChapter"
-                  >
-                    <Trash2 :size="16" />
-                  </button>
-                </template>
-                删除章节
-              </n-tooltip>
-            </div>
+              <div class="editor-action-group danger topbar-group topbar-group-danger">
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <button
+                        class="tool-badge neutral danger"
+                        :disabled="appStore.chapters.length <= 1"
+                        @click="requestDeleteChapter"
+                    >
+                      <Trash2 :size="16" />
+                    </button>
+                  </template>
+                  删除章节
+                </n-tooltip>
+              </div>
             </template>
           </div>
         </div>
@@ -1083,140 +1086,143 @@ onBeforeUnmount(() => {
             </template>
 
             <template v-else>
-            <div class="editor-manuscript-head">
-              <div class="editor-meta-stack">
-                <div class="manuscript-heading">
-                  <span class="manuscript-overline">Chapter {{ selectedChapterIndexInVolume }}</span>
-                  <input
-                    class="chapter-title"
-                    :value="appStore.selectedChapter?.title"
-                    @input="appStore.updateChapterTitle(($event.target as HTMLInputElement).value)"
-                  />
-                </div>
-                <div v-if="linkedOutlineItem" class="outline-origin-card">
-                  <div class="outline-origin-head">
-                    <span class="outline-origin-kicker">来源大纲节点</span>
-                    <div class="outline-origin-head-actions">
-                      <button v-if="canSyncOutlineBack" class="outline-origin-link secondary" @click="syncChapterBackToOutline()">
-                        同步回大纲
-                      </button>
-                      <button
-                        v-if="linkedOutlineItem"
-                        class="outline-origin-link secondary"
-                        :disabled="isGeneratingOutlineChain"
-                        @click="generateNextOutlineChain()"
-                      >
-                        {{ isGeneratingOutlineChain ? '生成中...' : '生成后续剧情链' }}
-                      </button>
-                      <button class="outline-origin-link secondary" @click="openChapterMetaEditor(appStore.selectedChapter)">
-                        调整绑定
-                      </button>
-                      <button class="outline-origin-link" @click="jumpBackToOutline()">
-                        回到大纲
-                      </button>
+              <div class="editor-body" :class="{ compact: isCompactStudio }">
+                <!-- 加入内部滚动条：editor-column 自身具有 overflow-y: auto -->
+                <div class="editor-column arc-scrollbar">
+                  <div class="manuscript-paper">
+                    <div class="manuscript-heading">
+                      <span class="manuscript-overline">Chapter {{ selectedChapterIndexInVolume }}</span>
+                      <input
+                          class="chapter-title"
+                          :value="appStore.selectedChapter?.title"
+                          @input="appStore.updateChapterTitle(($event.target as HTMLInputElement).value)"
+                          placeholder="未命名章节"
+                      />
                     </div>
+
+                    <div class="manuscript-divider"></div>
+
+                    <RichChapterEditor
+                        class="chapter-editor-instance"
+                        :chapter-id="appStore.selectedChapter?.id ?? ''"
+                        :model-value="appStore.selectedChapter?.content ?? ''"
+                        :insertion-request="appStore.pendingChapterInsertion"
+                        @update:model-value="appStore.updateChapterContent"
+                        @consume-insertion="appStore.consumeChapterInsertion"
+                        @selection-change="appStore.updateChapterSelection"
+                    />
                   </div>
-                  <div class="outline-origin-meta">
-                    <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
-                    <span class="outline-origin-status" :class="linkedOutlineStatusMeta.tone">
-                      {{ linkedOutlineStatusMeta.label }}
-                    </span>
-                    <span class="outline-origin-status ghost">目标 {{ linkedOutlineItem.wordTarget }}</span>
-                  </div>
-                  <p class="outline-origin-summary">
-                    <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict }}
-                    <br />
-                    <strong>剧情推进：</strong>{{ linkedOutlineItem.summary }}
-                  </p>
-                  <p class="outline-origin-hint">同步回大纲会更新该节点的剧情摘要，并根据当前章节状态推进到“写作中 / 已完成”。</p>
                 </div>
-              </div>
-            </div>
 
-            <div class="manuscript-divider"></div>
+                <aside v-if="!isCompactStudio" class="editor-insights">
+                  <!-- 侧边栏也能独立内部滚动 -->
+                  <div class="editor-insights-rail arc-scrollbar">
 
-            <div class="editor-body" :class="{ compact: isCompactStudio }">
-              <div class="editor-column">
-                <RichChapterEditor
-                  class="chapter-editor-instance"
-                  :chapter-id="appStore.selectedChapter?.id ?? ''"
-                  :model-value="appStore.selectedChapter?.content ?? ''"
-                  :insertion-request="appStore.pendingChapterInsertion"
-                  @update:model-value="appStore.updateChapterContent"
-                  @consume-insertion="appStore.consumeChapterInsertion"
-                  @selection-change="appStore.updateChapterSelection"
-                />
-              </div>
-
-              <aside v-if="!isCompactStudio" class="editor-insights">
-                <div class="editor-insights-rail arc-scrollbar">
-                  <div class="summary-card">
-                    <span class="summary-card-label">本章定位</span>
-                    <p>{{ currentSummaryText }}</p>
-                  </div>
-
-                  <div class="inspiration-card">
-                    <div class="inspiration-card-head">
-                      <div class="inspiration-card-copy">
-                        <span class="summary-card-label">章节灵感</span>
-                        <strong>当前可用灵感卡</strong>
+                    <div v-if="linkedOutlineItem" class="side-card outline-origin-card">
+                      <div class="side-card-head">
+                        <span class="side-card-label">来源大纲节点</span>
+                        <button class="text-link" @click="jumpBackToOutline()">回到大纲</button>
                       </div>
-                      <button class="inspiration-workbench-link" @click="openInspirationWorkbench">
-                        <span>灵感池</span>
-                        <ArrowUpRight :size="13" />
-                      </button>
+                      <div class="outline-origin-meta">
+                        <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
+                        <span class="outline-origin-status" :class="linkedOutlineStatusMeta.tone">
+                        {{ linkedOutlineStatusMeta.label }}
+                      </span>
+                      </div>
+                      <div class="outline-origin-summary-wrap">
+                        <p class="outline-origin-summary">
+                          <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
+                        </p>
+                        <p class="outline-origin-summary">
+                          <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
+                        </p>
+                      </div>
+                      <div class="outline-origin-actions">
+                        <button v-if="canSyncOutlineBack" class="action-btn primary" @click="syncChapterBackToOutline()">
+                          同步状态与摘要
+                        </button>
+                        <button
+                            class="action-btn"
+                            :disabled="isGeneratingOutlineChain"
+                            @click="generateNextOutlineChain()"
+                        >
+                          {{ isGeneratingOutlineChain ? '生成中...' : '生成后续剧情链' }}
+                        </button>
+                        <button class="action-btn ghost" @click="openChapterMetaEditor(appStore.selectedChapter)">
+                          调整节点绑定
+                        </button>
+                      </div>
                     </div>
 
-                    <div class="inspiration-focus-actions">
-                      <button
-                        v-for="focus in chapterInspirationFocuses"
-                        :key="focus"
-                        class="inspiration-focus-chip"
-                        :disabled="isGeneratingInspiration"
-                        @click="requestChapterInspiration(focus)"
-                      >
-                        <Lightbulb :size="13" />
-                        <span>{{ isGeneratingInspiration ? '生成中...' : `生成${focus}` }}</span>
-                      </button>
+                    <div class="side-card summary-card">
+                      <div class="side-card-head">
+                        <span class="side-card-label">本章定位</span>
+                      </div>
+                      <p>{{ currentSummaryText }}</p>
                     </div>
 
-                    <div v-if="chapterInspirationEntries.length" class="inspiration-list">
-                      <article v-for="entry in chapterInspirationEntries" :key="entry.id" class="inspiration-item">
-                        <div class="inspiration-item-top">
-                          <span class="inspiration-type">{{ entry.type }}</span>
-                          <span class="inspiration-source" :class="entry.source">{{ entry.source === 'ai' ? 'AI' : '手记' }}</span>
+                    <div class="side-card inspiration-card">
+                      <div class="side-card-head">
+                        <div class="side-card-head-stack">
+                          <span class="side-card-label">章节灵感</span>
+                          <strong>当前可用灵感卡</strong>
                         </div>
-                        <strong>{{ entry.title }}</strong>
-                        <p>{{ entry.content }}</p>
-                        <div v-if="entry.tags.length" class="inspiration-tag-row">
-                          <span v-for="tag in entry.tags" :key="`${entry.id}-${tag}`" class="inspiration-tag">{{ tag }}</span>
-                        </div>
-                        <div class="inspiration-item-actions">
-                          <button class="inspiration-action" @click="sendInspirationToAssistant(entry, 'expand')">扩成桥段</button>
-                          <button class="inspiration-action secondary" @click="sendInspirationToAssistant(entry, 'continue')">继续续写</button>
-                        </div>
-                      </article>
-                    </div>
+                        <button class="inspiration-workbench-link" @click="openInspirationWorkbench">
+                          <span>灵感池</span>
+                          <ArrowUpRight :size="13" />
+                        </button>
+                      </div>
 
-                    <div v-else class="inspiration-empty">
-                      <p>当前还没有与本章联动的灵感卡，可以先生成场景、转折或人物动机。</p>
+                      <div class="inspiration-focus-actions">
+                        <button
+                            v-for="focus in chapterInspirationFocuses"
+                            :key="focus"
+                            class="inspiration-focus-chip"
+                            :disabled="isGeneratingInspiration"
+                            @click="requestChapterInspiration(focus)"
+                        >
+                          <Lightbulb :size="13" />
+                          <span>{{ isGeneratingInspiration ? '生成中...' : `生成${focus}` }}</span>
+                        </button>
+                      </div>
+
+                      <div v-if="chapterInspirationEntries.length" class="inspiration-list">
+                        <article v-for="entry in chapterInspirationEntries" :key="entry.id" class="inspiration-item">
+                          <div class="inspiration-item-top">
+                            <span class="inspiration-type">{{ entry.type }}</span>
+                            <span class="inspiration-source" :class="entry.source">{{ entry.source === 'ai' ? 'AI' : '手记' }}</span>
+                          </div>
+                          <strong>{{ entry.title }}</strong>
+                          <p>{{ entry.content }}</p>
+                          <div v-if="entry.tags.length" class="inspiration-tag-row">
+                            <span v-for="tag in entry.tags" :key="`${entry.id}-${tag}`" class="inspiration-tag">{{ tag }}</span>
+                          </div>
+                          <div class="inspiration-item-actions">
+                            <button class="inspiration-action" @click="sendInspirationToAssistant(entry, 'expand')">扩成桥段</button>
+                            <button class="inspiration-action secondary" @click="sendInspirationToAssistant(entry, 'continue')">继续续写</button>
+                          </div>
+                        </article>
+                      </div>
+
+                      <div v-else class="inspiration-empty">
+                        <p>当前还没有与本章联动的灵感卡，可以先生成场景、转折或人物动机。</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </aside>
-            </div>
+                </aside>
+              </div>
 
             <div class="editor-status">
               <div class="editor-status-group">
                 <span class="status-metric">{{ currentWordCount }} 字</span>
                 <span class="status-metric">{{ currentChapterVersions.length }} 个历史版本</span>
-                <span class="status-metric">全书第 {{ selectedChapterIndex }} 章</span>
+                <span v-if="!isTinyStudio" class="status-metric">全书第 {{ selectedChapterIndex }} 章</span>
               </div>
-              <span class="status-pill">
+                <span class="status-pill">
                 <PenTool :size="12" />
                 {{ saveStatusText }}
               </span>
-            </div>
+              </div>
             </template>
           </div>
         </div>
@@ -1227,13 +1233,14 @@ onBeforeUnmount(() => {
       没有匹配“{{ props.searchQuery }}”的章节内容。
     </div>
 
+    <!-- Modals omitted for brevity, keeping exactly as your original ones -->
     <n-modal
-      :show="compactSidebarVisible"
-      preset="card"
-      class="arc-editor-modal compact-panel-modal"
-      title="章节目录"
-      :bordered="false"
-      @close="compactSidebarVisible = false"
+        :show="compactSidebarVisible"
+        preset="card"
+        class="arc-editor-modal compact-panel-modal"
+        title="章节目录"
+        :bordered="false"
+        @close="compactSidebarVisible = false"
     >
       <div class="compact-panel compact-panel-directory">
         <div class="chapter-side-summary compact-panel-summary">
@@ -1261,11 +1268,11 @@ onBeforeUnmount(() => {
 
             <div class="chapter-items">
               <button
-                v-for="chapter in group.items"
-                :key="`compact-item-${chapter.id}`"
-                class="chapter-pill"
-                :class="{ active: appStore.selectedChapterId === chapter.id }"
-                @click="selectChapterFromCompact(chapter.id)"
+                  v-for="chapter in group.items"
+                  :key="`compact-item-${chapter.id}`"
+                  class="chapter-pill"
+                  :class="{ active: appStore.selectedChapterId === chapter.id }"
+                  @click="selectChapterFromCompact(chapter.id)"
               >
                 <span class="chapter-pill-main">
                   <span class="chapter-pill-heading">
@@ -1286,23 +1293,62 @@ onBeforeUnmount(() => {
     </n-modal>
 
     <n-modal
-      :show="compactInsightsVisible"
-      preset="card"
-      class="arc-editor-modal compact-panel-modal"
-      title="章节参考"
-      :bordered="false"
-      @close="compactInsightsVisible = false"
+        :show="compactInsightsVisible"
+        preset="card"
+        class="arc-editor-modal compact-panel-modal"
+        title="章节参考"
+        :bordered="false"
+        @close="compactInsightsVisible = false"
     >
       <div class="compact-panel compact-panel-insights arc-scrollbar">
-        <div class="summary-card">
-          <span class="summary-card-label">本章定位</span>
+
+        <div v-if="linkedOutlineItem" class="side-card outline-origin-card">
+          <div class="side-card-head">
+            <span class="side-card-label">来源大纲节点</span>
+            <button class="text-link" @click="jumpBackToOutline()">回到大纲</button>
+          </div>
+          <div class="outline-origin-meta">
+            <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
+            <span class="outline-origin-status" :class="linkedOutlineStatusMeta.tone">
+              {{ linkedOutlineStatusMeta.label }}
+            </span>
+          </div>
+          <div class="outline-origin-summary-wrap">
+            <p class="outline-origin-summary">
+              <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
+            </p>
+            <p class="outline-origin-summary">
+              <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
+            </p>
+          </div>
+          <div class="outline-origin-actions">
+            <button v-if="canSyncOutlineBack" class="action-btn primary" @click="syncChapterBackToOutline()">
+              同步状态与摘要
+            </button>
+            <button
+                class="action-btn"
+                :disabled="isGeneratingOutlineChain"
+                @click="generateNextOutlineChain()"
+            >
+              {{ isGeneratingOutlineChain ? '生成中...' : '生成后续剧情链' }}
+            </button>
+            <button class="action-btn ghost" @click="openChapterMetaEditor(appStore.selectedChapter)">
+              调整节点绑定
+            </button>
+          </div>
+        </div>
+
+        <div class="side-card summary-card">
+          <div class="side-card-head">
+            <span class="side-card-label">本章定位</span>
+          </div>
           <p>{{ currentSummaryText }}</p>
         </div>
 
-        <div class="inspiration-card">
-          <div class="inspiration-card-head">
-            <div class="inspiration-card-copy">
-              <span class="summary-card-label">章节灵感</span>
+        <div class="side-card inspiration-card">
+          <div class="side-card-head">
+            <div class="side-card-head-stack">
+              <span class="side-card-label">章节灵感</span>
               <strong>当前可用灵感卡</strong>
             </div>
             <button class="inspiration-workbench-link" @click="openInspirationWorkbench">
@@ -1313,11 +1359,11 @@ onBeforeUnmount(() => {
 
           <div class="inspiration-focus-actions">
             <button
-              v-for="focus in chapterInspirationFocuses"
-              :key="`compact-${focus}`"
-              class="inspiration-focus-chip"
-              :disabled="isGeneratingInspiration"
-              @click="requestChapterInspiration(focus)"
+                v-for="focus in chapterInspirationFocuses"
+                :key="`compact-${focus}`"
+                class="inspiration-focus-chip"
+                :disabled="isGeneratingInspiration"
+                @click="requestChapterInspiration(focus)"
             >
               <Lightbulb :size="13" />
               <span>{{ isGeneratingInspiration ? '生成中...' : `生成${focus}` }}</span>
@@ -1350,12 +1396,12 @@ onBeforeUnmount(() => {
     </n-modal>
 
     <n-modal
-      :show="versionHistoryVisible"
-      preset="card"
-      class="arc-editor-modal arc-version-modal"
-      title="章节历史版本"
-      :bordered="false"
-      @close="versionHistoryVisible = false"
+        :show="versionHistoryVisible"
+        preset="card"
+        class="arc-editor-modal arc-version-modal"
+        title="章节历史版本"
+        :bordered="false"
+        @close="versionHistoryVisible = false"
     >
       <div v-if="currentChapterVersions.length" class="version-list">
         <article v-for="version in currentChapterVersions" :key="version.id" class="version-card">
@@ -1369,8 +1415,8 @@ onBeforeUnmount(() => {
 
           <div class="version-meta">
             <span
-              class="meta-chip"
-              :class="
+                class="meta-chip"
+                :class="
                 version.status === 'final'
                   ? 'success'
                   : version.status === 'polish'
@@ -1396,12 +1442,12 @@ onBeforeUnmount(() => {
     </n-modal>
 
     <n-modal
-      :show="editorVisible"
-      preset="card"
-      class="arc-editor-modal"
-      title="编辑章节信息"
-      :bordered="false"
-      @close="editorVisible = false"
+        :show="editorVisible"
+        preset="card"
+        class="arc-editor-modal"
+        title="编辑章节信息"
+        :bordered="false"
+        @close="editorVisible = false"
     >
       <n-form label-placement="top">
         <n-form-item label="所属分卷">
@@ -1409,9 +1455,9 @@ onBeforeUnmount(() => {
         </n-form-item>
         <n-form-item label="绑定大纲节点">
           <n-select
-            v-model:value="chapterForm.outlineItemId"
-            :options="outlineBindingOptions"
-            placeholder="可手动绑定或解绑当前章节对应的大纲节点"
+              v-model:value="chapterForm.outlineItemId"
+              :options="outlineBindingOptions"
+              placeholder="可手动绑定或解绑当前章节对应的大纲节点"
           />
         </n-form-item>
         <n-form-item label="章节标题">
@@ -1419,10 +1465,10 @@ onBeforeUnmount(() => {
         </n-form-item>
         <n-form-item label="章节摘要">
           <n-input
-            v-model:value="chapterForm.summary"
-            type="textarea"
-            :autosize="{ minRows: 3, maxRows: 5 }"
-            placeholder="用 1 到 2 句话概括这一章的核心事件和推进点..."
+              v-model:value="chapterForm.summary"
+              type="textarea"
+              :autosize="{ minRows: 3, maxRows: 5 }"
+              placeholder="用 1 到 2 句话概括这一章的核心事件和推进点..."
           />
         </n-form-item>
         <n-form-item label="章节状态">
@@ -1444,6 +1490,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* =========== 基础与骨架 =========== */
 .chapters-layout {
   --chapter-border: rgba(226, 232, 240, 0.92);
   --chapter-border-strong: rgba(203, 213, 225, 0.96);
@@ -1453,68 +1500,12 @@ onBeforeUnmount(() => {
   --chapter-muted: #667085;
   --chapter-ink: #18212f;
   --chapter-accent-soft: color-mix(in srgb, var(--arc-primary) 8%, white);
-  --chapter-editor-width: 880px;
+  --chapter-shell-max-width: 1360px;
   display: flex;
   min-height: 0;
   max-width: none;
   width: 100%;
   margin: 0 auto;
-}
-
-.assistant-toggle {
-  width: auto;
-  min-width: 152px;
-  gap: 10px;
-  padding: 8px 12px;
-}
-
-.assistant-toggle-icons {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: inherit;
-  flex-shrink: 0;
-}
-
-.assistant-toggle-copy {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
-}
-
-.assistant-toggle-label {
-  color: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.assistant-toggle-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #7a7f87;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  padding: 3px 7px;
-}
-
-.assistant-toggle-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.92);
-  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
-}
-
-.assistant-toggle-indicator.active {
-  background: #1f4ea3;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc-primary) 18%, transparent);
 }
 
 .chapters-shell {
@@ -1528,23 +1519,82 @@ onBeforeUnmount(() => {
   border: 1px solid var(--chapter-border-strong);
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.96));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.96));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 24px 60px rgba(15, 23, 42, 0.07);
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 24px 60px rgba(15, 23, 42, 0.07);
   overflow: hidden;
+  width: min(100%, var(--chapter-shell-max-width));
+  margin: 0 auto;
 }
 
+.chapters-shell.reading-mode {
+  grid-template-columns: minmax(0, 1fr);
+  background:
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.94) 42%, rgba(236, 241, 247, 0.98));
+}
+
+/* =========== AI 助手按钮等零碎样式 =========== */
+.assistant-toggle {
+  width: auto;
+  min-width: 152px;
+  gap: 10px;
+  padding: 8px 12px;
+}
+.assistant-toggle-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  flex-shrink: 0;
+}
+.assistant-toggle-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.assistant-toggle-label {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.assistant-toggle-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #7a7f87;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 3px 7px;
+}
+.assistant-toggle-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.92);
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
+}
+.assistant-toggle-indicator.active {
+  background: #1f4ea3;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc-primary) 18%, transparent);
+}
+
+/* =========== 侧边栏（左侧章节目录） =========== */
 .chapter-sidebar {
   display: flex;
   min-height: 0;
   flex-direction: column;
   border-right: 1px solid var(--chapter-border-strong);
   background:
-    linear-gradient(180deg, rgba(245, 248, 252, 0.96), rgba(240, 244, 249, 0.98));
+      linear-gradient(180deg, rgba(245, 248, 252, 0.96), rgba(240, 244, 249, 0.98));
   padding: 16px;
 }
-
 .chapter-side-head {
   display: flex;
   align-items: center;
@@ -1553,14 +1603,12 @@ onBeforeUnmount(() => {
   padding: 0 2px;
   margin-bottom: 12px;
 }
-
 .chapter-side-head-main {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
 }
-
 .chapter-side-head strong {
   display: block;
   color: var(--chapter-ink);
@@ -1568,24 +1616,21 @@ onBeforeUnmount(() => {
   font-weight: 700;
   line-height: 1.4;
 }
-
 .chapter-back-button {
   flex-shrink: 0;
   border-color: rgba(218, 226, 239, 0.96);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.98));
   color: #4f5f79;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 10px 22px rgba(15, 23, 42, 0.05);
+      inset 0 1px 0 rgba(255, 255, 255, 0.96),
+      0 10px 22px rgba(15, 23, 42, 0.05);
 }
-
 .chapter-back-button:hover {
   color: #1f4ea3;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.98),
-    0 14px 28px rgba(59, 130, 246, 0.1);
+      inset 0 1px 0 rgba(255, 255, 255, 0.98),
+      0 14px 28px rgba(59, 130, 246, 0.1);
 }
-
 .chapter-side-badge {
   display: inline-flex;
   align-items: center;
@@ -1597,14 +1642,12 @@ onBeforeUnmount(() => {
   font-weight: 700;
   padding: 5px 10px;
 }
-
 .chapter-side-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
 }
-
 .chapter-side-summary span {
   display: inline-flex;
   align-items: center;
@@ -1619,7 +1662,6 @@ onBeforeUnmount(() => {
   padding: 6px 9px;
   text-align: left;
 }
-
 .chapter-groups {
   display: flex;
   flex: 1;
@@ -1629,14 +1671,12 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding-right: 4px;
 }
-
 .chapter-group {
   border: 1px solid var(--chapter-border);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.76);
   padding: 9px;
 }
-
 .chapter-group-head {
   display: flex;
   align-items: flex-start;
@@ -1644,7 +1684,6 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 4px 4px 10px;
 }
-
 .chapter-group-head strong {
   display: block;
   color: var(--chapter-ink);
@@ -1652,14 +1691,12 @@ onBeforeUnmount(() => {
   font-weight: 700;
   line-height: 1.45;
 }
-
 .chapter-group-head p {
   margin: 4px 0 0;
   color: #7a7f87;
   font-size: 11px;
   font-weight: 700;
 }
-
 .mini-icon {
   display: inline-flex;
   width: 30px;
@@ -1673,19 +1710,16 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
-
 .mini-icon:hover {
   border-color: var(--chapter-border-strong);
   background: #f7f7f7;
   color: var(--arc-primary);
 }
-
 .chapter-items {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-
 .chapter-pill {
   position: relative;
   width: 100%;
@@ -1703,13 +1737,8 @@ onBeforeUnmount(() => {
   padding: 9px 10px;
   text-align: left;
   transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
+      background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
-
 .chapter-pill::before {
   content: '';
   position: absolute;
@@ -1722,40 +1751,34 @@ onBeforeUnmount(() => {
   opacity: 0;
   transition: opacity 0.18s ease, background 0.18s ease;
 }
-
 .chapter-pill:hover {
   border-color: var(--chapter-border);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
   transform: translateY(-1px);
 }
-
 .chapter-pill.dragging {
   opacity: 0.56;
 }
-
 .chapter-pill.drop-target {
   outline: 1px dashed color-mix(in srgb, var(--arc-primary) 42%, white);
   background: var(--chapter-accent-soft);
 }
-
 .chapter-pill.active {
   border-color: color-mix(in srgb, var(--arc-primary) 14%, var(--chapter-border));
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
+      linear-gradient(145deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
   color: #1f4ea3;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 12px 26px color-mix(in srgb, var(--arc-primary) 12%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.96),
+      0 12px 26px color-mix(in srgb, var(--arc-primary) 12%, transparent);
 }
-
 .chapter-pill.active::before {
   background: var(--arc-primary);
   opacity: 1;
   width: 4px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--arc-primary) 12%, transparent);
 }
-
 .chapter-pill-grip {
   display: inline-flex;
   width: 16px;
@@ -1765,11 +1788,9 @@ onBeforeUnmount(() => {
   color: #c4cad4;
   flex-shrink: 0;
 }
-
 .chapter-pill:hover .chapter-pill-grip {
   color: #9ca3af;
 }
-
 .chapter-pill-label {
   display: block;
   overflow: hidden;
@@ -1781,7 +1802,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
 }
-
 .chapter-pill-main {
   display: flex;
   min-width: 0;
@@ -1789,14 +1809,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 3px;
 }
-
 .chapter-pill-heading {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
 }
-
 .chapter-pill-meta {
   display: inline-flex;
   align-items: center;
@@ -1805,7 +1823,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 700;
 }
-
 .chapter-pill-current {
   display: inline-flex;
   align-items: center;
@@ -1821,14 +1838,12 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   padding: 0 8px;
 }
-
 .chapter-pill-dot {
   width: 4px;
   height: 4px;
   border-radius: 999px;
   background: #d1d5db;
 }
-
 .chapter-pill-action {
   display: inline-flex;
   width: 22px;
@@ -1839,29 +1854,22 @@ onBeforeUnmount(() => {
   color: #9aa0a6;
   flex-shrink: 0;
 }
-
 .chapter-pill:hover .chapter-pill-action {
   background: rgba(0, 0, 0, 0.05);
   color: #6b7280;
 }
 
-.chapters-shell.reading-mode {
-  grid-template-columns: minmax(0, 1fr);
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.94) 42%, rgba(236, 241, 247, 0.98));
-}
-
+/* =========== 顶部工具栏与外壳结构 =========== */
 .editor-shell {
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(246, 249, 253, 0.94));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(246, 249, 253, 0.94));
   padding: 0;
   overflow: hidden;
 }
-
 .editor-topbar {
   display: flex;
   align-items: center;
@@ -1870,45 +1878,64 @@ onBeforeUnmount(() => {
   padding: 14px 18px;
   border-bottom: 1px solid var(--chapter-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(246, 249, 253, 0.9));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(246, 249, 253, 0.9));
+}
+.editor-topbar.condensed {
+  align-items: flex-start;
+}
+.editor-topbar.narrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 
+.editor-topbar.tiny {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+}
 .editor-context {
   display: flex;
   min-width: 0;
   flex: 1;
 }
-
 .editor-context-main {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
+.editor-topbar.narrow .editor-context-main {
+  gap: 8px;
+}
 
+.editor-topbar.tiny .editor-context-main {
+  gap: 6px;
+}
 .editor-context-main strong {
   color: #18212f;
   font-size: 16px;
   font-weight: 700;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 .editor-context-main span {
   color: #667085;
   font-size: 12px;
   font-weight: 700;
 }
-
 .editor-context-main .progress-inline {
   color: #1f4ea3;
 }
-
 .save-status-inline {
   display: inline-flex;
   min-width: 56px;
   align-items: center;
   justify-content: center;
 }
-
 .editor-floating-actions {
   display: flex;
   align-items: center;
@@ -1916,7 +1943,16 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.editor-topbar.narrow .editor-floating-actions {
+  justify-content: flex-start;
+  gap: 10px;
+}
 
+.editor-topbar.tiny .editor-floating-actions {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+}
 .editor-action-group {
   display: inline-flex;
   align-items: center;
@@ -1926,22 +1962,96 @@ onBeforeUnmount(() => {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.62);
 }
+.topbar-group {
+  min-width: 0;
+}
+.topbar-group-primary {
+  flex-wrap: wrap;
+}
+.topbar-group-assistant {
+  flex-shrink: 0;
+}
+.topbar-group-danger {
+  margin-left: auto;
+}
+.editor-topbar.narrow .topbar-group-danger {
+  margin-left: 0;
+}
 
+.editor-topbar.tiny .topbar-group {
+  width: auto;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+}
+
+.editor-topbar.tiny .topbar-group-danger {
+  margin-left: 0;
+}
+
+.editor-topbar.tiny .editor-floating-actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.editor-topbar.tiny .editor-action-group {
+  flex: 0 0 auto;
+}
+
+.editor-topbar.tiny .compact-utility-cluster {
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.editor-topbar.tiny .compact-utility-switcher {
+  flex: 0 0 auto;
+}
+
+.editor-topbar.tiny .compact-utility-tab {
+  min-width: 78px;
+  padding: 0 12px;
+}
+
+.editor-topbar.tiny .compact-back-label {
+  display: none;
+}
+
+.editor-topbar.tiny .compact-back-button {
+  min-width: 36px;
+  padding: 0;
+}
+
+.editor-topbar.tiny .assistant-toggle {
+  min-width: auto;
+  padding: 8px 10px;
+}
+
+.editor-topbar.tiny .assistant-toggle-label {
+  display: none;
+}
+
+.editor-topbar.tiny .assistant-toggle-copy {
+  gap: 0;
+}
 .editor-action-group.emphasis {
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.94), rgba(241, 246, 253, 0.92));
 }
-
 .editor-action-group.danger {
   background: rgba(255, 255, 255, 0.5);
 }
-
 .compact-utility-cluster {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-
+.compact-utility-cluster.narrow {
+  width: 100%;
+  justify-content: space-between;
+}
 .compact-back-button {
   width: auto;
   gap: 8px;
@@ -1955,12 +2065,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   box-shadow: none;
 }
-
 .compact-back-button:hover {
   color: #1f4ea3;
   background: rgba(239, 246, 255, 0.72);
 }
-
 .compact-back-icon {
   display: inline-flex;
   width: 30px;
@@ -1972,11 +2080,9 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.98));
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
-
 .compact-back-label {
   line-height: 1;
 }
-
 .compact-utility-switcher {
   display: inline-flex;
   align-items: center;
@@ -1985,11 +2091,14 @@ onBeforeUnmount(() => {
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.95));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 10px 24px rgba(15, 23, 42, 0.04);
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      0 10px 24px rgba(15, 23, 42, 0.04);
   padding: 4px;
 }
-
+.compact-utility-cluster.narrow .compact-utility-switcher {
+  flex: 1;
+  justify-content: stretch;
+}
 .compact-utility-tab {
   display: inline-flex;
   min-width: 92px;
@@ -2007,92 +2116,19 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   white-space: nowrap;
   transition:
-    background 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
+      background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
-
 .compact-utility-tab:hover {
   color: #1f4ea3;
   background: rgba(239, 246, 255, 0.82);
 }
-
 .compact-utility-tab.active {
   background: linear-gradient(135deg, rgba(232, 241, 255, 0.96), rgba(244, 248, 255, 0.98));
   color: #1f4ea3;
   box-shadow: 0 8px 18px rgba(59, 130, 246, 0.12);
 }
 
-.chapters-layout.compact-mode .chapters-shell {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.chapters-layout.compact-mode .editor-topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  padding: 16px 18px 14px;
-}
-
-.chapters-layout.compact-mode .editor-context {
-  width: min(100%, 1180px);
-  margin: 0 auto;
-}
-
-.chapters-layout.compact-mode .editor-context-main {
-  gap: 8px;
-}
-
-.chapters-layout.compact-mode .editor-floating-actions {
-  width: min(100%, 1180px);
-  margin: 0 auto;
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-.chapters-layout.compact-mode .editor-action-group {
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
-.chapters-layout.compact-mode .editor-manuscript {
-  padding: 16px;
-}
-
-.chapters-layout.compact-mode .editor-manuscript-head,
-.chapters-layout.compact-mode .editor-body,
-.chapters-layout.compact-mode .editor-status {
-  width: min(100%, 1180px);
-  margin-inline: auto;
-}
-
-.chapters-layout.compact-mode .chapter-editor-instance {
-  width: 100%;
-  max-width: none;
-  margin-right: 0;
-}
-
-.chapters-layout.compact-mode .editor-status {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.chapters-layout.compact-mode .chapter-title {
-  font-size: clamp(24px, 3vw, 32px);
-}
-
-.editor-stage {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-}
-
-.editor-stage.reading-mode {
-  padding: clamp(18px, 2.8vw, 34px);
-}
-
+/* 按钮基础 */
 .tool-badge {
   display: inline-flex;
   min-width: 30px;
@@ -2107,55 +2143,50 @@ onBeforeUnmount(() => {
   cursor: pointer;
   padding: 0;
   transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
+      border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
-
 .tool-badge:hover {
   border-color: var(--chapter-border-strong);
   background: rgba(255, 255, 255, 0.98);
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
-
 .tool-badge.active {
   border-color: color-mix(in srgb, var(--arc-primary) 16%, var(--chapter-border));
   background: var(--chapter-accent-soft);
   color: #1f4ea3;
   box-shadow: 0 14px 28px color-mix(in srgb, var(--arc-primary) 10%, transparent);
 }
-
 .tool-badge.neutral {
   background: var(--chapter-surface);
   color: #60656d;
 }
-
 .tool-badge.neutral.active {
   background: var(--chapter-accent-soft);
   color: #1f4ea3;
 }
-
 .tool-badge.neutral.active .assistant-toggle-state {
   border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
   background: rgba(255, 255, 255, 0.92);
   color: #3c63a9;
 }
-
 .tool-badge:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-
 .tool-badge:disabled:hover {
   background: var(--chapter-surface);
 }
-
 .tool-badge.danger:hover {
   background: #fff1f1;
   color: #dc2626;
+}
+
+/* =========== 编辑器核心容器约束（重构内部滚动） =========== */
+.editor-stage {
+  display: flex;
+  min-height: 0;
+  flex: 1;
 }
 
 .editor-manuscript {
@@ -2163,143 +2194,57 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 0;
   flex: 1;
-  background:
-    linear-gradient(180deg, rgba(249, 251, 254, 0.92), rgba(255, 255, 255, 0.98));
-  padding: 18px;
+  background: linear-gradient(180deg, rgba(249, 251, 254, 0.92), rgba(255, 255, 255, 0.98));
+  padding: 20px 24px;
 }
 
-.editor-manuscript.reading-mode {
-  gap: 22px;
-  padding: clamp(18px, 2.6vw, 32px);
-  background:
-    linear-gradient(180deg, rgba(248, 250, 253, 0.92), rgba(241, 245, 250, 0.98));
-}
-
-.editor-manuscript-head {
+.editor-body {
   display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 4px;
+  gap: 30px;
+  flex: 1;
+  min-height: 0; /* 1. 传递高度约束 */
+  padding-top: 0;
+  align-items: stretch;
 }
 
-.editor-meta-stack {
-  min-width: 0;
+.editor-body.compact {
+  flex-direction: column;
+}
+
+/* 左侧正文列：自己负责垂直滚动 */
+.editor-column {
+  display: flex;
   flex: 1;
+  min-width: 0;
+  min-height: 0; /* 2. 传递高度约束 */
+  height: 100%;
+  justify-content: center;
+}
+
+.manuscript-paper {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* 3. 传递高度约束 */
+  height: 100%;
+}
+
+.chapter-editor-instance {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  flex: 1; /* 占据纸张剩下的全部高度 */
+  min-height: 0; /* 防止撑爆 */
+  display: flex;
+  flex-direction: column; /* 让内部的工具栏和输入区上下排列 */
 }
 
 .manuscript-heading {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.outline-origin-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.86);
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at right top, rgba(219, 234, 254, 0.28), transparent 42%),
-    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
-  padding: 14px 16px;
-}
-
-.outline-origin-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.outline-origin-head-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.outline-origin-kicker {
-  color: var(--arc-text-hint);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.outline-origin-link {
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 999px;
-  background: white;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.outline-origin-link.secondary {
-  border-color: rgba(191, 219, 254, 0.78);
-  background: rgba(239, 246, 255, 0.94);
-  color: #1d4ed8;
-}
-
-.outline-origin-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.outline-origin-title {
-  color: var(--arc-text-primary);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.outline-origin-status {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 5px 9px;
-}
-
-.outline-origin-status.ghost {
-  background: rgba(241, 245, 249, 0.96);
-  color: var(--arc-text-hint);
-}
-
-.outline-origin-status.neutral {
-  background: rgba(219, 234, 254, 0.9);
-  color: #1d4ed8;
-}
-
-.outline-origin-status.primary {
-  background: rgba(219, 234, 254, 0.98);
-  color: #2563eb;
-}
-
-.outline-origin-status.success {
-  background: rgba(220, 252, 231, 0.96);
-  color: #15803d;
-}
-
-.outline-origin-summary {
-  margin: 0;
-  color: var(--arc-text-secondary);
-  font-size: 12px;
-  line-height: 1.75;
-}
-
-.outline-origin-hint {
-  margin: 0;
-  color: var(--arc-text-hint);
-  font-size: 11px;
-  line-height: 1.7;
+  margin-bottom: 8px;
 }
 
 .manuscript-overline {
@@ -2321,53 +2266,90 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
   outline: none;
 }
-
 .chapter-title:hover {
   color: #202124;
 }
 
-.chapter-meta-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
+.manuscript-divider {
+  height: 1px;
+  margin: 16px 0 24px;
+  background: linear-gradient(90deg, transparent, rgba(203, 213, 225, 0.6), transparent);
 }
 
-.meta-chip {
+
+/* 右侧参考栏列：同样自己负责内部滚动 */
+.editor-insights {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;       /* ★ 限制外层高度 */
+}
+
+.editor-insights-rail {
+  /* 移除原来的 position: sticky 和 max-height */
+  display: flex;
+  flex: 1;
+  min-height: 0;       /* ★ 接收高度限制 */
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;    /* ★ 开启右侧独立滚动 */
+  padding-right: 4px;
+}
+
+/* 底部状态栏 */
+.editor-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 920px);
+  margin: 16px auto 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 18px;
+  background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 250, 253, 0.94));
+  box-shadow:
+      0 18px 36px rgba(15, 23, 42, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  color: #6a7078;
+  font-size: 12px;
+  flex-shrink: 0;      /* ★底部吸附固定★ */
+}
+.editor-status-group {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--chapter-border);
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.status-metric {
+  color: #5f6368;
+  font-weight: 600;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(191, 219, 254, 0.88);
   border-radius: 999px;
-  font-size: 12px;
+  background: rgba(239, 246, 255, 0.96);
+  color: #1f4ea3;
   font-weight: 700;
   padding: 6px 10px;
+  white-space: nowrap;
 }
 
-.meta-chip.neutral {
-  background: rgba(255, 255, 255, 0.88);
-  color: #5f6368;
+/* =========== 阅读模式约束 =========== */
+.editor-stage.reading-mode {
+  padding: clamp(18px, 2.8vw, 34px);
 }
-
-.meta-chip.ghost {
-  background: rgba(244, 247, 252, 0.94);
-  color: #5f6368;
-}
-
-.meta-chip.warning {
-  background: #fff7da;
-  color: #a16207;
-}
-
-.meta-chip.accent {
-  background: var(--chapter-accent-soft);
-  border-color: #b8cdf5;
-  color: #1f4ea3;
-}
-
-.meta-chip.success {
-  background: #ebf8ef;
-  color: #15803d;
+.editor-manuscript.reading-mode {
+  gap: 22px;
+  padding: clamp(18px, 2.6vw, 32px);
+  background:
+      linear-gradient(180deg, rgba(248, 250, 253, 0.92), rgba(241, 245, 250, 0.98));
 }
 
 .reading-header {
@@ -2377,19 +2359,16 @@ onBeforeUnmount(() => {
   max-width: 920px;
   margin: 0 auto;
 }
-
 .reading-header-meta {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
-
 .reading-heading {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
 .reading-heading h1 {
   margin: 0;
   color: #111827;
@@ -2398,7 +2377,6 @@ onBeforeUnmount(() => {
   letter-spacing: -0.035em;
   line-height: 1.15;
 }
-
 .reading-heading p {
   max-width: 720px;
   margin: 0;
@@ -2410,67 +2388,57 @@ onBeforeUnmount(() => {
 .reading-body {
   display: flex;
   flex: 1;
-  min-height: 0;
+  min-height: 0;       /* 接收高度限制 */
 }
 
 .reading-paper {
   width: min(100%, 920px);
-  min-height: 100%;
   margin: 0 auto;
   border: 1px solid rgba(222, 228, 236, 0.96);
   border-radius: 30px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 253, 255, 0.98));
-  box-shadow:
-    0 28px 60px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 253, 255, 0.98));
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;       /* 接受约束 */
 }
 
 .reading-content {
-  min-height: clamp(520px, 72vh, 980px);
-  max-height: 100%;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;    /* 开启内部独立滚动 */
   color: #2d3748;
   font-family: 'Georgia', 'Songti SC', 'Noto Serif SC', serif;
   font-size: clamp(18px, 1.2vw, 20px);
   line-height: 2;
   padding: clamp(30px, 4vw, 52px) clamp(24px, 5vw, 76px);
 }
-
-.reading-content :deep(h2),
-.reading-content :deep(h3) {
+.reading-content :deep(h2), .reading-content :deep(h3) {
   color: #18212f;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.35;
   margin: 1.4em 0 0.72em;
 }
-
 .reading-content :deep(h2) {
   font-size: 28px;
 }
-
 .reading-content :deep(h3) {
   font-size: 22px;
 }
-
 .reading-content :deep(p) {
   margin: 0 0 1.2em;
   text-align: justify;
   text-indent: 2em;
 }
-
-.reading-content :deep(ul),
-.reading-content :deep(ol) {
+.reading-content :deep(ul), .reading-content :deep(ol) {
   margin: 0 0 1.2em;
   padding-left: 1.6em;
 }
-
 .reading-content :deep(li) {
   margin-bottom: 0.55em;
 }
-
 .reading-content :deep(blockquote) {
   margin: 0 0 1.4em;
   border-left: 3px solid rgba(148, 163, 184, 0.7);
@@ -2485,7 +2453,6 @@ onBeforeUnmount(() => {
   width: min(100%, 920px);
   margin: 0 auto;
 }
-
 .reading-nav {
   display: inline-flex;
   min-height: 58px;
@@ -2502,53 +2469,205 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   text-align: left;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease;
+      transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
-
 .reading-nav span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .reading-nav:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
   background: rgba(255, 255, 255, 0.96);
   transform: translateY(-1px);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
-
 .reading-nav.primary {
   background: linear-gradient(135deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
   color: #1f4ea3;
 }
-
 .reading-nav:disabled {
   opacity: 0.52;
   cursor: not-allowed;
 }
 
-.summary-card {
+/* =========== 侧栏模块公用部分 =========== */
+.chapter-meta-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--chapter-border);
-  border-radius: 18px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.96));
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
-  padding: 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+.meta-chip.neutral {
+  background: rgba(255, 255, 255, 0.88);
+  color: #5f6368;
+}
+.meta-chip.ghost {
+  background: rgba(244, 247, 252, 0.94);
+  color: #5f6368;
+}
+.meta-chip.warning {
+  background: #fff7da;
+  color: #a16207;
+}
+.meta-chip.accent {
+  background: var(--chapter-accent-soft);
+  border-color: #b8cdf5;
+  color: #1f4ea3;
+}
+.meta-chip.success {
+  background: #ebf8ef;
+  color: #15803d;
 }
 
-.summary-card-label {
-  display: inline-flex;
-  margin-bottom: 8px;
+/* 右侧边栏卡片通用样式 */
+.side-card {
+  border: 1px solid var(--chapter-border);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 253, 0.96));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.03);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.side-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.side-card-head-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.side-card-head-stack strong {
+  color: #18212f;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.side-card-label {
   color: #667085;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.text-link {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.text-link:hover {
+  color: #1f4ea3;
+  text-decoration: underline;
 }
 
+/* 来源大纲节点特有样式 */
+.outline-origin-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.outline-origin-title {
+  color: var(--arc-text-primary, #18212f);
+  font-size: 15px;
+  font-weight: 700;
+}
+.outline-origin-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+.outline-origin-status.ghost {
+  background: rgba(241, 245, 249, 0.96);
+  color: var(--arc-text-hint);
+}
+.outline-origin-status.neutral {
+  background: rgba(219, 234, 254, 0.9);
+  color: #1d4ed8;
+}
+.outline-origin-status.primary {
+  background: rgba(219, 234, 254, 0.98);
+  color: #2563eb;
+}
+.outline-origin-status.success {
+  background: rgba(220, 252, 231, 0.96);
+  color: #15803d;
+}
+.outline-origin-summary-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+.outline-origin-summary {
+  margin: 0;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.outline-origin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.action-btn {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(191, 219, 254, 0.78);
+  border-radius: 10px;
+  background: rgba(239, 246, 255, 0.94);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.action-btn:hover:not(:disabled) {
+  background: rgba(219, 234, 254, 0.9);
+}
+.action-btn.primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--arc-primary) 10%, white), rgba(255, 255, 255, 0.98));
+  border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
+}
+.action-btn.ghost {
+  border-color: rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.9);
+  color: #64748b;
+}
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 本章定位特有样式 */
 .summary-card p {
   margin: 0;
   color: #4f545c;
@@ -2556,39 +2675,16 @@ onBeforeUnmount(() => {
   line-height: 1.75;
 }
 
-.inspiration-card {
-  border: 1px solid color-mix(in srgb, var(--arc-primary) 10%, var(--chapter-border));
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 10%, white), transparent 34%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 253, 0.98));
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
-  padding: 15px;
-}
-
-.inspiration-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.inspiration-card-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.inspiration-card-copy strong {
-  color: #18212f;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.4;
+/* 章节灵感特有样式 */
+.inspiration-card.side-card {
+  border-color: color-mix(in srgb, var(--arc-primary) 10%, var(--chapter-border));
+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--arc-primary) 8%, white), transparent 34%),
+  linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 253, 0.98));
 }
 
 .inspiration-workbench-link {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 30px;
   align-items: center;
   gap: 6px;
   border: 1px solid rgba(226, 232, 240, 0.92);
@@ -2596,16 +2692,12 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.92);
   color: #5b6472;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 8px 11px;
+  padding: 6px 11px;
   transition:
-    border-color 0.2s ease,
-    color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease;
+      border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
-
 .inspiration-workbench-link:hover {
   border-color: color-mix(in srgb, var(--arc-primary) 18%, white);
   color: var(--arc-primary);
@@ -2616,12 +2708,11 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: 2px;
 }
-
 .inspiration-focus-chip {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 32px;
   align-items: center;
   gap: 6px;
   border: 1px solid rgba(219, 234, 254, 0.92);
@@ -2629,20 +2720,16 @@ onBeforeUnmount(() => {
   background: rgba(239, 246, 255, 0.95);
   color: #2563eb;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 8px 11px;
+  padding: 6px 11px;
   transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    opacity 0.18s ease;
+      transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
-
 .inspiration-focus-chip:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(59, 130, 246, 0.09);
 }
-
 .inspiration-focus-chip:disabled {
   opacity: 0.58;
   cursor: not-allowed;
@@ -2652,29 +2739,26 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 2px;
 }
 
 .inspiration-item {
   border: 1px solid rgba(226, 232, 240, 0.92);
-  border-radius: 18px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
   padding: 12px;
 }
-
 .inspiration-item-top,
 .inspiration-tag-row,
 .inspiration-item-actions {
   display: flex;
 }
-
 .inspiration-item-top {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
 }
-
 .inspiration-type,
 .inspiration-source,
 .inspiration-tag {
@@ -2684,45 +2768,38 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 700;
 }
-
 .inspiration-type {
   background: rgba(239, 246, 255, 0.95);
   color: #2563eb;
   padding: 5px 9px;
 }
-
 .inspiration-source {
   background: rgba(241, 245, 249, 0.95);
   color: #64748b;
   padding: 5px 8px;
 }
-
 .inspiration-source.ai {
   background: rgba(224, 242, 254, 0.96);
   color: #0369a1;
 }
-
 .inspiration-item strong {
   display: block;
   color: #18212f;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.5;
 }
-
 .inspiration-item p {
   margin: 8px 0 0;
   color: #4f5b67;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.75;
 }
-
 .inspiration-tag-row {
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 10px;
 }
-
 .inspiration-tag {
   background: rgba(248, 250, 252, 0.96);
   color: #64748b;
@@ -2734,10 +2811,9 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   margin-top: 12px;
 }
-
 .inspiration-action {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 30px;
   align-items: center;
   justify-content: center;
   border: none;
@@ -2745,132 +2821,46 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, var(--arc-primary), color-mix(in srgb, var(--arc-primary) 76%, white));
   color: white;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  padding: 8px 12px;
+  padding: 6px 12px;
 }
-
 .inspiration-action.secondary {
   background: rgba(241, 245, 249, 0.96);
   color: #475569;
 }
-
 .inspiration-empty {
-  margin-top: 14px;
+  margin-top: 2px;
   border: 1px dashed rgba(203, 213, 225, 0.95);
-  border-radius: 18px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.78);
   padding: 14px;
 }
-
 .inspiration-empty p {
   margin: 0;
   color: #64748b;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.75;
 }
 
-.manuscript-divider {
-  height: 1px;
-  margin: 0 0 16px;
-  background: linear-gradient(90deg, transparent, var(--chapter-border-strong), transparent);
-}
-
-.editor-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
-  align-items: stretch;
-  gap: 18px;
-  flex: 1;
-  min-height: 0;
-  padding-top: 0;
-}
-
-.editor-body.compact {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.editor-column {
-  display: flex;
-  align-items: stretch;
-  min-height: 0;
-  min-width: 0;
-  margin: 0;
-}
-
-.editor-insights {
-  min-width: 0;
-}
-
-.editor-insights-rail {
-  position: sticky;
-  top: 0;
-  display: flex;
-  max-height: calc(100vh - 320px);
-  flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.editor-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-top: 14px;
-  margin-top: 14px;
-  border-top: 1px solid var(--chapter-border);
-  color: #6a7078;
-  font-size: 12px;
-}
-
-.editor-status-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.status-metric {
-  color: #5f6368;
-  font-weight: 600;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--chapter-border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  color: #4f545c;
-  font-weight: 700;
-  padding: 6px 10px;
-}
-
+/* =========== 弹窗公用 =========== */
 .arc-version-modal :deep(.n-card__content) {
   max-height: min(72vh, 720px);
   overflow: hidden;
 }
-
 .compact-panel-modal :deep(.n-card__content) {
   max-height: min(76vh, 780px);
   overflow: hidden;
 }
-
 .compact-panel {
   display: flex;
   min-height: 0;
   flex-direction: column;
   gap: 14px;
 }
-
 .compact-panel-summary {
   margin-bottom: 0;
 }
-
 .compact-panel-groups,
 .compact-panel-insights {
   min-height: 0;
@@ -2878,13 +2868,11 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding-right: 6px;
 }
-
 .compact-panel-insights {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-
 .version-list {
   display: flex;
   max-height: min(64vh, 620px);
@@ -2893,14 +2881,12 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding-right: 6px;
 }
-
 .version-card {
   border: 1px solid var(--chapter-border);
   border-radius: 6px;
   background: var(--chapter-surface);
   padding: 14px;
 }
-
 .version-card-head {
   display: flex;
   align-items: flex-start;
@@ -2908,19 +2894,16 @@ onBeforeUnmount(() => {
   gap: 14px;
   margin-bottom: 14px;
 }
-
 .version-card-head strong {
   display: block;
   color: #1f2937;
   font-size: 15px;
 }
-
 .version-card-head p {
   margin: 6px 0 0;
   color: #6b7280;
   font-size: 13px;
 }
-
 .version-meta {
   display: flex;
   align-items: center;
@@ -2928,29 +2911,160 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
-
 .version-words {
   color: #9ca3af;
   font-size: 12px;
   font-weight: 600;
 }
-
 .version-summary {
   margin: 0 0 10px;
   color: #4b5563;
   font-size: 13px;
   line-height: 1.75;
 }
-
 .version-preview {
   margin: 0;
   color: #6b7280;
   font-size: 13px;
   line-height: 1.8;
 }
-
 .version-empty {
   min-height: 220px;
 }
 
+/* =========== 响应式断点 =========== */
+@media (max-width: 1040px) {
+  .editor-action-group {
+    border-radius: 16px;
+  }
+  .tool-badge {
+    min-height: 36px;
+  }
+  .editor-context-main strong {
+    width: 100%;
+  }
+  .editor-context-main .meta-chip,
+  .editor-context-main .progress-inline,
+  .editor-context-main .save-status-inline {
+    order: 2;
+  }
+  .editor-status {
+    width: min(100%, 920px);
+  }
+  .chapters-layout.narrow-mode .editor-body {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 820px) {
+  .chapters-layout {
+    --chapter-shell-max-width: 100%;
+  }
+  .chapters-shell {
+    border-radius: 24px;
+  }
+  .editor-topbar {
+    padding: 14px 14px 12px;
+  }
+  .editor-manuscript,
+  .chapters-layout.compact-mode .editor-manuscript,
+  .chapters-layout.narrow-mode .editor-manuscript {
+    padding: 12px;
+  }
+
+  .chapters-layout.compact-mode .editor-body,
+  .chapters-layout.compact-mode .editor-status,
+  .chapters-layout.compact-mode .editor-context,
+  .chapters-layout.compact-mode .editor-floating-actions {
+    width: 100%;
+  }
+  .chapters-layout.compact-mode .editor-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px 18px 14px;
+  }
+  .compact-utility-cluster,
+  .compact-utility-cluster.narrow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .compact-back-button {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+  .editor-action-group,
+  .editor-action-group.emphasis,
+  .editor-action-group.danger {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .assistant-toggle {
+    min-width: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .editor-body,
+  .editor-body.compact {
+    flex-direction: column;
+    display: flex;
+    gap: 14px;
+  }
+
+  .editor-column {
+    min-height: 360px;
+  }
+
+  .manuscript-paper {
+    max-width: none;
+  }
+
+  .editor-insights {
+    width: 100%;
+  }
+
+  .editor-insights-rail {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .editor-status-group {
+    width: 100%;
+  }
+  .editor-status {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  .status-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .editor-topbar,
+  .editor-topbar.tiny {
+    padding: 12px 10px 10px;
+    gap: 8px;
+  }
+
+  .editor-context-main {
+    gap: 6px;
+  }
+
+  .editor-context-main strong {
+    font-size: 14px;
+  }
+
+  .compact-utility-tab {
+    min-width: 70px;
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .editor-status {
+    padding: 10px 12px;
+  }
+}
 </style>

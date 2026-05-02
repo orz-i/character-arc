@@ -282,10 +282,9 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   height: 100%;
-  /* Keep only the editor frame at a stable writing width without freezing the whole page layout. */
-  width: min(100%, var(--chapter-editor-width, 880px));
-  max-width: var(--chapter-editor-width, 880px);
-  margin-right: auto;
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #d4d4d8;
