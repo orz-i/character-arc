@@ -84,6 +84,15 @@ declare global {
     findingsMarkdown: string
   }
 
+  type CharacterArcReferenceImportProgressPayload = {
+    phase: 'extracting' | 'chunking' | 'chunk-analysis' | 'aggregating' | 'saving' | 'done'
+    message: string
+    current: number
+    total: number
+    percent: number
+    sourceTitle?: string
+  }
+
   interface Window {
     characterArc: {
       platform: string
@@ -222,6 +231,7 @@ declare global {
       onAssistantContext: (callback: (payload: CharacterArcAssistantContextPayload) => void) => () => void
       onAssistantPrompt: (callback: (payload: CharacterArcAssistantPromptPayload | null) => void) => () => void
       onWorkspaceSync: (callback: (payload: unknown) => void) => () => void
+      onReferenceImportProgress: (callback: (payload: CharacterArcReferenceImportProgressPayload) => void) => () => void
       onAssistantCommand: (callback: (payload: CharacterArcAssistantCommand) => void) => () => void
     }
   }

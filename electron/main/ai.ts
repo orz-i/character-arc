@@ -18,6 +18,7 @@ import {
   type OutlineBatchResult,
   type OutlineResult,
   type ProjectBootstrapResult,
+  type ReferenceStyleChunkResult,
   type ReferenceStyleAnalysisResult,
   type WorkflowDocumentsResult,
   type WorldviewResult
@@ -199,6 +200,32 @@ function normalizeReferenceStyleAnalysisResult(result: AiTaskResult): ReferenceS
   }
 }
 
+function normalizeReferenceStyleChunkResult(result: AiTaskResult): ReferenceStyleChunkResult {
+  const payload = result as Partial<ReferenceStyleChunkResult>
+  const toList = (value: unknown, fallback: string[]): string[] => {
+    if (!Array.isArray(value)) {
+      return fallback
+    }
+
+    const normalized = value
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .slice(0, 4)
+
+    return normalized.length ? normalized : fallback
+  }
+
+  return {
+    overview: payload.overview?.trim() || '这一段以稳定推进和局部反馈为主，能代表原作的一部分风格倾向。',
+    sentenceStyle: payload.sentenceStyle?.trim() || '句式偏直接，叙述重点落在动作与结果。',
+    dialogueRatio: payload.dialogueRatio?.trim() || '对白承担推进信息和制造对抗的职责。',
+    pacingControl: payload.pacingControl?.trim() || '节奏以短回合推进，少停留在纯说明。',
+    emotionExpression: payload.emotionExpression?.trim() || '情绪通过动作、停顿和人物反应外化。',
+    plotFunction: payload.plotFunction?.trim() || '该段桥段主要承担冲突抬升或信息兑现。',
+    styleRules: toList(payload.styleRules, ['保持信息推进和场景反馈同步，不做空转描写。'])
+  }
+}
+
 /** 标准化单条灵感卡片，限制标签最多 4 个，为缺失字段填入默认值 */
 function normalizeInspirationResult(result: AiTaskResult): InspirationResult {
   const entry = result as Partial<InspirationResult>
@@ -269,6 +296,19 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
     )
   }
 
+  if (task.task === 'reference-style-chunk') {
+    const analysis = result as ReferenceStyleChunkResult
+    return Boolean(
+      analysis.overview.trim() &&
+        analysis.sentenceStyle.trim() &&
+        analysis.dialogueRatio.trim() &&
+        analysis.pacingControl.trim() &&
+        analysis.emotionExpression.trim() &&
+        analysis.plotFunction.trim() &&
+        analysis.styleRules.length > 0
+    )
+  }
+
   if (task.task === 'inspiration-pack') {
     const payload = result as InspirationPackResult
     return payload.entries.length > 0
@@ -332,6 +372,8 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
       return normalizeOutlineBatchResult(parsed)
     case 'chapter-analysis':
       return normalizeChapterAnalysisResult(parsed)
+    case 'reference-style-chunk':
+      return normalizeReferenceStyleChunkResult(parsed)
     case 'reference-style-analysis':
       return normalizeReferenceStyleAnalysisResult(parsed)
     case 'inspiration-pack':

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowRight, BookOpenText, Compass, GitBranch, LibraryBig, Save, Sparkles, ScrollText, Users2 } from 'lucide-vue-next'
 import { NButton, NInput, useMessage } from 'naive-ui'
 import { workflowStageDocumentMap } from '@/features/novelWorkflow/documents'
@@ -21,10 +21,8 @@ const isGeneratingReferenceInsights = ref(false)
 const isGeneratingPremiseInsights = ref(false)
 const isGeneratingSettingInsights = ref(false)
 const isImportingReferenceNovel = ref(false)
+const referenceImportProgress = ref<CharacterArcReferenceImportProgressPayload | null>(null)
 const projectSkillItems = ref<Array<import('@/types/app').ProjectSkillItem>>([])
-const targetPlatformDraft = ref('')
-const referenceTitleDraft = ref('')
-const referenceSourceDraft = ref('')
 const premiseDraft = ref('')
 const settingDraft = ref('')
 
@@ -34,6 +32,10 @@ const activeWorkflowVolumeId = computed(() => appStore.activeWorkflowVolumeId)
 const activeWorkflowVolume = computed(() => appStore.activeWorkflowVolume)
 const workflowStageStates = computed(() => currentProject.value?.novelWorkflowStages ?? [])
 const referenceWorks = computed(() => currentProject.value?.referenceWorks ?? [])
+const latestAnalyzedReference = computed(() =>
+  [...referenceWorks.value].reverse().find((work) => work.analysis)
+)
+const isReferenceOperationActive = computed(() => isImportingReferenceNovel.value || isGeneratingReferenceInsights.value)
 const workflowStages = computed(() =>
   novelWorkflowStageDefinitions.map((definition) => ({
     ...definition,
@@ -77,9 +79,16 @@ if (activeDocument.value) {
 }
 
 if (currentProject.value) {
-  targetPlatformDraft.value = currentProject.value.targetPlatform
   premiseDraft.value = currentProject.value.writingStylePrompt
 }
+
+const cleanupReferenceImportProgress = window.characterArc.onReferenceImportProgress((payload) => {
+  referenceImportProgress.value = payload
+})
+
+onBeforeUnmount(() => {
+  cleanupReferenceImportProgress()
+})
 
 function selectVolume(volumeId: string): void {
   appStore.setActiveWorkflowVolumeId(volumeId)
@@ -118,33 +127,31 @@ function saveDocument(): void {
   message.success(`${activeDocument.value.title} 已更新`)
 }
 
-function saveReferenceSettings(): void {
-  if (!currentProject.value?.id) {
-    return
+function openReferenceFindings(): void {
+  setDocument('findings')
+}
+
+function resolveReferenceImportPhaseLabel(phase?: CharacterArcReferenceImportProgressPayload['phase']): string {
+  switch (phase) {
+    case 'extracting':
+      return '读取正文'
+    case 'chunking':
+      return '切分分块'
+    case 'chunk-analysis':
+      return '逐块分析'
+    case 'aggregating':
+      return '汇总结论'
+    case 'saving':
+      return '回填项目'
+    case 'done':
+      return '已完成'
+    default:
+      return '等待开始'
   }
+}
 
-  appStore.updateProject(currentProject.value.id, {
-    targetPlatform: targetPlatformDraft.value,
-    referenceWorks:
-      referenceTitleDraft.value.trim()
-        ? [
-            ...(currentProject.value.referenceWorks ?? []),
-            {
-              id: `ref-${Date.now()}`,
-              title: referenceTitleDraft.value.trim(),
-              source: referenceSourceDraft.value.trim() || '未标注来源',
-              notes: ''
-            }
-          ]
-        : currentProject.value.referenceWorks
-  })
-
-  if (referenceTitleDraft.value.trim()) {
-    referenceTitleDraft.value = ''
-    referenceSourceDraft.value = ''
-  }
-
-  message.success('参考阶段基础信息已更新')
+function setReferenceProgress(payload: CharacterArcReferenceImportProgressPayload | null): void {
+  referenceImportProgress.value = payload
 }
 
 function mergeWritingStylePrompt(existingPrompt: string, incomingPrompt: string, sourceTitle: string): string {
@@ -166,17 +173,23 @@ async function importReferenceNovelAnalysis(): Promise<void> {
   }
 
   isImportingReferenceNovel.value = true
+  setReferenceProgress({
+    phase: 'extracting',
+    message: '准备打开文件并开始拆书分析...',
+    current: 0,
+    total: 1,
+    percent: 2
+  })
   try {
     const result = await window.characterArc.importReferenceNovelAnalysis(toIpcPayload({
       settings: appStore.appSettings,
       projectTitle: currentProject.value.title,
       projectGenre: currentProject.value.genre,
-      projectPlatform: targetPlatformDraft.value.trim() || currentProject.value.targetPlatform || '',
-      preferredTitle: referenceTitleDraft.value.trim(),
-      preferredSource: referenceSourceDraft.value.trim()
+      projectPlatform: currentProject.value.targetPlatform || ''
     }))
 
     if (result.canceled) {
+      setReferenceProgress(null)
       return
     }
 
@@ -186,7 +199,6 @@ async function importReferenceNovelAnalysis(): Promise<void> {
 
     const nextReferenceWorks = [...referenceWorks.value, result.result.referenceWork]
     appStore.updateProject(currentProject.value.id, {
-      targetPlatform: targetPlatformDraft.value.trim() || currentProject.value.targetPlatform,
       referenceWorks: nextReferenceWorks,
       writingStylePrompt: mergeWritingStylePrompt(
         currentProject.value.writingStylePrompt,
@@ -209,10 +221,23 @@ async function importReferenceNovelAnalysis(): Promise<void> {
       }
     }
 
-    referenceTitleDraft.value = ''
-    referenceSourceDraft.value = ''
+    setReferenceProgress({
+      phase: 'done',
+      message: `《${result.result.referenceWork.title}》拆书完成，风格模板、参考档案和 findings 已更新。`,
+      current: 1,
+      total: 1,
+      percent: 100,
+      sourceTitle: result.result.referenceWork.title
+    })
     message.success(`已完成《${result.result.referenceWork.title}》拆书并回填风格规则`)
   } catch (error) {
+    setReferenceProgress({
+      phase: 'done',
+      message: error instanceof Error ? error.message : '参考作品拆书失败',
+      current: 0,
+      total: 1,
+      percent: 0
+    })
     message.error(error instanceof Error ? error.message : '参考作品拆书失败')
   } finally {
     isImportingReferenceNovel.value = false
@@ -225,7 +250,27 @@ async function generateReferenceInsights(): Promise<void> {
   }
 
   isGeneratingReferenceInsights.value = true
+  setReferenceProgress({
+    phase: 'extracting',
+    message: '正在整理参考作品、拆书结果和当前流程文件...',
+    current: 1,
+    total: 3,
+    percent: 12
+  })
   try {
+    window.setTimeout(() => {
+      if (!isGeneratingReferenceInsights.value) {
+        return
+      }
+      setReferenceProgress({
+        phase: 'aggregating',
+        message: '正在提炼参考阶段共性风格、题材爆点和平台偏好...',
+        current: 2,
+        total: 3,
+        percent: 56
+      })
+    }, 240)
+
     const result = await window.characterArc.generateAi(toIpcPayload({
       task: 'workflow-documents',
       settings: appStore.appSettings,
@@ -252,6 +297,13 @@ async function generateReferenceInsights(): Promise<void> {
     }
 
     const payload = result.result as Record<string, string>
+    setReferenceProgress({
+      phase: 'saving',
+      message: '正在把提炼结果写回参考阶段流程文件...',
+      current: 3,
+      total: 3,
+      percent: 88
+    })
     appStore.updateWorkflowDocuments(
       activeWorkflowVolume.value?.id ?? '',
       workflowStageDocumentMap.reference
@@ -261,8 +313,22 @@ async function generateReferenceInsights(): Promise<void> {
         }))
         .filter((item) => item.content.trim())
     )
+    setReferenceProgress({
+      phase: 'done',
+      message: '参考阶段文件已更新，后续立项会直接读取这些阶段结论。',
+      current: 3,
+      total: 3,
+      percent: 100
+    })
     message.success('已生成参考阶段流程文件')
   } catch (error) {
+    setReferenceProgress({
+      phase: 'done',
+      message: error instanceof Error ? error.message : '参考阶段提炼失败',
+      current: 0,
+      total: 3,
+      percent: 0
+    })
     message.error(error instanceof Error ? error.message : '参考阶段提炼失败')
   } finally {
     isGeneratingReferenceInsights.value = false
@@ -678,21 +744,55 @@ function resolveStageStatusLabel(status: string): string {
           </button>
         </div>
 
-        <div v-if="activeStage.id === 'reference'" class="workflow-focus-card reference-settings-card">
-          <strong>参考阶段基础输入</strong>
-          <div class="reference-form-grid">
-            <n-input v-model:value="targetPlatformDraft" placeholder="目标平台，例如：番茄 / 飞卢 / 起点" />
-            <n-input v-model:value="referenceTitleDraft" placeholder="参考作品标题" />
-            <n-input v-model:value="referenceSourceDraft" placeholder="作品来源，例如：番茄 / 起点 / TXT" />
+        <div v-if="activeStage.id === 'reference'" class="workflow-focus-card reference-analysis-card">
+          <div class="reference-analysis-head">
+            <div>
+              <strong>拆书分析与参考提炼</strong>
+              <p>直接导入小说文件即可开始拆书。系统会自动识别作品标题、按文件类型记录来源，并把结果整理成后续创作可复用的风格规则。</p>
+            </div>
+            <span class="reference-analysis-phase">{{ resolveReferenceImportPhaseLabel(referenceImportProgress?.phase) }}</span>
           </div>
           <div class="workflow-panel-actions">
-            <n-button round strong secondary @click="saveReferenceSettings">保存参考信息</n-button>
-            <n-button round strong secondary :disabled="isImportingReferenceNovel" @click="importReferenceNovelAnalysis">
+            <n-button round strong secondary :disabled="isReferenceOperationActive" @click="importReferenceNovelAnalysis">
               {{ isImportingReferenceNovel ? '拆书中...' : '导入小说并拆书' }}
             </n-button>
-            <n-button type="primary" round strong :disabled="isGeneratingReferenceInsights" @click="generateReferenceInsights">
+            <n-button type="primary" round strong :disabled="isReferenceOperationActive" @click="generateReferenceInsights">
               {{ isGeneratingReferenceInsights ? '提炼中...' : 'AI提炼参考阶段' }}
             </n-button>
+          </div>
+          <div class="reference-progress-card" :class="{ active: Boolean(referenceImportProgress) }">
+            <div class="reference-progress-meta">
+              <strong>{{ referenceImportProgress?.sourceTitle ? `正在处理《${referenceImportProgress.sourceTitle}》` : '等待开始拆书分析' }}</strong>
+              <span>{{ referenceImportProgress?.percent ?? 0 }}%</span>
+            </div>
+            <div class="reference-progress-track">
+              <div class="reference-progress-fill" :style="{ width: `${referenceImportProgress?.percent ?? 0}%` }" />
+            </div>
+            <p>{{ referenceImportProgress?.message || '导入后会依次完成：读取正文、切分分块、逐块分析、汇总模板、回填项目。' }}</p>
+            <small v-if="referenceImportProgress && referenceImportProgress.total > 1">
+              当前进度：{{ referenceImportProgress.current }} / {{ referenceImportProgress.total }}
+            </small>
+          </div>
+          <div class="reference-usage-grid">
+            <article class="reference-usage-card">
+              <strong>写作风格约束</strong>
+              <p>拆书生成的仿写模板会自动追加到项目风格规则里，后续故事立项、章节生成都会吃这套约束。</p>
+              <button class="doc-tab active" @click="openPanel('settings')">去项目设置查看</button>
+            </article>
+            <article class="reference-usage-card">
+              <strong>参考阶段 Findings</strong>
+              <p>拆书摘要会写进当前卷的 <code>findings</code>，作为后续阶段和 AI 的阶段记忆。</p>
+              <button class="doc-tab active" @click="openReferenceFindings">查看 findings</button>
+            </article>
+            <article class="reference-usage-card">
+              <strong>章节创作与续写</strong>
+              <p>章节助理会读取项目风格 prompt，所以你后面在正文创作里能直接继承拆出来的文笔和节奏。</p>
+              <button class="doc-tab active" @click="openPanel('chapters')">去章节创作</button>
+            </article>
+          </div>
+          <div v-if="latestAnalyzedReference?.analysis" class="reference-analysis-footnote">
+            最近一次完成拆书：<strong>{{ latestAnalyzedReference.title }}</strong>
+            <span>已提炼 {{ latestAnalyzedReference.analysis.styleRules.length }} 条风格规则，并回填到项目风格约束。</span>
           </div>
           <div v-if="referenceWorks.length > 0" class="reference-work-list">
             <article v-for="work in referenceWorks" :key="work.id" class="reference-work-card">
@@ -1056,6 +1156,135 @@ function resolveStageStatusLabel(status: string): string {
   grid-template-columns: 1fr;
 }
 
+.reference-analysis-card {
+  gap: 14px;
+}
+
+.reference-analysis-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reference-analysis-head p {
+  margin: 6px 0 0;
+  color: var(--arc-text-secondary);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.reference-analysis-phase {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.reference-progress-card {
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.76);
+  padding: 14px;
+}
+
+.reference-progress-card.active {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(239, 246, 255, 0.78);
+}
+
+.reference-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reference-progress-meta strong {
+  margin: 0;
+}
+
+.reference-progress-meta span {
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reference-progress-track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.88);
+  margin-top: 10px;
+}
+
+.reference-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+  transition: width 180ms ease;
+}
+
+.reference-progress-card p {
+  margin: 10px 0 0;
+  color: var(--arc-text-secondary);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.reference-progress-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--arc-text-hint);
+  font-size: 11px;
+}
+
+.reference-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reference-usage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 14px;
+}
+
+.reference-usage-card strong {
+  margin: 0;
+}
+
+.reference-usage-card p {
+  margin: 0;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  line-height: 1.72;
+}
+
+.reference-usage-card .doc-tab {
+  align-self: flex-start;
+}
+
+.reference-analysis-footnote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .reference-work-list {
   display: flex;
   flex-direction: column;
@@ -1267,6 +1496,16 @@ function resolveStageStatusLabel(status: string): string {
   }
 
   .reference-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-analysis-head,
+  .reference-progress-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reference-usage-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -331,6 +331,10 @@ const PROMPT_TASK_PROFILES = {
     label: "后续剧情链规划",
     defaultCapabilities: ["settings", "outline", "chapters", "worldview", "characters", "relations", "writing-style", "project-skills"]
   },
+  "reference-style-chunk": {
+    label: "参考作品分块分析",
+    defaultCapabilities: ["settings", "analysis", "writing-style", "outline", "import-export"]
+  },
   "reference-style-analysis": {
     label: "参考作品仿写分析",
     defaultCapabilities: ["settings", "analysis", "writing-style", "outline", "import-export"]
@@ -613,10 +617,41 @@ ${strategyBlock}
 返回格式：{"worldviewEntries":[{"type":"","title":"","content":""}],"outlineItems":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
     });
   }
+  if (task.task === "reference-style-chunk") {
+    return wrapPrompt({
+      system: "你是小说拆书分块分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、sentenceStyle、dialogueRatio、pacingControl、emotionExpression、plotFunction、styleRules。",
+      user: `请分析下面这个参考作品分块，提炼它在局部层面的风格和桥段作用。
+
+当前项目标题：${String(context.projectTitle ?? "")}
+当前项目题材：${String(context.projectGenre ?? "")}
+当前目标平台：${String(context.projectPlatform ?? "")}
+参考作品标题：${String(context.sourceTitle ?? "")}
+分块标签：${String(context.chunkLabel ?? "")}
+分块顺序：${String(context.chunkIndex ?? "")} / ${String(context.chunkTotal ?? "")}
+分块字数：${String(context.chunkCharacterCount ?? "")}
+分块局部统计：${JSON.stringify(context.chunkMetrics ?? [])}
+分块关键词：${JSON.stringify(context.chunkKeywords ?? [])}
+分块正文：
+${String(context.chunkText ?? "")}
+
+要求：
+1. 只分析这一块，不要假装知道整本书全貌
+2. overview 用 1 到 2 句话概括这一块在文风和桥段上的局部特征
+3. sentenceStyle 必须明确句式长短、描述密度或叙述颗粒度
+4. dialogueRatio 必须明确对白占比倾向及其在这一块里的作用
+5. pacingControl 必须说明这一块是快推、蓄压、回收还是过渡，以及怎么做到的
+6. emotionExpression 必须指出情绪靠什么细节外化
+7. plotFunction 必须说明这一块承担的桥段功能，比如开篇钩子、冲突升级、关系试探、结果兑现、余波过渡等
+8. styleRules 返回 2 到 4 条局部可复用规则，仍然必须去具体化，不能包含专有名词和桥段细节照搬
+9. 不要长篇复述剧情，不要输出版权敏感的连续原文
+
+返回格式：{"overview":"","sentenceStyle":"","dialogueRatio":"","pacingControl":"","emotionExpression":"","plotFunction":"","styleRules":["",""]}`
+    });
+  }
   if (task.task === "reference-style-analysis") {
     return wrapPrompt({
       system: "你是小说拆书分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、sentenceStyle、dialogueRatio、pacingControl、emotionExpression、narrativePerspective、styleRules、plotOutline、reusableStylePrompt、avoidRules。",
-      user: `请基于以下参考作品样本，提炼一套可以复用于后续原创写作的仿写规则。
+      user: `请基于以下参考作品的全局统计和分块分析结果，汇总出一套可以复用于后续原创写作的仿写规则。
 
 当前项目标题：${String(context.projectTitle ?? "")}
 当前项目题材：${String(context.projectGenre ?? "")}
@@ -625,26 +660,30 @@ ${strategyBlock}
 参考文件类型：${String(context.sourceFileType ?? "")}
 参考作品估计字数：${String(context.sourceCharacterCount ?? "")}
 参考作品章节估计：${String(context.sourceChapterCount ?? "")}
-局部统计：${JSON.stringify(context.styleMetrics ?? [])}
-关键词：${JSON.stringify(context.topKeywords ?? [])}
+全局统计：${JSON.stringify(context.styleMetrics ?? [])}
+全局关键词：${JSON.stringify(context.topKeywords ?? [])}
 开篇摘录：
 ${String(context.sourceExcerpt ?? "")}
 
-代表样本：
+全书抽样：
 ${String(context.analysisSample ?? "")}
 
+分块分析结果：
+${String(context.chunkSummaries ?? "")}
+
 要求：
-1. 目标不是复述剧情，而是提炼"可复用、可去具体化"的写作骨架
-2. sentenceStyle 必须明确句式简洁度、长短句分布、描写密度或叙述颗粒度
-3. dialogueRatio 必须明确对白比例倾向，以及对白在推进剧情中的职责
-4. pacingControl 必须明确该作品如何控节奏、如何分配冲突和反馈
-5. emotionExpression 必须明确情绪是靠什么外化的，不要空泛说"有感染力"
-6. narrativePerspective 必须说明视角稳定性、镜头距离或场景组织方式
-7. styleRules 返回 4 到 6 条可执行风格规则，不能包含具体人名、地名、外挂、组织名或桥段专有设定
-8. plotOutline 用 120 到 220 字概括故事骨架，但必须抽象到可迁移层，不要把原剧情直接压缩复写
-9. reusableStylePrompt 写成可直接放进后续章节生成的风格模板，强调文笔、对白、节奏、情绪表达和去 AI 味约束，180 到 320 字
-10. avoidRules 返回 3 到 5 条主动避险规则，提醒后续创作不要照搬原作的专有名词、关系网和桥段顺序
-11. 全部内容必须用简体中文，严格去具体化，不能输出版权敏感的连续原文，也不能鼓励照抄
+1. 目标不是复述剧情，而是汇总出跨分块稳定成立的风格骨架
+2. 优先相信多个分块重复出现的共性，不要被单个桥段带偏
+3. sentenceStyle 必须明确句式简洁度、长短句分布、描写密度或叙述颗粒度
+4. dialogueRatio 必须明确对白比例倾向，以及对白在推进剧情中的职责
+5. pacingControl 必须明确该作品如何在不同桥段里控节奏、如何分配冲突和反馈
+6. emotionExpression 必须明确情绪是靠什么外化的，不要空泛说"有感染力"
+7. narrativePerspective 必须说明视角稳定性、镜头距离或场景组织方式
+8. styleRules 返回 4 到 6 条可执行风格规则，不能包含具体人名、地名、外挂、组织名或桥段专有设定
+9. plotOutline 用 120 到 220 字概括故事骨架，但必须抽象到可迁移层，不要把原剧情直接压缩复写
+10. reusableStylePrompt 写成可直接放进后续章节生成的风格模板，强调文笔、对白、节奏、情绪表达和去 AI 味约束，180 到 320 字
+11. avoidRules 返回 3 到 5 条主动避险规则，提醒后续创作不要照搬原作的专有名词、关系网和桥段顺序
+12. 全部内容必须用简体中文，严格去具体化，不能输出版权敏感的连续原文，也不能鼓励照抄
 
 返回格式：{"overview":"","sentenceStyle":"","dialogueRatio":"","pacingControl":"","emotionExpression":"","narrativePerspective":"","styleRules":["",""],"plotOutline":"","reusableStylePrompt":"","avoidRules":["",""]}`
     });
@@ -1219,6 +1258,7 @@ function resolveMaxTokens(task) {
     case "project-bootstrap":
       return 1500;
     case "chapter-analysis":
+    case "reference-style-chunk":
     case "reference-style-analysis":
     case "inspiration-pack":
     case "outline-batch":
@@ -1589,6 +1629,25 @@ function normalizeReferenceStyleAnalysisResult(result) {
     avoidRules: toList(payload.avoidRules, ["不要照搬原作的人名、专有设定、组织结构和具体桥段顺序。"])
   };
 }
+function normalizeReferenceStyleChunkResult(result) {
+  const payload = result;
+  const toList = (value, fallback) => {
+    if (!Array.isArray(value)) {
+      return fallback;
+    }
+    const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 4);
+    return normalized.length ? normalized : fallback;
+  };
+  return {
+    overview: payload.overview?.trim() || "这一段以稳定推进和局部反馈为主，能代表原作的一部分风格倾向。",
+    sentenceStyle: payload.sentenceStyle?.trim() || "句式偏直接，叙述重点落在动作与结果。",
+    dialogueRatio: payload.dialogueRatio?.trim() || "对白承担推进信息和制造对抗的职责。",
+    pacingControl: payload.pacingControl?.trim() || "节奏以短回合推进，少停留在纯说明。",
+    emotionExpression: payload.emotionExpression?.trim() || "情绪通过动作、停顿和人物反应外化。",
+    plotFunction: payload.plotFunction?.trim() || "该段桥段主要承担冲突抬升或信息兑现。",
+    styleRules: toList(payload.styleRules, ["保持信息推进和场景反馈同步，不做空转描写。"])
+  };
+}
 function normalizeInspirationResult(result) {
   const entry = result;
   const tags = Array.isArray(entry.tags) ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4) : [];
@@ -1624,6 +1683,12 @@ function isTaskResultUsable(task, result) {
     const analysis = result;
     return Boolean(
       analysis.overview.trim() && analysis.sentenceStyle.trim() && analysis.dialogueRatio.trim() && analysis.pacingControl.trim() && analysis.emotionExpression.trim() && analysis.narrativePerspective.trim() && analysis.styleRules.length > 0 && analysis.plotOutline.trim() && analysis.reusableStylePrompt.trim() && analysis.avoidRules.length > 0
+    );
+  }
+  if (task.task === "reference-style-chunk") {
+    const analysis = result;
+    return Boolean(
+      analysis.overview.trim() && analysis.sentenceStyle.trim() && analysis.dialogueRatio.trim() && analysis.pacingControl.trim() && analysis.emotionExpression.trim() && analysis.plotFunction.trim() && analysis.styleRules.length > 0
     );
   }
   if (task.task === "inspiration-pack") {
@@ -1670,6 +1735,8 @@ function normalizeTaskResult(task, rawText) {
       return normalizeOutlineBatchResult(parsed);
     case "chapter-analysis":
       return normalizeChapterAnalysisResult(parsed);
+    case "reference-style-chunk":
+      return normalizeReferenceStyleChunkResult(parsed);
     case "reference-style-analysis":
       return normalizeReferenceStyleAnalysisResult(parsed);
     case "inspiration-pack":
@@ -1733,6 +1800,9 @@ async function streamAiTask(task, handlers, signal) {
 const jieba = jieba$1.Jieba.withDict(dict.dict);
 const tfidf = jieba$1.TfIdf.withDict(dict.idf);
 const CHAPTER_HEADING_RE = /^(第[0-9零一二三四五六七八九十百千万两]+[章节回卷部集][^\n]{0,40})$/gm;
+const MAX_ANALYSIS_CHUNKS = 12;
+const MAX_CHUNK_CHAR_COUNT = 6e3;
+const CHUNK_KEYWORD_LIMIT = 8;
 const STOP_WORDS = /* @__PURE__ */ new Set([
   "一个",
   "一种",
@@ -1838,7 +1908,11 @@ function clipText(text, maxLength) {
   return `${text.slice(0, maxLength).trim()}……`;
 }
 function buildAnalysisSample(chapters, text) {
-  const sourceSections = chapters.length >= 3 ? [chapters[0], chapters[Math.floor(chapters.length / 2)], chapters[chapters.length - 1]] : [text.slice(0, 2200), text.slice(Math.max(0, Math.floor(text.length / 2) - 1100), Math.max(0, Math.floor(text.length / 2) - 1100) + 2200), text.slice(Math.max(0, text.length - 2200))];
+  const sourceSections = chapters.length >= 3 ? [chapters[0], chapters[Math.floor(chapters.length / 2)], chapters[chapters.length - 1]] : [
+    text.slice(0, 2200),
+    text.slice(Math.max(0, Math.floor(text.length / 2) - 1100), Math.max(0, Math.floor(text.length / 2) - 1100) + 2200),
+    text.slice(Math.max(0, text.length - 2200))
+  ];
   return sourceSections.map((section, index) => {
     const label = index === 0 ? "开篇样本" : index === 1 ? "中段样本" : "后段样本";
     return `【${label}】
@@ -1866,9 +1940,89 @@ function computeMetrics(text, chapters) {
     { label: "情绪标点密度", value: `每千字 ${emotionMarksPerThousand.toFixed(1)} 个` }
   ];
 }
-function extractKeywords(text) {
-  const keywords = tfidf.extractKeywords(jieba, clipText(text, 36e3), 18);
-  return keywords.map((entry) => entry.keyword.trim()).filter((keyword) => keyword.length >= 2 && !STOP_WORDS.has(keyword)).slice(0, 10);
+function extractKeywords(text, limit = 10) {
+  const keywords = tfidf.extractKeywords(jieba, clipText(text, 36e3), Math.max(limit * 2, 18));
+  return keywords.map((entry) => entry.keyword.trim()).filter((keyword) => keyword.length >= 2 && !STOP_WORDS.has(keyword)).slice(0, limit);
+}
+function mergeSectionsIntoChunks(sections) {
+  if (sections.length === 0) {
+    return [];
+  }
+  const merged = [];
+  let current = "";
+  for (const section of sections) {
+    if (section.length > MAX_CHUNK_CHAR_COUNT) {
+      if (current.trim()) {
+        merged.push(current.trim());
+        current = "";
+      }
+      for (let index = 0; index < section.length; index += MAX_CHUNK_CHAR_COUNT) {
+        const slice = section.slice(index, index + MAX_CHUNK_CHAR_COUNT).trim();
+        if (slice) {
+          merged.push(slice);
+        }
+      }
+      continue;
+    }
+    const candidate = current ? `${current}
+
+${section}` : section;
+    if (candidate.length > MAX_CHUNK_CHAR_COUNT && current.trim()) {
+      merged.push(current.trim());
+      current = section;
+      continue;
+    }
+    current = candidate;
+  }
+  if (current.trim()) {
+    merged.push(current.trim());
+  }
+  return merged;
+}
+function pickRepresentativeChunkIndexes(total) {
+  if (total <= MAX_ANALYSIS_CHUNKS) {
+    return Array.from({ length: total }, (_, index) => index);
+  }
+  const indexes = /* @__PURE__ */ new Set([0, total - 1, Math.floor(total / 2)]);
+  const step = (total - 1) / (MAX_ANALYSIS_CHUNKS - 1);
+  for (let index = 0; index < MAX_ANALYSIS_CHUNKS; index += 1) {
+    indexes.add(Math.round(index * step));
+  }
+  return Array.from(indexes).sort((left, right) => left - right).slice(0, MAX_ANALYSIS_CHUNKS);
+}
+function buildChunkLabel(index, total) {
+  if (index === 0) {
+    return "开篇段";
+  }
+  if (index === total - 1) {
+    return "收束段";
+  }
+  const ratio = total <= 1 ? 0 : index / (total - 1);
+  if (ratio < 0.34) {
+    return "前段";
+  }
+  if (ratio > 0.66) {
+    return "后段";
+  }
+  return "中段";
+}
+function buildAnalysisChunks(chapters) {
+  const mergedChunks = mergeSectionsIntoChunks(chapters);
+  const selectedIndexes = pickRepresentativeChunkIndexes(mergedChunks.length);
+  return selectedIndexes.map((chunkIndex, order) => {
+    const text = mergedChunks[chunkIndex];
+    const plainText = text.replace(/\s+/g, "");
+    const label = `${buildChunkLabel(chunkIndex, mergedChunks.length)} ${chunkIndex + 1}/${mergedChunks.length}`;
+    return {
+      id: `chunk-${chunkIndex + 1}`,
+      label,
+      order,
+      text,
+      characterCount: plainText.length,
+      topKeywords: extractKeywords(text, CHUNK_KEYWORD_LIMIT),
+      metrics: computeMetrics(text, [text])
+    };
+  });
 }
 async function extractReferenceNovelContext(filePath) {
   const fileType = resolveFileType(filePath);
@@ -1889,7 +2043,8 @@ async function extractReferenceNovelContext(filePath) {
     characterCount: text.replace(/\s+/g, "").length,
     chapterCount: Math.max(chapters.length, 1),
     topKeywords: extractKeywords(text),
-    metrics: computeMetrics(text, chapters)
+    metrics: computeMetrics(text, chapters),
+    analysisChunks: buildAnalysisChunks(chapters)
   };
 }
 const APP_DEFAULT_WIDTH = 1480;
@@ -2495,6 +2650,24 @@ function buildImportedReferenceFindingsMarkdown(title, analysis, metrics, keywor
     "### 避免照搬",
     avoidRuleLines
   ].join("\n");
+}
+function emitReferenceImportProgress(window, payload) {
+  if (window.isDestroyed()) {
+    return;
+  }
+  window.webContents.send("characterarc:reference-import-progress", payload);
+}
+function formatReferenceChunkSummaries(chunkResults) {
+  return chunkResults.map(({ label, characterCount, result }, index) => [
+    `【分块 ${index + 1}｜${label}｜约 ${characterCount} 字】`,
+    `局部概括：${result.overview}`,
+    `句式：${result.sentenceStyle}`,
+    `对白：${result.dialogueRatio}`,
+    `节奏：${result.pacingControl}`,
+    `情绪：${result.emotionExpression}`,
+    `桥段功能：${result.plotFunction}`,
+    `局部规则：${result.styleRules.join("；")}`
+  ].join("\n")).join("\n\n");
 }
 function normalizeWorkspacePayload(payload) {
   if ("workspaces" in payload && payload.workspaces) {
@@ -3330,9 +3503,64 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
   }
   try {
     const request = payload ?? {};
+    emitReferenceImportProgress(window, {
+      phase: "extracting",
+      message: "正在读取小说正文并提取基础统计...",
+      current: 0,
+      total: 1,
+      percent: 8
+    });
     const localContext = await extractReferenceNovelContext(result.filePaths[0]);
     const resolvedTitle = request.preferredTitle?.trim() || localContext.title;
     const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase();
+    emitReferenceImportProgress(window, {
+      phase: "chunking",
+      message: `已拆出 ${localContext.analysisChunks.length} 个分析分块，准备逐块提炼风格...`,
+      current: 0,
+      total: Math.max(localContext.analysisChunks.length, 1),
+      percent: 16,
+      sourceTitle: resolvedTitle
+    });
+    const chunkResults = [];
+    for (const [index, chunk] of localContext.analysisChunks.entries()) {
+      emitReferenceImportProgress(window, {
+        phase: "chunk-analysis",
+        message: `正在分析第 ${index + 1} / ${localContext.analysisChunks.length} 个分块：${chunk.label}`,
+        current: index + 1,
+        total: localContext.analysisChunks.length,
+        percent: Math.min(82, 16 + Math.round((index + 1) / Math.max(localContext.analysisChunks.length, 1) * 58)),
+        sourceTitle: resolvedTitle
+      });
+      chunkResults.push({
+        label: chunk.label,
+        characterCount: chunk.characterCount,
+        result: await generateAiTask({
+          task: "reference-style-chunk",
+          settings: request.settings,
+          context: {
+            projectTitle: request.projectTitle ?? "",
+            projectGenre: request.projectGenre ?? "",
+            projectPlatform: request.projectPlatform ?? "",
+            sourceTitle: resolvedTitle,
+            chunkLabel: chunk.label,
+            chunkIndex: index + 1,
+            chunkTotal: localContext.analysisChunks.length,
+            chunkCharacterCount: chunk.characterCount,
+            chunkMetrics: chunk.metrics,
+            chunkKeywords: chunk.topKeywords,
+            chunkText: chunk.text
+          }
+        })
+      });
+    }
+    emitReferenceImportProgress(window, {
+      phase: "aggregating",
+      message: "正在汇总所有分块结论，生成可复用仿写模板...",
+      current: chunkResults.length,
+      total: chunkResults.length,
+      percent: 90,
+      sourceTitle: resolvedTitle
+    });
     const analysis = await generateAiTask({
       task: "reference-style-analysis",
       settings: request.settings,
@@ -3347,10 +3575,19 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
         styleMetrics: localContext.metrics,
         topKeywords: localContext.topKeywords,
         sourceExcerpt: localContext.excerpt,
-        analysisSample: localContext.analysisSample
+        analysisSample: localContext.analysisSample,
+        chunkSummaries: formatReferenceChunkSummaries(chunkResults)
       }
     });
     const importedAt = (/* @__PURE__ */ new Date()).toISOString();
+    emitReferenceImportProgress(window, {
+      phase: "saving",
+      message: "正在整理结果并回填到项目风格规则与流程文件...",
+      current: 1,
+      total: 1,
+      percent: 96,
+      sourceTitle: resolvedTitle
+    });
     const referenceWork = {
       id: `ref-${Date.now()}`,
       title: resolvedTitle,
@@ -3365,7 +3602,10 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
         chapterCount: localContext.chapterCount,
         excerpt: localContext.excerpt,
         topKeywords: localContext.topKeywords,
-        metrics: localContext.metrics,
+        metrics: [
+          ...localContext.metrics,
+          { label: "分析分块数", value: `${localContext.analysisChunks.length} 块` }
+        ],
         overview: analysis.overview,
         sentenceStyle: analysis.sentenceStyle,
         dialogueRatio: analysis.dialogueRatio,
@@ -3378,6 +3618,14 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
         avoidRules: analysis.avoidRules
       }
     };
+    emitReferenceImportProgress(window, {
+      phase: "done",
+      message: `《${resolvedTitle}》拆书完成，结果已回填到项目风格规则、参考档案和 findings。`,
+      current: 1,
+      total: 1,
+      percent: 100,
+      sourceTitle: resolvedTitle
+    });
     return {
       success: true,
       canceled: false,

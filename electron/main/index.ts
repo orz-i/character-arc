@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { generateAiTask, streamAiTask, testAiConnection, type AiTaskPayload } from './ai'
 import { extractReferenceNovelContext, type ReferenceStyleMetric } from './referenceAnalysis'
-import type { ReferenceStyleAnalysisResult } from './aiShared'
+import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './aiShared'
 
 // ── 窗口尺寸常量 ──
 const APP_DEFAULT_WIDTH = 1480     // 主窗口默认宽度
@@ -43,6 +43,15 @@ type ReferenceNovelImportRequest = {
   projectPlatform?: string
   preferredTitle?: string
   preferredSource?: string
+}
+
+type ReferenceImportProgressPayload = {
+  phase: 'extracting' | 'chunking' | 'chunk-analysis' | 'aggregating' | 'saving' | 'done'
+  message: string
+  current: number
+  total: number
+  percent: number
+  sourceTitle?: string
 }
 
 // 缓存最新的助手上下文和提示词，新窗口打开时可立即同步
@@ -1079,6 +1088,35 @@ function buildImportedReferenceFindingsMarkdown(title: string, analysis: Referen
     '### 避免照搬',
     avoidRuleLines
   ].join('\n')
+}
+
+function emitReferenceImportProgress(window: BrowserWindow, payload: ReferenceImportProgressPayload): void {
+  if (window.isDestroyed()) {
+    return
+  }
+
+  window.webContents.send('characterarc:reference-import-progress', payload)
+}
+
+function formatReferenceChunkSummaries(
+  chunkResults: Array<{
+    label: string
+    characterCount: number
+    result: ReferenceStyleChunkResult
+  }>
+): string {
+  return chunkResults
+    .map(({ label, characterCount, result }, index) => [
+      `【分块 ${index + 1}｜${label}｜约 ${characterCount} 字】`,
+      `局部概括：${result.overview}`,
+      `句式：${result.sentenceStyle}`,
+      `对白：${result.dialogueRatio}`,
+      `节奏：${result.pacingControl}`,
+      `情绪：${result.emotionExpression}`,
+      `桥段功能：${result.plotFunction}`,
+      `局部规则：${result.styleRules.join('；')}`
+    ].join('\n'))
+    .join('\n\n')
 }
 
 /**
@@ -2242,9 +2280,64 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
 
   try {
     const request = (payload ?? {}) as ReferenceNovelImportRequest
+    emitReferenceImportProgress(window, {
+      phase: 'extracting',
+      message: '正在读取小说正文并提取基础统计...',
+      current: 0,
+      total: 1,
+      percent: 8
+    })
     const localContext = await extractReferenceNovelContext(result.filePaths[0])
     const resolvedTitle = request.preferredTitle?.trim() || localContext.title
     const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase()
+    emitReferenceImportProgress(window, {
+      phase: 'chunking',
+      message: `已拆出 ${localContext.analysisChunks.length} 个分析分块，准备逐块提炼风格...`,
+      current: 0,
+      total: Math.max(localContext.analysisChunks.length, 1),
+      percent: 16,
+      sourceTitle: resolvedTitle
+    })
+    const chunkResults: Array<{ label: string; characterCount: number; result: ReferenceStyleChunkResult }> = []
+    for (const [index, chunk] of localContext.analysisChunks.entries()) {
+      emitReferenceImportProgress(window, {
+        phase: 'chunk-analysis',
+        message: `正在分析第 ${index + 1} / ${localContext.analysisChunks.length} 个分块：${chunk.label}`,
+        current: index + 1,
+        total: localContext.analysisChunks.length,
+        percent: Math.min(82, 16 + Math.round(((index + 1) / Math.max(localContext.analysisChunks.length, 1)) * 58)),
+        sourceTitle: resolvedTitle
+      })
+      chunkResults.push({
+        label: chunk.label,
+        characterCount: chunk.characterCount,
+        result: (await generateAiTask({
+          task: 'reference-style-chunk',
+          settings: request.settings,
+          context: {
+            projectTitle: request.projectTitle ?? '',
+            projectGenre: request.projectGenre ?? '',
+            projectPlatform: request.projectPlatform ?? '',
+            sourceTitle: resolvedTitle,
+            chunkLabel: chunk.label,
+            chunkIndex: index + 1,
+            chunkTotal: localContext.analysisChunks.length,
+            chunkCharacterCount: chunk.characterCount,
+            chunkMetrics: chunk.metrics,
+            chunkKeywords: chunk.topKeywords,
+            chunkText: chunk.text
+          }
+        })) as ReferenceStyleChunkResult
+      })
+    }
+    emitReferenceImportProgress(window, {
+      phase: 'aggregating',
+      message: '正在汇总所有分块结论，生成可复用仿写模板...',
+      current: chunkResults.length,
+      total: chunkResults.length,
+      percent: 90,
+      sourceTitle: resolvedTitle
+    })
     const analysis = await generateAiTask({
       task: 'reference-style-analysis',
       settings: request.settings,
@@ -2259,11 +2352,20 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
         styleMetrics: localContext.metrics,
         topKeywords: localContext.topKeywords,
         sourceExcerpt: localContext.excerpt,
-        analysisSample: localContext.analysisSample
+        analysisSample: localContext.analysisSample,
+        chunkSummaries: formatReferenceChunkSummaries(chunkResults)
       }
     }) as ReferenceStyleAnalysisResult
 
     const importedAt = new Date().toISOString()
+    emitReferenceImportProgress(window, {
+      phase: 'saving',
+      message: '正在整理结果并回填到项目风格规则与流程文件...',
+      current: 1,
+      total: 1,
+      percent: 96,
+      sourceTitle: resolvedTitle
+    })
     const referenceWork = {
       id: `ref-${Date.now()}`,
       title: resolvedTitle,
@@ -2278,7 +2380,10 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
         chapterCount: localContext.chapterCount,
         excerpt: localContext.excerpt,
         topKeywords: localContext.topKeywords,
-        metrics: localContext.metrics,
+        metrics: [
+          ...localContext.metrics,
+          { label: '分析分块数', value: `${localContext.analysisChunks.length} 块` }
+        ],
         overview: analysis.overview,
         sentenceStyle: analysis.sentenceStyle,
         dialogueRatio: analysis.dialogueRatio,
@@ -2291,6 +2396,14 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
         avoidRules: analysis.avoidRules
       }
     }
+    emitReferenceImportProgress(window, {
+      phase: 'done',
+      message: `《${resolvedTitle}》拆书完成，结果已回填到项目风格规则、参考档案和 findings。`,
+      current: 1,
+      total: 1,
+      percent: 100,
+      sourceTitle: resolvedTitle
+    })
 
     return {
       success: true,

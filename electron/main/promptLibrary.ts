@@ -115,6 +115,10 @@ const PROMPT_TASK_PROFILES: Record<AiTaskName, PromptTaskProfile> = {
     label: '后续剧情链规划',
     defaultCapabilities: ['settings', 'outline', 'chapters', 'worldview', 'characters', 'relations', 'writing-style', 'project-skills']
   },
+  'reference-style-chunk': {
+    label: '参考作品分块分析',
+    defaultCapabilities: ['settings', 'analysis', 'writing-style', 'outline', 'import-export']
+  },
   'reference-style-analysis': {
     label: '参考作品仿写分析',
     defaultCapabilities: ['settings', 'analysis', 'writing-style', 'outline', 'import-export']

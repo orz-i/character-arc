@@ -113,6 +113,14 @@ contextBridge.exposeInMainWorld('characterArc', {
       ipcRenderer.removeListener('characterarc:workspace-sync-event', listener)
     }
   },
+  /** 监听参考小说拆书分析进度 */
+  onReferenceImportProgress: (callback: (payload: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
+    ipcRenderer.on('characterarc:reference-import-progress', listener)
+    return () => {
+      ipcRenderer.removeListener('characterarc:reference-import-progress', listener)
+    }
+  },
   /** 监听主窗口发送的命令事件（如将 AI 结果插入正文） */
   onAssistantCommand: (callback: (payload: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)

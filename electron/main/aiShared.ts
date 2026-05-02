@@ -20,6 +20,7 @@ export type AiTaskName =
   | 'outline-item'        // 生成一条剧情大纲节点
   | 'outline-batch'       // 批量生成多条剧情大纲节点
   | 'outline-chain'       // 基于当前章节生成连续剧情链
+  | 'reference-style-chunk' // 拆书分块分析
   | 'reference-style-analysis' // 拆书提炼仿写规则
   | 'workflow-documents'  // 生成项目流程文件
   | 'chapter-assistant'   // 章节创作助理（支持流式）
@@ -148,6 +149,24 @@ export type ReferenceStyleAnalysisResult = {
   avoidRules: string[]
 }
 
+/** AI 返回的参考作品单块分析结果 */
+export type ReferenceStyleChunkResult = {
+  /** 当前分块的局部风格观察 */
+  overview: string
+  /** 当前分块的句式与叙述特征 */
+  sentenceStyle: string
+  /** 当前分块的对白使用方式 */
+  dialogueRatio: string
+  /** 当前分块的节奏特征 */
+  pacingControl: string
+  /** 当前分块的情绪表达方式 */
+  emotionExpression: string
+  /** 当前分块的桥段/冲突骨架 */
+  plotFunction: string
+  /** 2-4 条可汇总的局部规则 */
+  styleRules: string[]
+}
+
 /** AI 返回的单条灵感卡片结构 */
 export type InspirationResult = {
   /** 灵感类型：标题灵感 / 开篇钩子 / 场景火花 / 剧情转折 / 设定补完 / 人物动机 */
@@ -177,6 +196,7 @@ export type AiTaskResult =
   | WorkflowDocumentsResult
   | WorkflowStageDocumentsResult
   | ChapterAnalysisResult
+  | ReferenceStyleChunkResult
   | ReferenceStyleAnalysisResult
   | InspirationPackResult
 
@@ -285,6 +305,7 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
       // 初始化任务需要一次性输出世界观 + 大纲，token 需求较高
       return 1500
     case 'chapter-analysis':
+    case 'reference-style-chunk':
     case 'reference-style-analysis':
     case 'inspiration-pack':
     case 'outline-batch':

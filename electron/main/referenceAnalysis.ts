@@ -10,6 +10,16 @@ export type ReferenceStyleMetric = {
   value: string
 }
 
+export type ReferenceNovelChunk = {
+  id: string
+  label: string
+  order: number
+  text: string
+  characterCount: number
+  topKeywords: string[]
+  metrics: ReferenceStyleMetric[]
+}
+
 export type ReferenceNovelLocalContext = {
   title: string
   fileName: string
@@ -20,11 +30,15 @@ export type ReferenceNovelLocalContext = {
   chapterCount: number
   topKeywords: string[]
   metrics: ReferenceStyleMetric[]
+  analysisChunks: ReferenceNovelChunk[]
 }
 
 const jieba = Jieba.withDict(dict)
 const tfidf = TfIdf.withDict(idf)
 const CHAPTER_HEADING_RE = /^(第[0-9零一二三四五六七八九十百千万两]+[章节回卷部集][^\n]{0,40})$/gm
+const MAX_ANALYSIS_CHUNKS = 12
+const MAX_CHUNK_CHAR_COUNT = 6_000
+const CHUNK_KEYWORD_LIMIT = 8
 const STOP_WORDS = new Set([
   '一个',
   '一种',
@@ -158,7 +172,11 @@ function clipText(text: string, maxLength: number): string {
 function buildAnalysisSample(chapters: string[], text: string): string {
   const sourceSections = chapters.length >= 3
     ? [chapters[0], chapters[Math.floor(chapters.length / 2)], chapters[chapters.length - 1]]
-    : [text.slice(0, 2200), text.slice(Math.max(0, Math.floor(text.length / 2) - 1100), Math.max(0, Math.floor(text.length / 2) - 1100) + 2200), text.slice(Math.max(0, text.length - 2200))]
+    : [
+        text.slice(0, 2200),
+        text.slice(Math.max(0, Math.floor(text.length / 2) - 1100), Math.max(0, Math.floor(text.length / 2) - 1100) + 2200),
+        text.slice(Math.max(0, text.length - 2200))
+      ]
 
   return sourceSections
     .map((section, index) => {
@@ -194,12 +212,111 @@ function computeMetrics(text: string, chapters: string[]): ReferenceStyleMetric[
   ]
 }
 
-function extractKeywords(text: string): string[] {
-  const keywords = tfidf.extractKeywords(jieba, clipText(text, 36_000), 18)
+function extractKeywords(text: string, limit = 10): string[] {
+  const keywords = tfidf.extractKeywords(jieba, clipText(text, 36_000), Math.max(limit * 2, 18))
   return keywords
     .map((entry) => entry.keyword.trim())
     .filter((keyword) => keyword.length >= 2 && !STOP_WORDS.has(keyword))
-    .slice(0, 10)
+    .slice(0, limit)
+}
+
+function mergeSectionsIntoChunks(sections: string[]): string[] {
+  if (sections.length === 0) {
+    return []
+  }
+
+  const merged: string[] = []
+  let current = ''
+
+  for (const section of sections) {
+    if (section.length > MAX_CHUNK_CHAR_COUNT) {
+      if (current.trim()) {
+        merged.push(current.trim())
+        current = ''
+      }
+
+      for (let index = 0; index < section.length; index += MAX_CHUNK_CHAR_COUNT) {
+        const slice = section.slice(index, index + MAX_CHUNK_CHAR_COUNT).trim()
+        if (slice) {
+          merged.push(slice)
+        }
+      }
+      continue
+    }
+
+    const candidate = current ? `${current}\n\n${section}` : section
+    if (candidate.length > MAX_CHUNK_CHAR_COUNT && current.trim()) {
+      merged.push(current.trim())
+      current = section
+      continue
+    }
+
+    current = candidate
+  }
+
+  if (current.trim()) {
+    merged.push(current.trim())
+  }
+
+  return merged
+}
+
+function pickRepresentativeChunkIndexes(total: number): number[] {
+  if (total <= MAX_ANALYSIS_CHUNKS) {
+    return Array.from({ length: total }, (_, index) => index)
+  }
+
+  const indexes = new Set<number>([0, total - 1, Math.floor(total / 2)])
+  const step = (total - 1) / (MAX_ANALYSIS_CHUNKS - 1)
+
+  for (let index = 0; index < MAX_ANALYSIS_CHUNKS; index += 1) {
+    indexes.add(Math.round(index * step))
+  }
+
+  return Array.from(indexes)
+    .sort((left, right) => left - right)
+    .slice(0, MAX_ANALYSIS_CHUNKS)
+}
+
+function buildChunkLabel(index: number, total: number): string {
+  if (index === 0) {
+    return '开篇段'
+  }
+
+  if (index === total - 1) {
+    return '收束段'
+  }
+
+  const ratio = total <= 1 ? 0 : index / (total - 1)
+  if (ratio < 0.34) {
+    return '前段'
+  }
+
+  if (ratio > 0.66) {
+    return '后段'
+  }
+
+  return '中段'
+}
+
+function buildAnalysisChunks(chapters: string[]): ReferenceNovelChunk[] {
+  const mergedChunks = mergeSectionsIntoChunks(chapters)
+  const selectedIndexes = pickRepresentativeChunkIndexes(mergedChunks.length)
+
+  return selectedIndexes.map((chunkIndex, order) => {
+    const text = mergedChunks[chunkIndex]
+    const plainText = text.replace(/\s+/g, '')
+    const label = `${buildChunkLabel(chunkIndex, mergedChunks.length)} ${chunkIndex + 1}/${mergedChunks.length}`
+    return {
+      id: `chunk-${chunkIndex + 1}`,
+      label,
+      order,
+      text,
+      characterCount: plainText.length,
+      topKeywords: extractKeywords(text, CHUNK_KEYWORD_LIMIT),
+      metrics: computeMetrics(text, [text])
+    }
+  })
 }
 
 export async function extractReferenceNovelContext(filePath: string): Promise<ReferenceNovelLocalContext> {
@@ -224,6 +341,7 @@ export async function extractReferenceNovelContext(filePath: string): Promise<Re
     characterCount: text.replace(/\s+/g, '').length,
     chapterCount: Math.max(chapters.length, 1),
     topKeywords: extractKeywords(text),
-    metrics: computeMetrics(text, chapters)
+    metrics: computeMetrics(text, chapters),
+    analysisChunks: buildAnalysisChunks(chapters)
   }
 }
