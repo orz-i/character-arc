@@ -69,6 +69,21 @@ declare global {
     quickAction?: string
   }
 
+  type CharacterArcReferenceImportPayload = {
+    settings: import('@/types/app').AppSettings
+    projectTitle?: string
+    projectGenre?: string
+    projectPlatform?: string
+    preferredTitle?: string
+    preferredSource?: string
+  }
+
+  type CharacterArcReferenceImportResult = {
+    referenceWork: import('@/types/app').ReferenceWorkItem
+    suggestedWritingStylePrompt: string
+    findingsMarkdown: string
+  }
+
   interface Window {
     characterArc: {
       platform: string
@@ -135,6 +150,12 @@ declare global {
         canceled: boolean
         payload?: unknown
         meta?: CharacterArcImportMeta
+        error?: string
+      }>
+      importReferenceNovelAnalysis: (payload: CharacterArcReferenceImportPayload) => Promise<{
+        success: boolean
+        canceled: boolean
+        result?: CharacterArcReferenceImportResult
         error?: string
       }>
       scanProjectSkills: () => Promise<{

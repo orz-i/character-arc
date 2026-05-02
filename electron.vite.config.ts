@@ -8,6 +8,9 @@ export default defineConfig({
       outDir: 'dist-electron/main',
       lib: {
         entry: resolve(__dirname, 'electron/main/index.ts')
+      },
+      rollupOptions: {
+        external: ['@node-rs/jieba', '@node-rs/jieba/dict']
       }
     },
     resolve: {

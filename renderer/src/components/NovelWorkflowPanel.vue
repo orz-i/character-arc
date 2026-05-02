@@ -20,6 +20,7 @@ const isScanningProjectSkills = ref(false)
 const isGeneratingReferenceInsights = ref(false)
 const isGeneratingPremiseInsights = ref(false)
 const isGeneratingSettingInsights = ref(false)
+const isImportingReferenceNovel = ref(false)
 const projectSkillItems = ref<Array<import('@/types/app').ProjectSkillItem>>([])
 const targetPlatformDraft = ref('')
 const referenceTitleDraft = ref('')
@@ -32,6 +33,7 @@ const outlineVolumes = computed(() => appStore.outlineVolumes)
 const activeWorkflowVolumeId = computed(() => appStore.activeWorkflowVolumeId)
 const activeWorkflowVolume = computed(() => appStore.activeWorkflowVolume)
 const workflowStageStates = computed(() => currentProject.value?.novelWorkflowStages ?? [])
+const referenceWorks = computed(() => currentProject.value?.referenceWorks ?? [])
 const workflowStages = computed(() =>
   novelWorkflowStageDefinitions.map((definition) => ({
     ...definition,
@@ -143,6 +145,78 @@ function saveReferenceSettings(): void {
   }
 
   message.success('参考阶段基础信息已更新')
+}
+
+function mergeWritingStylePrompt(existingPrompt: string, incomingPrompt: string, sourceTitle: string): string {
+  const nextBlock = [`【参考拆书：${sourceTitle}】`, incomingPrompt.trim()].join('\n')
+  if (!existingPrompt.trim()) {
+    return nextBlock
+  }
+
+  if (existingPrompt.includes(`【参考拆书：${sourceTitle}】`)) {
+    return existingPrompt
+  }
+
+  return `${existingPrompt.trim()}\n\n${nextBlock}`
+}
+
+async function importReferenceNovelAnalysis(): Promise<void> {
+  if (!currentProject.value || isImportingReferenceNovel.value) {
+    return
+  }
+
+  isImportingReferenceNovel.value = true
+  try {
+    const result = await window.characterArc.importReferenceNovelAnalysis(toIpcPayload({
+      settings: appStore.appSettings,
+      projectTitle: currentProject.value.title,
+      projectGenre: currentProject.value.genre,
+      projectPlatform: targetPlatformDraft.value.trim() || currentProject.value.targetPlatform || '',
+      preferredTitle: referenceTitleDraft.value.trim(),
+      preferredSource: referenceSourceDraft.value.trim()
+    }))
+
+    if (result.canceled) {
+      return
+    }
+
+    if (!result.success || !result.result) {
+      throw new Error(result.error ?? '参考作品拆书失败')
+    }
+
+    const nextReferenceWorks = [...referenceWorks.value, result.result.referenceWork]
+    appStore.updateProject(currentProject.value.id, {
+      targetPlatform: targetPlatformDraft.value.trim() || currentProject.value.targetPlatform,
+      referenceWorks: nextReferenceWorks,
+      writingStylePrompt: mergeWritingStylePrompt(
+        currentProject.value.writingStylePrompt,
+        result.result.suggestedWritingStylePrompt,
+        result.result.referenceWork.title
+      )
+    })
+
+    if (activeWorkflowVolume.value?.id) {
+      appStore.appendWorkflowDocumentEntry(
+        activeWorkflowVolume.value.id,
+        'findings',
+        `${result.result.referenceWork.title} 拆书结果`,
+        result.result.findingsMarkdown
+      )
+
+      if (activeDocumentKey.value === 'findings') {
+        draftContent.value =
+          appStore.workflowDocuments.find((document) => document.key === 'findings')?.content ?? draftContent.value
+      }
+    }
+
+    referenceTitleDraft.value = ''
+    referenceSourceDraft.value = ''
+    message.success(`已完成《${result.result.referenceWork.title}》拆书并回填风格规则`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '参考作品拆书失败')
+  } finally {
+    isImportingReferenceNovel.value = false
+  }
 }
 
 async function generateReferenceInsights(): Promise<void> {
@@ -613,9 +687,32 @@ function resolveStageStatusLabel(status: string): string {
           </div>
           <div class="workflow-panel-actions">
             <n-button round strong secondary @click="saveReferenceSettings">保存参考信息</n-button>
+            <n-button round strong secondary :disabled="isImportingReferenceNovel" @click="importReferenceNovelAnalysis">
+              {{ isImportingReferenceNovel ? '拆书中...' : '导入小说并拆书' }}
+            </n-button>
             <n-button type="primary" round strong :disabled="isGeneratingReferenceInsights" @click="generateReferenceInsights">
               {{ isGeneratingReferenceInsights ? '提炼中...' : 'AI提炼参考阶段' }}
             </n-button>
+          </div>
+          <div v-if="referenceWorks.length > 0" class="reference-work-list">
+            <article v-for="work in referenceWorks" :key="work.id" class="reference-work-card">
+              <div class="reference-work-head">
+                <div>
+                  <strong>{{ work.title }}</strong>
+                  <p>{{ work.source }}<span v-if="work.fileName"> · {{ work.fileName }}</span></p>
+                </div>
+                <span v-if="work.analysis?.chapterCount" class="reference-work-badge">{{ work.analysis.chapterCount }} 段/章</span>
+              </div>
+              <p class="reference-work-summary">{{ work.analysis?.overview || work.notes || '已录入参考作品，等待进一步提炼。' }}</p>
+              <div v-if="work.analysis?.metrics?.length" class="reference-work-metrics">
+                <span v-for="metric in work.analysis.metrics.slice(0, 4)" :key="`${work.id}-${metric.label}`">
+                  {{ metric.label }}：{{ metric.value }}
+                </span>
+              </div>
+              <ul v-if="work.analysis?.styleRules?.length" class="reference-work-rules">
+                <li v-for="rule in work.analysis.styleRules.slice(0, 3)" :key="`${work.id}-${rule}`">{{ rule }}</li>
+              </ul>
+            </article>
           </div>
         </div>
 
@@ -957,6 +1054,88 @@ function resolveStageStatusLabel(status: string): string {
 
 .reference-form-grid.single {
   grid-template-columns: 1fr;
+}
+
+.reference-work-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.reference-work-card {
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
+  padding: 14px;
+}
+
+.reference-work-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reference-work-head strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--arc-text-primary);
+  font-size: 14px;
+}
+
+.reference-work-head p {
+  margin: 0;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+}
+
+.reference-work-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.reference-work-summary {
+  margin: 10px 0 0;
+  color: var(--arc-text-secondary);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.reference-work-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+
+.reference-work-metrics span {
+  display: inline-flex;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--arc-text-secondary);
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.reference-work-rules {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--arc-text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.reference-work-rules li + li {
+  margin-top: 4px;
 }
 
 .workflow-focus-card strong {

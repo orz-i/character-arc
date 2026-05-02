@@ -58,6 +58,53 @@ export interface ProjectSkillItem {
 }
 
 /** 项目参考作品条目 */
+export interface ReferenceStyleMetric {
+  /** 指标名称 */
+  label: string
+  /** 指标值 */
+  value: string
+}
+
+/** 项目参考作品拆书结果 */
+export interface ReferenceStyleAnalysis {
+  /** 拆书时间 */
+  createdAt: string
+  /** 来源文件名 */
+  fileName: string
+  /** 来源文件类型 */
+  fileType: 'txt' | 'md' | 'docx'
+  /** 参考作品字数 */
+  characterCount: number
+  /** 章节估计数 */
+  chapterCount: number
+  /** 开篇摘录 */
+  excerpt: string
+  /** 关键词 */
+  topKeywords: string[]
+  /** 局部统计指标 */
+  metrics: ReferenceStyleMetric[]
+  /** 风格骨架总述 */
+  overview: string
+  /** 句式与叙述密度 */
+  sentenceStyle: string
+  /** 对话比例与职责 */
+  dialogueRatio: string
+  /** 节奏控制方式 */
+  pacingControl: string
+  /** 情绪表达方式 */
+  emotionExpression: string
+  /** 叙事视角方式 */
+  narrativePerspective: string
+  /** 可复用风格规则 */
+  styleRules: string[]
+  /** 去具体化剧情骨架 */
+  plotOutline: string
+  /** 可复用仿写模板 */
+  reusableStylePrompt: string
+  /** 避免照搬的约束 */
+  avoidRules: string[]
+}
+
 export interface ReferenceWorkItem {
   /** 唯一标识 */
   id: string
@@ -67,6 +114,10 @@ export interface ReferenceWorkItem {
   source: string
   /** 备注 */
   notes: string
+  /** 来源文件名 */
+  fileName?: string
+  /** 拆书分析结果 */
+  analysis?: ReferenceStyleAnalysis
 }
 
 /** 章节 AI 模板分组 */

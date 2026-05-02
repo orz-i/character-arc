@@ -4,6 +4,8 @@ const node_path = require("node:path");
 const promises = require("node:fs/promises");
 const node_sqlite = require("node:sqlite");
 const node_crypto = require("node:crypto");
+const jieba$1 = require("@node-rs/jieba");
+const dict = require("@node-rs/jieba/dict");
 const DEFAULT_STRATEGY = {
   storyFocus: "先锁定主角最明确的欲望、最现实的阻力和最有辨识度的切入场景。",
   worldviewBias: "世界观只保留最支撑剧情推进的 3 条骨架信息，避免泛泛堆设定。",
@@ -329,6 +331,10 @@ const PROMPT_TASK_PROFILES = {
     label: "后续剧情链规划",
     defaultCapabilities: ["settings", "outline", "chapters", "worldview", "characters", "relations", "writing-style", "project-skills"]
   },
+  "reference-style-analysis": {
+    label: "参考作品仿写分析",
+    defaultCapabilities: ["settings", "analysis", "writing-style", "outline", "import-export"]
+  },
   "workflow-documents": {
     label: "流程文件生成",
     defaultCapabilities: ["settings", "workflow", "import-export"]
@@ -605,6 +611,42 @@ ${strategyBlock}
 8. ${writingStyleInstruction}
 
 返回格式：{"worldviewEntries":[{"type":"","title":"","content":""}],"outlineItems":[{"title":"","wordTarget":"","conflict":"","summary":""}]}`
+    });
+  }
+  if (task.task === "reference-style-analysis") {
+    return wrapPrompt({
+      system: "你是小说拆书分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、sentenceStyle、dialogueRatio、pacingControl、emotionExpression、narrativePerspective、styleRules、plotOutline、reusableStylePrompt、avoidRules。",
+      user: `请基于以下参考作品样本，提炼一套可以复用于后续原创写作的仿写规则。
+
+当前项目标题：${String(context.projectTitle ?? "")}
+当前项目题材：${String(context.projectGenre ?? "")}
+当前目标平台：${String(context.projectPlatform ?? "")}
+参考作品标题：${String(context.sourceTitle ?? "")}
+参考文件类型：${String(context.sourceFileType ?? "")}
+参考作品估计字数：${String(context.sourceCharacterCount ?? "")}
+参考作品章节估计：${String(context.sourceChapterCount ?? "")}
+局部统计：${JSON.stringify(context.styleMetrics ?? [])}
+关键词：${JSON.stringify(context.topKeywords ?? [])}
+开篇摘录：
+${String(context.sourceExcerpt ?? "")}
+
+代表样本：
+${String(context.analysisSample ?? "")}
+
+要求：
+1. 目标不是复述剧情，而是提炼"可复用、可去具体化"的写作骨架
+2. sentenceStyle 必须明确句式简洁度、长短句分布、描写密度或叙述颗粒度
+3. dialogueRatio 必须明确对白比例倾向，以及对白在推进剧情中的职责
+4. pacingControl 必须明确该作品如何控节奏、如何分配冲突和反馈
+5. emotionExpression 必须明确情绪是靠什么外化的，不要空泛说"有感染力"
+6. narrativePerspective 必须说明视角稳定性、镜头距离或场景组织方式
+7. styleRules 返回 4 到 6 条可执行风格规则，不能包含具体人名、地名、外挂、组织名或桥段专有设定
+8. plotOutline 用 120 到 220 字概括故事骨架，但必须抽象到可迁移层，不要把原剧情直接压缩复写
+9. reusableStylePrompt 写成可直接放进后续章节生成的风格模板，强调文笔、对白、节奏、情绪表达和去 AI 味约束，180 到 320 字
+10. avoidRules 返回 3 到 5 条主动避险规则，提醒后续创作不要照搬原作的专有名词、关系网和桥段顺序
+11. 全部内容必须用简体中文，严格去具体化，不能输出版权敏感的连续原文，也不能鼓励照抄
+
+返回格式：{"overview":"","sentenceStyle":"","dialogueRatio":"","pacingControl":"","emotionExpression":"","narrativePerspective":"","styleRules":["",""],"plotOutline":"","reusableStylePrompt":"","avoidRules":["",""]}`
     });
   }
   if (task.task === "workflow-documents") {
@@ -1177,6 +1219,7 @@ function resolveMaxTokens(task) {
     case "project-bootstrap":
       return 1500;
     case "chapter-analysis":
+    case "reference-style-analysis":
     case "inspiration-pack":
     case "outline-batch":
     case "outline-chain":
@@ -1524,6 +1567,28 @@ function normalizeChapterAnalysisResult(result) {
     revisionActions: toList(payload.revisionActions, ["先挑一段关键正文，按冲突、节奏和画面感三个维度逐句重写。"])
   };
 }
+function normalizeReferenceStyleAnalysisResult(result) {
+  const payload = result;
+  const toList = (value, fallback) => {
+    if (!Array.isArray(value)) {
+      return fallback;
+    }
+    const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 6);
+    return normalized.length ? normalized : fallback;
+  };
+  return {
+    overview: payload.overview?.trim() || "该参考作品的风格重在稳定推进、明确反馈和鲜明的场景驱动。",
+    sentenceStyle: payload.sentenceStyle?.trim() || "句式偏直给，叙述密度中等，以动作和结果优先。",
+    dialogueRatio: payload.dialogueRatio?.trim() || "对白占比适中，主要承担推进信息和制造张力。",
+    pacingControl: payload.pacingControl?.trim() || "节奏以短回合冲突推进，尽量避免长时间停滞解释。",
+    emotionExpression: payload.emotionExpression?.trim() || "情绪表达偏外显，通过动作、停顿和措辞变化落地。",
+    narrativePerspective: payload.narrativePerspective?.trim() || "叙事视角相对稳定，画面切换服务冲突与反馈。",
+    styleRules: toList(payload.styleRules, ["保持句子干净直接，每段都要有信息推进或关系变化。"]),
+    plotOutline: payload.plotOutline?.trim() || "故事骨架围绕主角目标、外部压迫和持续兑现的阶段收益展开。",
+    reusableStylePrompt: payload.reusableStylePrompt?.trim() || "用简洁句式、较高对白驱动和快反馈节奏写作，少做空泛描写，多让冲突在场景里直接落地。",
+    avoidRules: toList(payload.avoidRules, ["不要照搬原作的人名、专有设定、组织结构和具体桥段顺序。"])
+  };
+}
 function normalizeInspirationResult(result) {
   const entry = result;
   const tags = Array.isArray(entry.tags) ? entry.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 4) : [];
@@ -1553,6 +1618,12 @@ function isTaskResultUsable(task, result) {
     const analysis = result;
     return Boolean(
       analysis.overview.trim() && analysis.pacing.trim() && analysis.tension.trim() && analysis.continuity.trim() && analysis.highlights.length > 0 && analysis.risks.length > 0 && analysis.revisionActions.length > 0
+    );
+  }
+  if (task.task === "reference-style-analysis") {
+    const analysis = result;
+    return Boolean(
+      analysis.overview.trim() && analysis.sentenceStyle.trim() && analysis.dialogueRatio.trim() && analysis.pacingControl.trim() && analysis.emotionExpression.trim() && analysis.narrativePerspective.trim() && analysis.styleRules.length > 0 && analysis.plotOutline.trim() && analysis.reusableStylePrompt.trim() && analysis.avoidRules.length > 0
     );
   }
   if (task.task === "inspiration-pack") {
@@ -1599,6 +1670,8 @@ function normalizeTaskResult(task, rawText) {
       return normalizeOutlineBatchResult(parsed);
     case "chapter-analysis":
       return normalizeChapterAnalysisResult(parsed);
+    case "reference-style-analysis":
+      return normalizeReferenceStyleAnalysisResult(parsed);
     case "inspiration-pack":
       return normalizeInspirationPackResult(parsed);
     case "outline-item":
@@ -1656,6 +1729,168 @@ async function streamAiTask(task, handlers, signal) {
   const prompt = buildTaskPrompt(task);
   const rawText = await requestAiTextStream(settings, prompt, handlers, signal, task);
   return normalizeAssistantText(rawText);
+}
+const jieba = jieba$1.Jieba.withDict(dict.dict);
+const tfidf = jieba$1.TfIdf.withDict(dict.idf);
+const CHAPTER_HEADING_RE = /^(第[0-9零一二三四五六七八九十百千万两]+[章节回卷部集][^\n]{0,40})$/gm;
+const STOP_WORDS = /* @__PURE__ */ new Set([
+  "一个",
+  "一种",
+  "一些",
+  "没有",
+  "他们",
+  "自己",
+  "这个",
+  "那个",
+  "这里",
+  "那里",
+  "我们",
+  "你们",
+  "不是",
+  "然后",
+  "已经",
+  "可以",
+  "因为",
+  "所以",
+  "而且",
+  "只是",
+  "还是",
+  "如果",
+  "但是",
+  "开始",
+  "时候",
+  "东西",
+  "什么",
+  "怎么",
+  "一个人",
+  "一下",
+  "出来",
+  "进去",
+  "之后",
+  "之前",
+  "起来",
+  "下来",
+  "现在",
+  "真的",
+  "有些",
+  "这种",
+  "那种"
+]);
+function resolveFileType(filePath) {
+  const extension = node_path.extname(filePath).toLowerCase();
+  if (extension === ".docx") {
+    return "docx";
+  }
+  if (extension === ".md" || extension === ".markdown") {
+    return "md";
+  }
+  return "txt";
+}
+function normalizeNovelText(rawText) {
+  return rawText.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+async function readNovelText(filePath, fileType) {
+  if (fileType === "docx") {
+    const mammoth = await Promise.resolve().then(() => require("./index-DksbR5ML.js")).then((n) => n.index);
+    const result = await mammoth.extractRawText({ path: filePath });
+    return normalizeNovelText(result.value);
+  }
+  const buffer = await promises.readFile(filePath);
+  return normalizeNovelText(buffer.toString("utf-8"));
+}
+function splitParagraphs(text) {
+  return text.split(/\n+/).map((paragraph) => paragraph.trim()).filter(Boolean);
+}
+function splitChapters(text) {
+  const matches = Array.from(text.matchAll(CHAPTER_HEADING_RE));
+  if (matches.length >= 3) {
+    return matches.map((match, index) => {
+      const start = match.index ?? 0;
+      const end = matches[index + 1]?.index ?? text.length;
+      return text.slice(start, end).trim();
+    }).filter(Boolean);
+  }
+  const paragraphs = splitParagraphs(text);
+  if (paragraphs.length === 0) {
+    return [];
+  }
+  const chunks = [];
+  let current = "";
+  for (const paragraph of paragraphs) {
+    if ((current + "\n\n" + paragraph).length > 2600 && current.trim()) {
+      chunks.push(current.trim());
+      current = paragraph;
+      continue;
+    }
+    current = current ? `${current}
+
+${paragraph}` : paragraph;
+  }
+  if (current.trim()) {
+    chunks.push(current.trim());
+  }
+  return chunks;
+}
+function clipText(text, maxLength) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength).trim()}……`;
+}
+function buildAnalysisSample(chapters, text) {
+  const sourceSections = chapters.length >= 3 ? [chapters[0], chapters[Math.floor(chapters.length / 2)], chapters[chapters.length - 1]] : [text.slice(0, 2200), text.slice(Math.max(0, Math.floor(text.length / 2) - 1100), Math.max(0, Math.floor(text.length / 2) - 1100) + 2200), text.slice(Math.max(0, text.length - 2200))];
+  return sourceSections.map((section, index) => {
+    const label = index === 0 ? "开篇样本" : index === 1 ? "中段样本" : "后段样本";
+    return `【${label}】
+${clipText(section.trim(), 2200)}`;
+  }).join("\n\n");
+}
+function computeMetrics(text, chapters) {
+  const plainText = text.replace(/\s+/g, "");
+  const characterCount = plainText.length;
+  const paragraphs = splitParagraphs(text);
+  const sentences = text.split(/[。！？!?；;]+/).map((sentence) => sentence.replace(/\s+/g, "").trim()).filter(Boolean);
+  const dialogueParagraphCount = paragraphs.filter((paragraph) => /[“”「」『』"']/u.test(paragraph)).length;
+  const shortSentenceCount = sentences.filter((sentence) => sentence.length <= 18).length;
+  const emotionMarkCount = (text.match(/[!?！？]/g) ?? []).length;
+  const avgSentenceLength = sentences.length ? plainText.length / sentences.length : 0;
+  const dialogueParagraphRatio = paragraphs.length ? dialogueParagraphCount / paragraphs.length : 0;
+  const shortSentenceRatio = sentences.length ? shortSentenceCount / sentences.length : 0;
+  const emotionMarksPerThousand = characterCount ? emotionMarkCount / characterCount * 1e3 : 0;
+  return [
+    { label: "总字数", value: `${characterCount.toLocaleString("zh-CN")} 字` },
+    { label: "章节估计", value: `${Math.max(chapters.length, 1)} 段/章` },
+    { label: "平均句长", value: `${avgSentenceLength.toFixed(1)} 字/句` },
+    { label: "对白段落占比", value: `${(dialogueParagraphRatio * 100).toFixed(0)}%` },
+    { label: "短句比例", value: `${(shortSentenceRatio * 100).toFixed(0)}%` },
+    { label: "情绪标点密度", value: `每千字 ${emotionMarksPerThousand.toFixed(1)} 个` }
+  ];
+}
+function extractKeywords(text) {
+  const keywords = tfidf.extractKeywords(jieba, clipText(text, 36e3), 18);
+  return keywords.map((entry) => entry.keyword.trim()).filter((keyword) => keyword.length >= 2 && !STOP_WORDS.has(keyword)).slice(0, 10);
+}
+async function extractReferenceNovelContext(filePath) {
+  const fileType = resolveFileType(filePath);
+  const fileName = node_path.basename(filePath);
+  const title = node_path.basename(filePath, node_path.extname(filePath)).trim() || "未命名参考作品";
+  const text = await readNovelText(filePath, fileType);
+  if (!text.trim()) {
+    throw new Error("导入的文件没有可用正文，请确认文件内容不是空白。");
+  }
+  const chapters = splitChapters(text);
+  const excerpt = clipText(chapters[0] ?? text, 800);
+  return {
+    title,
+    fileName,
+    fileType,
+    excerpt,
+    analysisSample: buildAnalysisSample(chapters, text),
+    characterCount: text.replace(/\s+/g, "").length,
+    chapterCount: Math.max(chapters.length, 1),
+    topKeywords: extractKeywords(text),
+    metrics: computeMetrics(text, chapters)
+  };
 }
 const APP_DEFAULT_WIDTH = 1480;
 const APP_DEFAULT_HEIGHT = 920;
@@ -2231,6 +2466,35 @@ function normalizeProjectRecord(project) {
     projectSkills: Array.isArray(project.projectSkills) ? project.projectSkills : [],
     chapterAssistantTemplates: Array.isArray(project.chapterAssistantTemplates) ? project.chapterAssistantTemplates : []
   };
+}
+function buildImportedReferenceStylePrompt(title, analysis) {
+  return [
+    `以下规则来自参考作品《${title}》的拆书结果，已做去具体化处理，只借鉴文笔和结构骨架，不复用专有设定：`,
+    analysis.reusableStylePrompt,
+    `补充校准：句式 ${analysis.sentenceStyle}；对白 ${analysis.dialogueRatio}；节奏 ${analysis.pacingControl}；情绪 ${analysis.emotionExpression}；视角 ${analysis.narrativePerspective}。`
+  ].join("\n");
+}
+function buildImportedReferenceFindingsMarkdown(title, analysis, metrics, keywords) {
+  const metricLines = metrics.map((metric) => `- ${metric.label}：${metric.value}`).join("\n");
+  const styleRuleLines = analysis.styleRules.map((rule) => `- ${rule}`).join("\n");
+  const avoidRuleLines = analysis.avoidRules.map((rule) => `- ${rule}`).join("\n");
+  return [
+    `- 参考作品：${title}`,
+    `- 风格总述：${analysis.overview}`,
+    ...keywords.length ? [`- 关键词：${keywords.join("、")}`] : [],
+    "",
+    "### 局部统计",
+    metricLines,
+    "",
+    "### 可复用风格规则",
+    styleRuleLines,
+    "",
+    "### 去具体化剧情骨架",
+    analysis.plotOutline,
+    "",
+    "### 避免照搬",
+    avoidRuleLines
+  ].join("\n");
 }
 function normalizeWorkspacePayload(payload) {
   if ("workspaces" in payload && payload.workspaces) {
@@ -3048,6 +3312,93 @@ electron.ipcMain.handle("characterarc:pick-cover-image", async () => {
     filePath,
     dataUrl: `data:${mime};base64,${bytes.toString("base64")}`
   };
+});
+electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_event, payload) => {
+  const window = electron.BrowserWindow.getFocusedWindow();
+  if (!window) {
+    return { success: false, canceled: true };
+  }
+  const result = await electron.dialog.showOpenDialog(window, {
+    title: "导入参考小说",
+    properties: ["openFile"],
+    filters: [
+      { name: "小说文本", extensions: ["txt", "md", "docx"] }
+    ]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false, canceled: true };
+  }
+  try {
+    const request = payload ?? {};
+    const localContext = await extractReferenceNovelContext(result.filePaths[0]);
+    const resolvedTitle = request.preferredTitle?.trim() || localContext.title;
+    const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase();
+    const analysis = await generateAiTask({
+      task: "reference-style-analysis",
+      settings: request.settings,
+      context: {
+        projectTitle: request.projectTitle ?? "",
+        projectGenre: request.projectGenre ?? "",
+        projectPlatform: request.projectPlatform ?? "",
+        sourceTitle: resolvedTitle,
+        sourceFileType: localContext.fileType,
+        sourceCharacterCount: localContext.characterCount,
+        sourceChapterCount: localContext.chapterCount,
+        styleMetrics: localContext.metrics,
+        topKeywords: localContext.topKeywords,
+        sourceExcerpt: localContext.excerpt,
+        analysisSample: localContext.analysisSample
+      }
+    });
+    const importedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const referenceWork = {
+      id: `ref-${Date.now()}`,
+      title: resolvedTitle,
+      source: resolvedSource,
+      notes: analysis.overview,
+      fileName: localContext.fileName,
+      analysis: {
+        createdAt: importedAt,
+        fileName: localContext.fileName,
+        fileType: localContext.fileType,
+        characterCount: localContext.characterCount,
+        chapterCount: localContext.chapterCount,
+        excerpt: localContext.excerpt,
+        topKeywords: localContext.topKeywords,
+        metrics: localContext.metrics,
+        overview: analysis.overview,
+        sentenceStyle: analysis.sentenceStyle,
+        dialogueRatio: analysis.dialogueRatio,
+        pacingControl: analysis.pacingControl,
+        emotionExpression: analysis.emotionExpression,
+        narrativePerspective: analysis.narrativePerspective,
+        styleRules: analysis.styleRules,
+        plotOutline: analysis.plotOutline,
+        reusableStylePrompt: analysis.reusableStylePrompt,
+        avoidRules: analysis.avoidRules
+      }
+    };
+    return {
+      success: true,
+      canceled: false,
+      result: {
+        referenceWork,
+        suggestedWritingStylePrompt: buildImportedReferenceStylePrompt(resolvedTitle, analysis),
+        findingsMarkdown: buildImportedReferenceFindingsMarkdown(
+          resolvedTitle,
+          analysis,
+          localContext.metrics,
+          localContext.topKeywords
+        )
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      canceled: false,
+      error: error instanceof Error ? error.message : "参考作品拆书失败"
+    };
+  }
 });
 electron.ipcMain.handle("characterarc:ai-generate", async (_event, payload) => {
   try {

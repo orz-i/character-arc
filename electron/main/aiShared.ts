@@ -20,6 +20,7 @@ export type AiTaskName =
   | 'outline-item'        // 生成一条剧情大纲节点
   | 'outline-batch'       // 批量生成多条剧情大纲节点
   | 'outline-chain'       // 基于当前章节生成连续剧情链
+  | 'reference-style-analysis' // 拆书提炼仿写规则
   | 'workflow-documents'  // 生成项目流程文件
   | 'chapter-assistant'   // 章节创作助理（支持流式）
   | 'project-bootstrap'   // 项目初始化，批量生成世界观 + 大纲
@@ -123,6 +124,30 @@ export type ChapterAnalysisResult = {
   revisionActions: string[]
 }
 
+/** AI 返回的参考作品仿写分析结果 */
+export type ReferenceStyleAnalysisResult = {
+  /** 风格骨架总述 */
+  overview: string
+  /** 句式与叙述密度判断 */
+  sentenceStyle: string
+  /** 对话比例与对白用法 */
+  dialogueRatio: string
+  /** 节奏推进控制方式 */
+  pacingControl: string
+  /** 情绪表达方式 */
+  emotionExpression: string
+  /** 叙事视角或镜头组织方式 */
+  narrativePerspective: string
+  /** 4-6 条可复用风格规则 */
+  styleRules: string[]
+  /** 去具体化后的故事骨架摘要 */
+  plotOutline: string
+  /** 可直接复用到后续创作的风格模板 */
+  reusableStylePrompt: string
+  /** 3-5 条需要主动避开的照搬风险 */
+  avoidRules: string[]
+}
+
 /** AI 返回的单条灵感卡片结构 */
 export type InspirationResult = {
   /** 灵感类型：标题灵感 / 开篇钩子 / 场景火花 / 剧情转折 / 设定补完 / 人物动机 */
@@ -152,6 +177,7 @@ export type AiTaskResult =
   | WorkflowDocumentsResult
   | WorkflowStageDocumentsResult
   | ChapterAnalysisResult
+  | ReferenceStyleAnalysisResult
   | InspirationPackResult
 
 /** 提示词对：系统提示词 + 用户提示词 */
@@ -259,6 +285,7 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
       // 初始化任务需要一次性输出世界观 + 大纲，token 需求较高
       return 1500
     case 'chapter-analysis':
+    case 'reference-style-analysis':
     case 'inspiration-pack':
     case 'outline-batch':
     case 'outline-chain':

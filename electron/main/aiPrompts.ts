@@ -56,6 +56,15 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     })
   }
 
+  // ── 参考作品仿写分析任务 ──
+  if (task.task === 'reference-style-analysis') {
+    return wrapPrompt({
+      system:
+        '你是小说拆书分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、sentenceStyle、dialogueRatio、pacingControl、emotionExpression、narrativePerspective、styleRules、plotOutline、reusableStylePrompt、avoidRules。',
+      user: `请基于以下参考作品样本，提炼一套可以复用于后续原创写作的仿写规则。\n\n当前项目标题：${String(context.projectTitle ?? '')}\n当前项目题材：${String(context.projectGenre ?? '')}\n当前目标平台：${String(context.projectPlatform ?? '')}\n参考作品标题：${String(context.sourceTitle ?? '')}\n参考文件类型：${String(context.sourceFileType ?? '')}\n参考作品估计字数：${String(context.sourceCharacterCount ?? '')}\n参考作品章节估计：${String(context.sourceChapterCount ?? '')}\n局部统计：${JSON.stringify(context.styleMetrics ?? [])}\n关键词：${JSON.stringify(context.topKeywords ?? [])}\n开篇摘录：\n${String(context.sourceExcerpt ?? '')}\n\n代表样本：\n${String(context.analysisSample ?? '')}\n\n要求：\n1. 目标不是复述剧情，而是提炼"可复用、可去具体化"的写作骨架\n2. sentenceStyle 必须明确句式简洁度、长短句分布、描写密度或叙述颗粒度\n3. dialogueRatio 必须明确对白比例倾向，以及对白在推进剧情中的职责\n4. pacingControl 必须明确该作品如何控节奏、如何分配冲突和反馈\n5. emotionExpression 必须明确情绪是靠什么外化的，不要空泛说"有感染力"\n6. narrativePerspective 必须说明视角稳定性、镜头距离或场景组织方式\n7. styleRules 返回 4 到 6 条可执行风格规则，不能包含具体人名、地名、外挂、组织名或桥段专有设定\n8. plotOutline 用 120 到 220 字概括故事骨架，但必须抽象到可迁移层，不要把原剧情直接压缩复写\n9. reusableStylePrompt 写成可直接放进后续章节生成的风格模板，强调文笔、对白、节奏、情绪表达和去 AI 味约束，180 到 320 字\n10. avoidRules 返回 3 到 5 条主动避险规则，提醒后续创作不要照搬原作的专有名词、关系网和桥段顺序\n11. 全部内容必须用简体中文，严格去具体化，不能输出版权敏感的连续原文，也不能鼓励照抄\n\n返回格式：{"overview":"","sentenceStyle":"","dialogueRatio":"","pacingControl":"","emotionExpression":"","narrativePerspective":"","styleRules":["",""],"plotOutline":"","reusableStylePrompt":"","avoidRules":["",""]}`
+    })
+  }
+
   // ── 项目流程文件生成任务 ──
   if (task.task === 'workflow-documents') {
     const stageId = String(context.stageId ?? 'reference')

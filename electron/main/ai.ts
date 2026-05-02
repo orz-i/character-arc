@@ -18,6 +18,7 @@ import {
   type OutlineBatchResult,
   type OutlineResult,
   type ProjectBootstrapResult,
+  type ReferenceStyleAnalysisResult,
   type WorkflowDocumentsResult,
   type WorldviewResult
 } from './aiShared'
@@ -167,6 +168,37 @@ function normalizeChapterAnalysisResult(result: AiTaskResult): ChapterAnalysisRe
   }
 }
 
+function normalizeReferenceStyleAnalysisResult(result: AiTaskResult): ReferenceStyleAnalysisResult {
+  const payload = result as Partial<ReferenceStyleAnalysisResult>
+  const toList = (value: unknown, fallback: string[]): string[] => {
+    if (!Array.isArray(value)) {
+      return fallback
+    }
+
+    const normalized = value
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .slice(0, 6)
+
+    return normalized.length ? normalized : fallback
+  }
+
+  return {
+    overview: payload.overview?.trim() || '该参考作品的风格重在稳定推进、明确反馈和鲜明的场景驱动。',
+    sentenceStyle: payload.sentenceStyle?.trim() || '句式偏直给，叙述密度中等，以动作和结果优先。',
+    dialogueRatio: payload.dialogueRatio?.trim() || '对白占比适中，主要承担推进信息和制造张力。',
+    pacingControl: payload.pacingControl?.trim() || '节奏以短回合冲突推进，尽量避免长时间停滞解释。',
+    emotionExpression: payload.emotionExpression?.trim() || '情绪表达偏外显，通过动作、停顿和措辞变化落地。',
+    narrativePerspective: payload.narrativePerspective?.trim() || '叙事视角相对稳定，画面切换服务冲突与反馈。',
+    styleRules: toList(payload.styleRules, ['保持句子干净直接，每段都要有信息推进或关系变化。']),
+    plotOutline: payload.plotOutline?.trim() || '故事骨架围绕主角目标、外部压迫和持续兑现的阶段收益展开。',
+    reusableStylePrompt:
+      payload.reusableStylePrompt?.trim() ||
+      '用简洁句式、较高对白驱动和快反馈节奏写作，少做空泛描写，多让冲突在场景里直接落地。',
+    avoidRules: toList(payload.avoidRules, ['不要照搬原作的人名、专有设定、组织结构和具体桥段顺序。'])
+  }
+}
+
 /** 标准化单条灵感卡片，限制标签最多 4 个，为缺失字段填入默认值 */
 function normalizeInspirationResult(result: AiTaskResult): InspirationResult {
   const entry = result as Partial<InspirationResult>
@@ -218,6 +250,22 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
         analysis.highlights.length > 0 &&
         analysis.risks.length > 0 &&
         analysis.revisionActions.length > 0
+    )
+  }
+
+  if (task.task === 'reference-style-analysis') {
+    const analysis = result as ReferenceStyleAnalysisResult
+    return Boolean(
+      analysis.overview.trim() &&
+        analysis.sentenceStyle.trim() &&
+        analysis.dialogueRatio.trim() &&
+        analysis.pacingControl.trim() &&
+        analysis.emotionExpression.trim() &&
+        analysis.narrativePerspective.trim() &&
+        analysis.styleRules.length > 0 &&
+        analysis.plotOutline.trim() &&
+        analysis.reusableStylePrompt.trim() &&
+        analysis.avoidRules.length > 0
     )
   }
 
@@ -284,6 +332,8 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
       return normalizeOutlineBatchResult(parsed)
     case 'chapter-analysis':
       return normalizeChapterAnalysisResult(parsed)
+    case 'reference-style-analysis':
+      return normalizeReferenceStyleAnalysisResult(parsed)
     case 'inspiration-pack':
       return normalizeInspirationPackResult(parsed)
     case 'outline-item':

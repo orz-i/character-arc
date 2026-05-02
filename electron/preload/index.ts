@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('characterArc', {
   exportText: (payload: unknown) => ipcRenderer.invoke('characterarc:export-text', toIpcPayload(payload)),
   /** 从 JSON 文件导入项目数据 */
   importJson: () => ipcRenderer.invoke('characterarc:import-json'),
+  /** 导入参考小说并执行拆书分析 */
+  importReferenceNovelAnalysis: (payload: unknown) => ipcRenderer.invoke('characterarc:import-reference-novel-analysis', toIpcPayload(payload)),
   /** 扫描当前项目目录下的 .project-skills/ */
   scanProjectSkills: () => ipcRenderer.invoke('characterarc:project-skills-scan'),
   /** 读取当前项目已安装 skills 的正文内容（供 AI 内部使用） */

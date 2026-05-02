@@ -4,6 +4,8 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { generateAiTask, streamAiTask, testAiConnection, type AiTaskPayload } from './ai'
+import { extractReferenceNovelContext, type ReferenceStyleMetric } from './referenceAnalysis'
+import type { ReferenceStyleAnalysisResult } from './aiShared'
 
 // ── 窗口尺寸常量 ──
 const APP_DEFAULT_WIDTH = 1480     // 主窗口默认宽度
@@ -32,6 +34,15 @@ type AssistantContextPayload = {
     chapterId: string
     text: string
   } | null
+}
+
+type ReferenceNovelImportRequest = {
+  settings: AiTaskPayload['settings']
+  projectTitle?: string
+  projectGenre?: string
+  projectPlatform?: string
+  preferredTitle?: string
+  preferredSource?: string
 }
 
 // 缓存最新的助手上下文和提示词，新窗口打开时可立即同步
@@ -685,6 +696,27 @@ type WorkspacePayload = {
       title: string
       source: string
       notes: string
+      fileName?: string
+      analysis?: {
+        createdAt: string
+        fileName: string
+        fileType: 'txt' | 'md' | 'docx'
+        characterCount: number
+        chapterCount: number
+        excerpt: string
+        topKeywords: string[]
+        metrics: ReferenceStyleMetric[]
+        overview: string
+        sentenceStyle: string
+        dialogueRatio: string
+        pacingControl: string
+        emotionExpression: string
+        narrativePerspective: string
+        styleRules: string[]
+        plotOutline: string
+        reusableStylePrompt: string
+        avoidRules: string[]
+      }
     }>
     writingStylePresetId: string
     writingStylePrompt: string
@@ -1016,6 +1048,37 @@ function normalizeProjectRecord(project: Partial<WorkspacePayload['projects'][nu
     projectSkills: Array.isArray(project.projectSkills) ? project.projectSkills : [],
     chapterAssistantTemplates: Array.isArray(project.chapterAssistantTemplates) ? project.chapterAssistantTemplates : []
   }
+}
+
+function buildImportedReferenceStylePrompt(title: string, analysis: ReferenceStyleAnalysisResult): string {
+  return [
+    `以下规则来自参考作品《${title}》的拆书结果，已做去具体化处理，只借鉴文笔和结构骨架，不复用专有设定：`,
+    analysis.reusableStylePrompt,
+    `补充校准：句式 ${analysis.sentenceStyle}；对白 ${analysis.dialogueRatio}；节奏 ${analysis.pacingControl}；情绪 ${analysis.emotionExpression}；视角 ${analysis.narrativePerspective}。`
+  ].join('\n')
+}
+
+function buildImportedReferenceFindingsMarkdown(title: string, analysis: ReferenceStyleAnalysisResult, metrics: ReferenceStyleMetric[], keywords: string[]): string {
+  const metricLines = metrics.map((metric) => `- ${metric.label}：${metric.value}`).join('\n')
+  const styleRuleLines = analysis.styleRules.map((rule) => `- ${rule}`).join('\n')
+  const avoidRuleLines = analysis.avoidRules.map((rule) => `- ${rule}`).join('\n')
+  return [
+    `- 参考作品：${title}`,
+    `- 风格总述：${analysis.overview}`,
+    ...(keywords.length ? [`- 关键词：${keywords.join('、')}`] : []),
+    '',
+    '### 局部统计',
+    metricLines,
+    '',
+    '### 可复用风格规则',
+    styleRuleLines,
+    '',
+    '### 去具体化剧情骨架',
+    analysis.plotOutline,
+    '',
+    '### 避免照搬',
+    avoidRuleLines
+  ].join('\n')
 }
 
 /**
@@ -2155,6 +2218,100 @@ ipcMain.handle('characterarc:pick-cover-image', async () => {
     canceled: false,
     filePath,
     dataUrl: `data:${mime};base64,${bytes.toString('base64')}`
+  }
+})
+
+/** 导入参考小说并完成拆书分析，返回可回填到项目的仿写结果 */
+ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, payload: ReferenceNovelImportRequest) => {
+  const window = BrowserWindow.getFocusedWindow()
+  if (!window) {
+    return { success: false, canceled: true }
+  }
+
+  const result = await dialog.showOpenDialog(window, {
+    title: '导入参考小说',
+    properties: ['openFile'],
+    filters: [
+      { name: '小说文本', extensions: ['txt', 'md', 'docx'] }
+    ]
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { success: false, canceled: true }
+  }
+
+  try {
+    const request = (payload ?? {}) as ReferenceNovelImportRequest
+    const localContext = await extractReferenceNovelContext(result.filePaths[0])
+    const resolvedTitle = request.preferredTitle?.trim() || localContext.title
+    const resolvedSource = request.preferredSource?.trim() || localContext.fileType.toUpperCase()
+    const analysis = await generateAiTask({
+      task: 'reference-style-analysis',
+      settings: request.settings,
+      context: {
+        projectTitle: request.projectTitle ?? '',
+        projectGenre: request.projectGenre ?? '',
+        projectPlatform: request.projectPlatform ?? '',
+        sourceTitle: resolvedTitle,
+        sourceFileType: localContext.fileType,
+        sourceCharacterCount: localContext.characterCount,
+        sourceChapterCount: localContext.chapterCount,
+        styleMetrics: localContext.metrics,
+        topKeywords: localContext.topKeywords,
+        sourceExcerpt: localContext.excerpt,
+        analysisSample: localContext.analysisSample
+      }
+    }) as ReferenceStyleAnalysisResult
+
+    const importedAt = new Date().toISOString()
+    const referenceWork = {
+      id: `ref-${Date.now()}`,
+      title: resolvedTitle,
+      source: resolvedSource,
+      notes: analysis.overview,
+      fileName: localContext.fileName,
+      analysis: {
+        createdAt: importedAt,
+        fileName: localContext.fileName,
+        fileType: localContext.fileType,
+        characterCount: localContext.characterCount,
+        chapterCount: localContext.chapterCount,
+        excerpt: localContext.excerpt,
+        topKeywords: localContext.topKeywords,
+        metrics: localContext.metrics,
+        overview: analysis.overview,
+        sentenceStyle: analysis.sentenceStyle,
+        dialogueRatio: analysis.dialogueRatio,
+        pacingControl: analysis.pacingControl,
+        emotionExpression: analysis.emotionExpression,
+        narrativePerspective: analysis.narrativePerspective,
+        styleRules: analysis.styleRules,
+        plotOutline: analysis.plotOutline,
+        reusableStylePrompt: analysis.reusableStylePrompt,
+        avoidRules: analysis.avoidRules
+      }
+    }
+
+    return {
+      success: true,
+      canceled: false,
+      result: {
+        referenceWork,
+        suggestedWritingStylePrompt: buildImportedReferenceStylePrompt(resolvedTitle, analysis),
+        findingsMarkdown: buildImportedReferenceFindingsMarkdown(
+          resolvedTitle,
+          analysis,
+          localContext.metrics,
+          localContext.topKeywords
+        )
+      }
+    }
+  } catch (error) {
+    return {
+      success: false,
+      canceled: false,
+      error: error instanceof Error ? error.message : '参考作品拆书失败'
+    }
   }
 })
 
