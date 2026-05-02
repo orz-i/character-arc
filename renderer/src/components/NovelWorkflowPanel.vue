@@ -72,6 +72,18 @@ const stageDocuments = computed(() =>
   (workflowStageDocumentMap[activeStage.value.id] ?? []).map((key) => workflowDocuments.value.find((document) => document.key === key)).filter(Boolean)
 )
 
+function syncDraftContentFromActiveDocument(): void {
+  draftContent.value = activeDocument.value?.content ?? ''
+}
+
+watch(
+  activeDocument,
+  () => {
+    syncDraftContentFromActiveDocument()
+  },
+  { immediate: true }
+)
+
 // 分卷切换时同步文档内容
 watch(
   () => activeWorkflowVolumeId.value,
@@ -80,13 +92,9 @@ watch(
     if (firstDocKey) {
       activeDocumentKey.value = firstDocKey
     }
-    draftContent.value = workflowDocuments.value.find((d) => d.key === activeDocumentKey.value)?.content ?? ''
+    syncDraftContentFromActiveDocument()
   }
 )
-
-if (activeDocument.value) {
-  draftContent.value = activeDocument.value.content
-}
 
 if (currentProject.value) {
   premiseDraft.value = currentProject.value.writingStylePrompt
@@ -119,13 +127,13 @@ function setStage(stageId: NovelWorkflowStageId): void {
   const firstDocument = workflowStageDocumentMap[stageId]?.[0]
   if (firstDocument) {
     activeDocumentKey.value = firstDocument
-    draftContent.value = workflowDocuments.value.find((document) => document.key === firstDocument)?.content ?? ''
+    syncDraftContentFromActiveDocument()
   }
 }
 
 function setDocument(key: WorkflowDocumentKey): void {
   activeDocumentKey.value = key
-  draftContent.value = workflowDocuments.value.find((document) => document.key === key)?.content ?? ''
+  syncDraftContentFromActiveDocument()
 }
 
 function saveDocument(): void {
@@ -224,11 +232,7 @@ async function importReferenceNovelAnalysis(): Promise<void> {
         `${result.result.referenceWork.title} 拆书结果`,
         result.result.findingsMarkdown
       )
-
-      if (activeDocumentKey.value === 'findings') {
-        draftContent.value =
-          appStore.workflowDocuments.find((document) => document.key === 'findings')?.content ?? draftContent.value
-      }
+      syncDraftContentFromActiveDocument()
     }
 
     setReferenceProgress({
@@ -323,6 +327,7 @@ async function generateReferenceInsights(): Promise<void> {
         }))
         .filter((item) => item.content.trim())
     )
+    syncDraftContentFromActiveDocument()
     setReferenceProgress({
       phase: 'done',
       message: '参考阶段文件已更新，后续立项会直接读取这些阶段结论。',
@@ -390,6 +395,7 @@ async function generatePremiseInsights(): Promise<void> {
         }))
         .filter((item) => item.content.trim())
     )
+    syncDraftContentFromActiveDocument()
     message.success('已生成故事立项阶段流程文件')
   } catch (error) {
     message.error(error instanceof Error ? error.message : '故事立项生成失败')
@@ -457,6 +463,7 @@ async function generateSettingInsights(): Promise<void> {
         }))
         .filter((item) => item.content.trim())
     )
+    syncDraftContentFromActiveDocument()
     message.success('已生成设定搭建阶段流程文件')
   } catch (error) {
     message.error(error instanceof Error ? error.message : '设定搭建生成失败')
@@ -533,10 +540,7 @@ async function generateWorkflowDocuments(): Promise<void> {
         }))
         .filter((item) => item.content.trim())
     )
-
-    if (activeDocumentKey.value) {
-      draftContent.value = payload[activeDocumentKey.value] ?? draftContent.value
-    }
+    syncDraftContentFromActiveDocument()
 
     message.success('AI 已生成当前项目流程文件')
   } catch (error) {
