@@ -51,6 +51,7 @@
       "node_modules/@node-rs/**"
     ],
     "win": {
+      "icon": "resources/icon.ico",
       "target": [
         "nsis"
       ]
@@ -58,6 +59,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
       "installerLanguages": ["zh_CN", "en_US"],
       "language": "2052",
       "artifactName": "${productName}-${version}-setup.${ext}"
