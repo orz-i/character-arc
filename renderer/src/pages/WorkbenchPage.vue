@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
+  BookMarked,
   BookOpenText,
   ChevronLeft,
   FileText,
@@ -25,6 +26,7 @@ import CharactersPanel from '@/components/CharactersPanel.vue'
 import RelationsPanel from '@/components/RelationsPanel.vue'
 import InspirationPanel from '@/components/InspirationPanel.vue'
 import OutlinePanel from '@/components/OutlinePanel.vue'
+import PlotThreadsPanel from '@/components/PlotThreadsPanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import SearchResultsPanel from '@/components/SearchResultsPanel.vue'
 import type { PanelName } from '@/types/app'
@@ -45,6 +47,7 @@ const panelSearch = reactive<Record<string, string>>({
   relations: '',
   inspiration: '',
   outline: '',
+  threads: '',
   chapters: '',
   settings: ''
 })
@@ -61,6 +64,7 @@ const sidebarItems = [
   { id: 'relations', label: '关系组织', description: '维护势力结构、人物关系与成员归属', icon: Network, color: '#6b7280' },
   { id: 'inspiration', label: '灵感模块', description: '收集标题、桥段、转折与人物动机', icon: Lightbulb, color: '#f59e0b' },
   { id: 'outline', label: '剧情大纲', description: '组织卷宗结构与关键情节点', icon: GitMerge, color: '#10b981' },
+  { id: 'threads', label: '剧情线索', description: '追踪未收尾伏笔与活跃剧情线', icon: BookMarked, color: '#6366f1' },
   { id: 'chapters', label: '章节创作', description: '进入正文草稿与章节推进流程', icon: FileText, color: '#3b82f6' }
 ] as const
 
@@ -302,6 +306,7 @@ watch(searchKeyword, (value) => {
           <RelationsPanel v-else-if="appStore.activePanel === 'relations'" key="relations" :search-query="normalizedSearch" />
           <InspirationPanel v-else-if="appStore.activePanel === 'inspiration'" key="inspiration" :search-query="normalizedSearch" />
           <OutlinePanel v-else-if="appStore.activePanel === 'outline'" key="outline" :search-query="normalizedSearch" />
+          <PlotThreadsPanel v-else-if="appStore.activePanel === 'threads'" key="threads" :search-query="normalizedSearch" />
           <SettingsPanel v-else key="settings" />
         </Transition>
       </div>

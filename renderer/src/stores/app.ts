@@ -52,6 +52,7 @@ import type {
   OutlineItem,
   OutlineVolume,
   PanelName,
+  PlotThread,
   ProjectImportPayload,
   ProjectSummary,
   ProjectWorkspaceData,
@@ -211,6 +212,8 @@ export const useAppStore = defineStore('app', () => {
   const chapterVersions = computed(() => currentWorkspace.value.chapterVersions)
   /** 当前项目的 AI 聊天消息列表 */
   const messages = computed(() => currentWorkspace.value.messages)
+  /** 当前项目的剧情线索列表 */
+  const plotThreads = computed(() => currentWorkspace.value.plotThreads)
   /** 流程面板当前激活的分卷（回退到第一个分卷） */
   const activeWorkflowVolume = computed(
     () => outlineVolumes.value.find((v) => v.id === activeWorkflowVolumeId.value) ?? outlineVolumes.value[0]
@@ -1460,6 +1463,56 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
+  // ── 剧情线索 CRUD ──
+  function createPlotThread(payload?: Partial<PlotThread>): void {
+    const now = new Date().toISOString()
+    const nextThread: PlotThread = {
+      id: uniqueId('thread'),
+      title: payload?.title?.trim() || '未命名线索',
+      description: payload?.description?.trim() || '',
+      openedInChapterId: payload?.openedInChapterId || '',
+      status: 'open',
+      closedInChapterId: undefined,
+      tags: Array.isArray(payload?.tags) ? payload.tags.map((t) => String(t).trim()).filter(Boolean) : [],
+      createdAt: now,
+      updatedAt: now
+    }
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      plotThreads: [...workspace.plotThreads, nextThread]
+    }))
+    schedulePersist('fast')
+  }
+
+  function updatePlotThread(threadId: string, payload: Partial<PlotThread>): void {
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      plotThreads: workspace.plotThreads.map((thread) =>
+        thread.id === threadId
+          ? {
+              ...thread,
+              ...payload,
+              title: payload.title?.trim() || thread.title,
+              description: payload.description?.trim() ?? thread.description,
+              tags: Array.isArray(payload.tags)
+                ? payload.tags.map((t) => String(t).trim()).filter(Boolean)
+                : thread.tags,
+              updatedAt: new Date().toISOString()
+            }
+          : thread
+      )
+    }))
+    schedulePersist('fast')
+  }
+
+  function deletePlotThread(threadId: string): void {
+    updateCurrentWorkspace((workspace) => ({
+      ...workspace,
+      plotThreads: workspace.plotThreads.filter((thread) => thread.id !== threadId)
+    }))
+    schedulePersist('fast')
+  }
+
   // ── 大纲分卷 CRUD ──
   /** 创建新的大纲分卷，返回新分卷 ID */
   function createOutlineVolume(payload?: Partial<OutlineVolume>): string {
@@ -2124,6 +2177,7 @@ export const useAppStore = defineStore('app', () => {
     createOutlineItem,
     createOutlineItemsAfter,
     createOutlineVolume,
+    createPlotThread,
     createWorldviewEntry,
     createChapter,
     createChapterFromOutlineItem,
@@ -2143,6 +2197,7 @@ export const useAppStore = defineStore('app', () => {
     deleteOrganization,
     deleteOrganizationMembership,
     deleteOutlineItem,
+    deletePlotThread,
     deleteProject,
     deleteWorldviewEntry,
     insertIntoChapter,
@@ -2164,6 +2219,7 @@ export const useAppStore = defineStore('app', () => {
     outlineVolumes,
     pendingAssistantRequest,
     pendingChapterInsertion,
+    plotThreads,
     projects,
     pushAssistantMessage,
     pushUserMessage,
@@ -2201,6 +2257,7 @@ export const useAppStore = defineStore('app', () => {
     updateOrganizationMembership,
     updateOutlineItem,
     updateOutlineVolume,
+    updatePlotThread,
     updateWorldviewEntry,
     worldviewEntries,
     persistenceError

@@ -25,6 +25,7 @@ export type AiTaskName =
   | 'workflow-documents'  // 生成项目流程文件
   | 'chapter-assistant'   // 章节创作助理（支持流式）
   | 'chapter-first-draft' // 章节初稿生成（支持流式）
+  | 'chapter-summarize'   // 章节摘要自动生成（4维结构化文本）
   | 'project-bootstrap'   // 项目初始化，批量生成世界观 + 大纲
   | 'chapter-analysis'    // 章节质量分析
   | 'inspiration-pack'    // 批量生成灵感卡片

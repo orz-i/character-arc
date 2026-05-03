@@ -9,6 +9,7 @@ import type {
   OrganizationMembership,
   OutlineItem,
   OutlineVolume,
+  PlotThread,
   ProjectSummary,
   WorldviewEntry
 } from '@/types/app'
@@ -29,6 +30,14 @@ type ChapterAssistantContextInput = {
     summary: string
     preview: string
   }>
+  volumeChapterSummaries: Array<{                       // 当前分卷内其他章节的摘要（不含 relatedChapters）
+    title: string
+    summary: string
+  }>
+  novelOpenerSummary?: {                                // 全书第 1 章摘要（世界/角色基调参照）
+    title: string
+    summary: string
+  }
   recentMessages: ChapterAssistantMessage[]             // 最近的对话消息，用于维持对话上下文
   worldviewEntries: WorldviewEntry[]                    // 世界观设定列表
   characters: CharacterCard[]                           // 角色卡列表
@@ -37,6 +46,7 @@ type ChapterAssistantContextInput = {
   organizationMemberships: OrganizationMembership[]     // 组织成员关系列表
   inspirationEntries: InspirationEntry[]                // 灵感条目列表
   outlineItems: OutlineItem[]                           // 大纲条目列表
+  plotThreads: PlotThread[]                             // 剧情线索（活跃伏笔）
   projectSkills?: Array<{                               // 当前项目启用的 skills 摘要
     id: string
     name: string
@@ -60,6 +70,14 @@ type ChapterFirstDraftContextInput = {
     summary: string
     preview: string
   }>
+  volumeChapterSummaries: Array<{                       // 当前分卷内其他章节的摘要
+    title: string
+    summary: string
+  }>
+  novelOpenerSummary?: {                                // 全书第 1 章摘要
+    title: string
+    summary: string
+  }
   worldviewEntries: WorldviewEntry[]
   characters: CharacterCard[]
   organizations: OrganizationEntry[]
@@ -67,6 +85,7 @@ type ChapterFirstDraftContextInput = {
   organizationMemberships: OrganizationMembership[]
   inspirationEntries: InspirationEntry[]
   outlineItems: OutlineItem[]
+  plotThreads: PlotThread[]                             // 剧情线索（活跃伏笔）
   projectSkills?: Array<{
     id: string
     name: string
@@ -109,7 +128,13 @@ export function buildChapterAssistantContext(input: ChapterAssistantContextInput
     chapterVolumeTitle: input.chapterVolume?.title,
     chapterVolumeSummary: input.chapterVolume?.summary,
     relatedChapters: input.relatedChapters,
+    volumeChapterSummaries: input.volumeChapterSummaries,
+    novelOpenerSummary: input.novelOpenerSummary ?? null,
     recentMessages: input.recentMessages,
+    // 只传递活跃（open）的剧情线索，精简字段
+    plotThreads: input.plotThreads
+      .filter((t) => t.status === 'open')
+      .map((t) => ({ title: t.title, description: t.description, status: t.status })),
     // 精简世界观字段，只保留标题和内容
     worldviewEntries: input.worldviewEntries.map((entry) => ({
       title: entry.title,
@@ -193,6 +218,12 @@ export function buildChapterFirstDraftContext(input: ChapterFirstDraftContextInp
     chapterVolumeTitle: input.chapterVolume?.title,
     chapterVolumeSummary: input.chapterVolume?.summary,
     relatedChapters: input.relatedChapters,
+    volumeChapterSummaries: input.volumeChapterSummaries,
+    novelOpenerSummary: input.novelOpenerSummary ?? null,
+    // 只传递活跃（open）的剧情线索
+    plotThreads: input.plotThreads
+      .filter((t) => t.status === 'open')
+      .map((t) => ({ title: t.title, description: t.description, status: t.status })),
     worldviewEntries: input.worldviewEntries.map((entry) => ({
       title: entry.title,
       content: entry.content

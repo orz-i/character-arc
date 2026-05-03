@@ -59,6 +59,7 @@ const isGeneratingInspiration = ref(false) // AI 生成章节灵感时的加载�
 const isGeneratingOutlineChain = ref(false)
 const isGeneratingChapterDraft = ref(false)
 const isStoppingChapterDraft = ref(false)
+const isGeneratingSummary = ref(false) // AI 自动生成章节摘要时的加载状态
 const chapterDraftStreamId = ref<string | null>(null)
 const chapterDraftStreamingContent = ref('')
 const chapterDraftExecutionLabel = ref('')
@@ -725,12 +726,27 @@ async function generateChapterFirstDraft(): Promise<void> {
         preview: getChapterPreviewText(item.content, '该章节暂无正文')
       }))
 
+    // Tier 2：当前分卷内其他章节的摘要，排除 Tier 1 中已包含的
+    const relatedTitles = new Set(relatedChapters.map((r) => r.title))
+    const volumeChapterSummaries = appStore.chapters
+      .filter((c) => c.volumeId === chapter.volumeId && c.id !== chapter.id && !relatedTitles.has(c.title))
+      .map((c) => ({ title: c.title, summary: c.summary }))
+
+    // Tier 3：全书第 1 章摘要（基调参照，仅当不在前两层时添加）
+    const firstChapter = appStore.chapters[0]
+    const novelOpenerSummary =
+      firstChapter && firstChapter.id !== chapter.id && !relatedTitles.has(firstChapter.title)
+        ? { title: firstChapter.title, summary: firstChapter.summary }
+        : undefined
+
     const currentChapterContent = currentPlainContent.value
     const context = buildChapterFirstDraftContext({
       project,
       chapter,
       chapterVolume,
       relatedChapters,
+      volumeChapterSummaries,
+      novelOpenerSummary,
       worldviewEntries: appStore.worldviewEntries,
       characters: appStore.characters,
       organizations: appStore.organizations,
@@ -738,6 +754,7 @@ async function generateChapterFirstDraft(): Promise<void> {
       organizationMemberships: appStore.organizationMemberships,
       inspirationEntries: appStore.inspirationEntries,
       outlineItems: appStore.outlineItems.filter((item) => item.volumeId === chapter.volumeId),
+      plotThreads: appStore.plotThreads,
       chapterContent: currentChapterContent,
       targetWordCount,
       userPrompt: `请生成这一章的完整初稿，目标字数控制在 ${targetWordCount} 字左右，可上下浮动 10%。如果当前正文为空，就从零起稿；如果当前正文不为空，也按整章重写处理，而不是续写。`,
@@ -785,6 +802,50 @@ function resetChapterDraftStreamingState(): void {
   chapterDraftExecutionLabel.value = ''
   isGeneratingChapterDraft.value = false
   isStoppingChapterDraft.value = false
+}
+
+async function generateChapterSummary(): Promise<void> {
+  const chapter = appStore.selectedChapter
+  if (!chapter || isGeneratingSummary.value) return
+  const plainContent = getPlainTextFromEditorContent(chapter.content ?? '').trim()
+  if (!plainContent) {
+    message.warning('当前章节没有正文内容，无法生成摘要')
+    return
+  }
+
+  isGeneratingSummary.value = true
+  try {
+    const result = await window.characterArc.generateAi(toIpcPayload({
+      task: 'chapter-summarize',
+      settings: appStore.appSettings,
+      context: {
+        chapterTitle: chapter.title,
+        chapterContent: plainContent
+      }
+    }))
+
+    if (!result.success) {
+      throw new Error(result.error ?? 'AI 摘要生成失败')
+    }
+
+    const summaryText = String(
+      result.result && typeof result.result === 'object'
+        ? (result.result as Record<string, unknown>).content ?? ''
+        : ''
+    ).trim()
+
+    if (summaryText) {
+      appStore.updateChapter(chapter.id, { summary: summaryText })
+      chapterForm.summary = summaryText
+      message.success('已生成章节摘要')
+    } else {
+      message.warning('AI 返回了空摘要，请稍后重试')
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'AI 摘要生成失败')
+  } finally {
+    isGeneratingSummary.value = false
+  }
 }
 
 function closeChapterDraftModal(): void {
@@ -1720,12 +1781,25 @@ onBeforeUnmount(() => {
           <n-input v-model:value="chapterForm.title" placeholder="例如：第4章：夜城回响" />
         </n-form-item>
         <n-form-item label="章节摘要">
-          <n-input
-              v-model:value="chapterForm.summary"
-              type="textarea"
-              :autosize="{ minRows: 3, maxRows: 5 }"
-              placeholder="用 1 到 2 句话概括这一章的核心事件和推进点..."
-          />
+          <div class="summary-field-wrap">
+            <n-input
+                v-model:value="chapterForm.summary"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 5 }"
+                placeholder="用 1 到 2 句话概括这一章的核心事件和推进点..."
+            />
+            <n-button
+                size="small"
+                secondary
+                :loading="isGeneratingSummary"
+                :disabled="isGeneratingSummary"
+                class="summary-ai-btn"
+                @click="generateChapterSummary()"
+            >
+              <template #icon><Sparkles :size="13" /></template>
+              AI 生成
+            </n-button>
+          </div>
         </n-form-item>
         <n-form-item label="章节状态">
           <n-select v-model:value="chapterForm.status" :options="chapterStatusOptions" />
@@ -2272,6 +2346,9 @@ onBeforeUnmount(() => {
 .action-btn.ghost { background: transparent; border: 1px solid var(--chapter-border); color: var(--arc-text-secondary); }
 
 .text-link { background: transparent; border: none; padding: 0; cursor: pointer; color: var(--arc-primary); font-size: 12px; font-weight: 600; }
+
+.summary-field-wrap { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.summary-ai-btn { align-self: flex-end; }
 
 .inspiration-card.side-card { border-color: color-mix(in srgb, var(--arc-primary) 10%, var(--chapter-border)); background: color-mix(in srgb, var(--arc-primary) 4%, var(--arc-bg-surface)); }
 .inspiration-workbench-link { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 1px solid var(--arc-border); border-radius: var(--arc-radius-md); background: var(--arc-bg-body); color: var(--arc-text-secondary); font-size: 11px; font-weight: 700; padding: 6px 11px; }

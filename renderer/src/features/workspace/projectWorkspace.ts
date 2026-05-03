@@ -10,6 +10,7 @@ import type {
   OrganizationMembership,
   OutlineItem,
   OutlineVolume,
+  PlotThread,
   ProjectWorkspaceData,
   WorkflowDocument,
   WorldviewEntry
@@ -214,7 +215,8 @@ export function createEmptyWorkspace(overrides?: Partial<ProjectWorkspaceData>):
     chapters: cloneChapters(volumeState.chapters),
     chapterVersions: cloneChapterVersions(overrides?.chapterVersions),
     messages: cloneMessages(overrides?.messages),
-    workflowDocuments: normalizeWorkflowDocuments(overrides?.workflowDocuments as WorkflowDocument[] | undefined)
+    workflowDocuments: normalizeWorkflowDocuments(overrides?.workflowDocuments as WorkflowDocument[] | undefined),
+    plotThreads: Array.isArray(overrides?.plotThreads) ? (overrides.plotThreads as PlotThread[]) : []
   }
 }
 
@@ -263,6 +265,7 @@ export function normalizeWorkspace(
     chapters: cloneChapters(volumeState.chapters),
     chapterVersions: cloneChapterVersions(workspace.chapterVersions),
     messages: cloneMessages(workspace.messages),
-    workflowDocuments: normalizeWorkflowDocuments(projectLevelDocs)
+    workflowDocuments: normalizeWorkflowDocuments(projectLevelDocs),
+    plotThreads: Array.isArray(workspace.plotThreads) ? (workspace.plotThreads as PlotThread[]) : []
   }
 }

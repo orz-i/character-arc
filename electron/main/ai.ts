@@ -76,9 +76,9 @@ function extractJsonObject(text: string): AiTaskResult {
   return JSON.parse(jsonSlice) as AiTaskResult
 }
 
-/** 判断任务是否为结构化输出（需要返回 JSON），章节助理任务返回纯文本，不属于结构化任务 */
+/** 判断任务是否为结构化输出（需要返回 JSON），章节助理和摘要任务返回纯文本，不属于结构化任务 */
 function isStructuredTask(task: AiTaskPayload): boolean {
-  return task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft'
+  return task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft' && task.task !== 'chapter-summarize'
 }
 
 /**
@@ -389,7 +389,7 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
  * 章节助理任务直接处理纯文本，其他任务先提取 JSON 再按类型标准化。
  */
 function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult {
-  if (task.task === 'chapter-assistant' || task.task === 'chapter-first-draft') {
+  if (task.task === 'chapter-assistant' || task.task === 'chapter-first-draft' || task.task === 'chapter-summarize') {
     return normalizeAssistantText(rawText)
   }
 

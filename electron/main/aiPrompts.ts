@@ -234,7 +234,32 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
           })
           .join('\n\n')
       : ''
-    // 最近 4 条对话记录，帮助 AI 避免重复和保持连贯
+    // 当前分卷内其他章节的摘要（不含前两章），供 AI 做情节衔接参考
+    const volumeChapterSummaries = Array.isArray(context.volumeChapterSummaries)
+      ? context.volumeChapterSummaries
+          .map((item, index) => {
+            const record = item as Record<string, unknown>
+            return `第${index + 1}节：${String(record.title ?? '')}\n  摘要：${String(record.summary ?? '') || '暂无摘要'}`
+          })
+          .join('\n\n')
+      : ''
+    // 全书第 1 章摘要（世界/角色基调参照，仅当不在前两层时才添加）
+    const novelOpenerSummary = context.novelOpenerSummary
+      ? (() => {
+          const record = context.novelOpenerSummary as Record<string, unknown>
+          return `标题：${String(record.title ?? '')}\n摘要：${String(record.summary ?? '') || '暂无摘要'}`
+        })()
+      : ''
+    // 活跃剧情线索（status=open），供 AI 避免矛盾、按需收束
+    const openPlotThreads = Array.isArray(context.plotThreads)
+      ? context.plotThreads
+          .filter((t) => (t as Record<string, unknown>).status === 'open')
+          .map((t) => {
+            const record = t as Record<string, unknown>
+            return `- ${String(record.title ?? '')}：${String(record.description ?? '')}`
+          })
+          .join('\n')
+      : ''
     const recentMessages = Array.isArray(context.recentMessages)
       ? context.recentMessages
           .slice(-4)
@@ -306,7 +331,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
 
 【质量审查框架】
 审查时按"问题→证据→最小修法"输出，优先修根因，不做表面润色。审查维度包括：设定冲突、人物OOC、爽点缺失、节奏拖沓、配角降智、敌方信息越界、战力崩坏、伏笔失管、语言机械、词汇疲劳、利益链不成立、台词失真。`,
-      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考：\n${relatedChapters || '暂无'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n最近对话：\n${recentMessages || '暂无'}\n\n当前项目启用 skills：\n${projectSkills || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果\n9. 如果当前项目启用了 skills，优先吸收其中与正文创作、优化、审查相关的规则与口径\n10. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n11. 续写或改写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源\n12. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节\n13. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智\n14. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡\n15. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升\n16. ${modeInstruction}\n17. ${lengthInstruction}\n18. ${quickActionInstruction}`
+      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考（含正文预览）：\n${relatedChapters || '暂无'}\n\n本卷章节概览（摘要，供情节衔接参考）：\n${volumeChapterSummaries || '暂无'}\n\n全书开篇（世界与角色基调参照）：\n${novelOpenerSummary || '暂无'}\n\n未收伏笔 / 活跃剧情线：\n${openPlotThreads || '暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n最近对话：\n${recentMessages || '暂无'}\n\n当前项目启用 skills：\n${projectSkills || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果\n9. 如果当前项目启用了 skills，优先吸收其中与正文创作、优化、审查相关的规则与口径\n10. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n11. 续写或改写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源\n12. 如果"未收伏笔 / 活跃剧情线"不为空，本次内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确收束情节\n13. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节\n14. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智\n15. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡\n16. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升\n17. ${modeInstruction}\n18. ${lengthInstruction}\n19. ${quickActionInstruction}`
     })
   }
 
@@ -351,6 +376,32 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
             return `关联章节${index + 1}：${String(record.title ?? '')}\n摘要：${String(record.summary ?? '')}\n正文预览：${String(record.preview ?? '')}`
           })
           .join('\n\n')
+      : ''
+    // 当前分卷内其他章节的摘要，供 AI 做情节衔接参考
+    const volumeChapterSummaries = Array.isArray(context.volumeChapterSummaries)
+      ? context.volumeChapterSummaries
+          .map((item, index) => {
+            const record = item as Record<string, unknown>
+            return `第${index + 1}节：${String(record.title ?? '')}\n  摘要：${String(record.summary ?? '') || '暂无摘要'}`
+          })
+          .join('\n\n')
+      : ''
+    // 全书第 1 章摘要（世界/角色基调参照）
+    const novelOpenerSummaryDraft = context.novelOpenerSummary
+      ? (() => {
+          const record = context.novelOpenerSummary as Record<string, unknown>
+          return `标题：${String(record.title ?? '')}\n摘要：${String(record.summary ?? '') || '暂无摘要'}`
+        })()
+      : ''
+    // 活跃剧情线索
+    const openPlotThreadsDraft = Array.isArray(context.plotThreads)
+      ? context.plotThreads
+          .filter((t) => (t as Record<string, unknown>).status === 'open')
+          .map((t) => {
+            const record = t as Record<string, unknown>
+            return `- ${String(record.title ?? '')}：${String(record.description ?? '')}`
+          })
+          .join('\n')
       : ''
     const chapterContent = String(context.chapterContent ?? '').trim()
     const chapterHasExistingContent = Boolean(context.chapterHasExistingContent)
@@ -412,8 +463,17 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
 当前章节现有正文（如为空则代表从零起稿）：
 ${chapterContent || '【空】'}
 
-相邻章节参考：
+相邻章节参考（含正文预览）：
 ${relatedChapters || '暂无'}
+
+本卷章节概览（摘要，供情节衔接参考）：
+${volumeChapterSummaries || '暂无'}
+
+全书开篇（世界与角色基调参照）：
+${novelOpenerSummaryDraft || '暂无'}
+
+未收伏笔 / 活跃剧情线：
+${openPlotThreadsDraft || '暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）'}
 
 相关世界观：
 ${worldviewEntries || '暂无'}
@@ -443,12 +503,22 @@ ${projectSkills || '暂无'}
 ${String(context.userPrompt ?? '')}
 
 硬要求：
-1. 生成的是“完整初稿”，不是续写，不是建议，不是分析。
+1. 生成的是”完整初稿”，不是续写，不是建议，不是分析。
 2. 成稿直接覆盖当前章节全部内容，所以必须完整可读。
-3. 如果当前正文为空，按从零起稿处理，不得虚构“上文已经写过”的内容。
+3. 如果当前正文为空，按从零起稿处理，不得虚构”上文已经写过”的内容。
 4. 强贴当前章节标题、章节摘要、分卷目标和大纲，不要跑偏到别的章节。
 5. 字数尽量贴近目标字数，允许上下浮动 10%。
-6. 优先写出可继续改稿的第一版正文，不要解释。`
+6. 如果”未收伏笔 / 活跃剧情线”不为空，本章内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确的收束情节。
+7. 优先写出可继续改稿的第一版正文，不要解释。`
+    })
+  }
+
+  // ── 章节摘要自动生成任务（非流式，4 维结构化文本） ──
+  if (task.task === 'chapter-summarize') {
+    return wrapPrompt({
+      system:
+        '你是小说章节摘要助手。请按照指定的四维格式输出纯文本摘要，不要输出 Markdown、JSON 或额外解释。',
+      user: `请为以下章节生成一段结构化摘要，供后续章节创作时快速了解本章关键信息。\n\n章节标题：${String(context.chapterTitle ?? '')}\n章节正文：\n${String(context.chapterContent ?? '')}\n\n要求：\n1. 严格按以下四维格式输出，每一维单独一行开头：\n   核心事件：\n   信息增量：\n   状态变化：\n   留存悬念：\n2. 每一维用 1 到 2 句话描述，总字数控制在 80 到 150 字之间\n3. 核心事件：本章推进的主要情节（发生了什么）\n4. 信息增量：读者或人物获知的新信息（知道了什么）\n5. 状态变化：人物、势力、资源的具体变化（改变了什么）\n6. 留存悬念：埋下但未解的伏笔或疑问（留下了什么）\n7. 不要输出"摘要："前缀，直接从"核心事件："开始\n8. 只输出摘要正文，不要解释`
     })
   }
 

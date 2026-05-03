@@ -2,7 +2,7 @@
 export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 
 /** 工作台面板名称，对应 8 个功能面板 */
-export type PanelName = 'workflow' | 'overview' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'chapters' | 'settings'
+export type PanelName = 'workflow' | 'overview' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'threads' | 'chapters' | 'settings'
 
 /** 小说流程阶段标识 */
 export type NovelWorkflowStageId = 'reference' | 'premise' | 'setting' | 'outline' | 'draft'
@@ -390,6 +390,28 @@ export interface ChapterSelectionState {
   text: string
 }
 
+/** 剧情线索 / 伏笔追踪条目 */
+export interface PlotThread {
+  /** 唯一标识 */
+  id: string
+  /** 伏笔标题，如"林莫的穿越遗物" */
+  title: string
+  /** 详细描述 */
+  description: string
+  /** 在哪章埋下（章节 ID） */
+  openedInChapterId: string
+  /** 状态：活跃（未收尾）/ 已收尾 */
+  status: 'open' | 'resolved'
+  /** 在哪章收尾（章节 ID，resolved 时填写） */
+  closedInChapterId?: string
+  /** 关联标签（角色名、地点等） */
+  tags: string[]
+  /** 创建时间 */
+  createdAt: string
+  /** 最后更新时间 */
+  updatedAt: string
+}
+
 /** 章节稿件数据结构 */
 export interface ChapterDraft {
   /** 章节唯一标识 */
@@ -456,6 +478,8 @@ export interface ProjectWorkspaceData {
   messages: ChatMessage[]
   /** 项目固定流程文件 */
   workflowDocuments: WorkflowDocument[]
+  /** 剧情线索 / 伏笔追踪列表 */
+  plotThreads: PlotThread[]
 }
 
 /** 导入/导出的模块类型标识 */

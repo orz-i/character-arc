@@ -961,6 +961,20 @@ ${outlineItems || "暂无"}
 摘要：${String(record.summary ?? "")}
 正文预览：${String(record.preview ?? "")}`;
     }).join("\n\n") : "";
+    const volumeChapterSummaries = Array.isArray(context.volumeChapterSummaries) ? context.volumeChapterSummaries.map((item, index) => {
+      const record = item;
+      return `第${index + 1}节：${String(record.title ?? "")}
+  摘要：${String(record.summary ?? "") || "暂无摘要"}`;
+    }).join("\n\n") : "";
+    const novelOpenerSummary = context.novelOpenerSummary ? (() => {
+      const record = context.novelOpenerSummary;
+      return `标题：${String(record.title ?? "")}
+摘要：${String(record.summary ?? "") || "暂无摘要"}`;
+    })() : "";
+    const openPlotThreads = Array.isArray(context.plotThreads) ? context.plotThreads.filter((t) => t.status === "open").map((t) => {
+      const record = t;
+      return `- ${String(record.title ?? "")}：${String(record.description ?? "")}`;
+    }).join("\n") : "";
     const recentMessages = Array.isArray(context.recentMessages) ? context.recentMessages.slice(-4).map((item) => {
       const record = item;
       const role = String(record.role ?? "") === "assistant" ? "助理" : "用户";
@@ -1040,8 +1054,17 @@ ${String(context.chapterContent ?? "")}
 当前选中文本：
 ${selectedText || "暂无"}
 
-相邻章节参考：
+相邻章节参考（含正文预览）：
 ${relatedChapters || "暂无"}
+
+本卷章节概览（摘要，供情节衔接参考）：
+${volumeChapterSummaries || "暂无"}
+
+全书开篇（世界与角色基调参照）：
+${novelOpenerSummary || "暂无"}
+
+未收伏笔 / 活跃剧情线：
+${openPlotThreads || "暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）"}
 
 相关世界观：
 ${worldviewEntries || "暂无"}
@@ -1087,13 +1110,14 @@ ${projectSkills || "暂无"}
 9. 如果当前项目启用了 skills，优先吸收其中与正文创作、优化、审查相关的规则与口径
 10. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架
 11. 续写或改写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源
-12. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节
-13. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智
-14. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡
-15. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升
-16. ${modeInstruction}
-17. ${lengthInstruction}
-18. ${quickActionInstruction}`
+12. 如果"未收伏笔 / 活跃剧情线"不为空，本次内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确收束情节
+13. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节
+14. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智
+15. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡
+16. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升
+17. ${modeInstruction}
+18. ${lengthInstruction}
+19. ${quickActionInstruction}`
     });
   }
   if (task.task === "chapter-first-draft") {
@@ -1114,6 +1138,20 @@ ${projectSkills || "暂无"}
 摘要：${String(record.summary ?? "")}
 正文预览：${String(record.preview ?? "")}`;
     }).join("\n\n") : "";
+    const volumeChapterSummaries = Array.isArray(context.volumeChapterSummaries) ? context.volumeChapterSummaries.map((item, index) => {
+      const record = item;
+      return `第${index + 1}节：${String(record.title ?? "")}
+  摘要：${String(record.summary ?? "") || "暂无摘要"}`;
+    }).join("\n\n") : "";
+    const novelOpenerSummaryDraft = context.novelOpenerSummary ? (() => {
+      const record = context.novelOpenerSummary;
+      return `标题：${String(record.title ?? "")}
+摘要：${String(record.summary ?? "") || "暂无摘要"}`;
+    })() : "";
+    const openPlotThreadsDraft = Array.isArray(context.plotThreads) ? context.plotThreads.filter((t) => t.status === "open").map((t) => {
+      const record = t;
+      return `- ${String(record.title ?? "")}：${String(record.description ?? "")}`;
+    }).join("\n") : "";
     const chapterContent = String(context.chapterContent ?? "").trim();
     const chapterHasExistingContent = Boolean(context.chapterHasExistingContent);
     const targetWordCount = String(context.targetWordCount ?? context.chapterWordTarget ?? "").trim();
@@ -1173,8 +1211,17 @@ ${projectSkills || "暂无"}
 当前章节现有正文（如为空则代表从零起稿）：
 ${chapterContent || "【空】"}
 
-相邻章节参考：
+相邻章节参考（含正文预览）：
 ${relatedChapters || "暂无"}
+
+本卷章节概览（摘要，供情节衔接参考）：
+${volumeChapterSummaries || "暂无"}
+
+全书开篇（世界与角色基调参照）：
+${novelOpenerSummaryDraft || "暂无"}
+
+未收伏笔 / 活跃剧情线：
+${openPlotThreadsDraft || "暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）"}
 
 相关世界观：
 ${worldviewEntries || "暂无"}
@@ -1204,12 +1251,37 @@ ${projectSkills || "暂无"}
 ${String(context.userPrompt ?? "")}
 
 硬要求：
-1. 生成的是“完整初稿”，不是续写，不是建议，不是分析。
+1. 生成的是”完整初稿”，不是续写，不是建议，不是分析。
 2. 成稿直接覆盖当前章节全部内容，所以必须完整可读。
-3. 如果当前正文为空，按从零起稿处理，不得虚构“上文已经写过”的内容。
+3. 如果当前正文为空，按从零起稿处理，不得虚构”上文已经写过”的内容。
 4. 强贴当前章节标题、章节摘要、分卷目标和大纲，不要跑偏到别的章节。
 5. 字数尽量贴近目标字数，允许上下浮动 10%。
-6. 优先写出可继续改稿的第一版正文，不要解释。`
+6. 如果”未收伏笔 / 活跃剧情线”不为空，本章内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确的收束情节。
+7. 优先写出可继续改稿的第一版正文，不要解释。`
+    });
+  }
+  if (task.task === "chapter-summarize") {
+    return wrapPrompt({
+      system: "你是小说章节摘要助手。请按照指定的四维格式输出纯文本摘要，不要输出 Markdown、JSON 或额外解释。",
+      user: `请为以下章节生成一段结构化摘要，供后续章节创作时快速了解本章关键信息。
+
+章节标题：${String(context.chapterTitle ?? "")}
+章节正文：
+${String(context.chapterContent ?? "")}
+
+要求：
+1. 严格按以下四维格式输出，每一维单独一行开头：
+   核心事件：
+   信息增量：
+   状态变化：
+   留存悬念：
+2. 每一维用 1 到 2 句话描述，总字数控制在 80 到 150 字之间
+3. 核心事件：本章推进的主要情节（发生了什么）
+4. 信息增量：读者或人物获知的新信息（知道了什么）
+5. 状态变化：人物、势力、资源的具体变化（改变了什么）
+6. 留存悬念：埋下但未解的伏笔或疑问（留下了什么）
+7. 不要输出"摘要："前缀，直接从"核心事件："开始
+8. 只输出摘要正文，不要解释`
     });
   }
   return wrapPrompt({
@@ -1826,7 +1898,7 @@ function extractJsonObject(text) {
   return JSON.parse(jsonSlice);
 }
 function isStructuredTask(task) {
-  return task.task !== "chapter-assistant" && task.task !== "chapter-first-draft";
+  return task.task !== "chapter-assistant" && task.task !== "chapter-first-draft" && task.task !== "chapter-summarize";
 }
 function normalizeAssistantText(text) {
   const cleaned = text.replace(/```[\w-]*\n?/g, "").replace(/```/g, "").trim();
@@ -2020,7 +2092,7 @@ function isTaskResultUsable(task, result) {
   return Boolean(outline.title.trim() && outline.summary.trim());
 }
 function normalizeTaskResult(task, rawText) {
-  if (task.task === "chapter-assistant" || task.task === "chapter-first-draft") {
+  if (task.task === "chapter-assistant" || task.task === "chapter-first-draft" || task.task === "chapter-summarize") {
     return normalizeAssistantText(rawText);
   }
   const parsed = extractJsonObject(rawText);

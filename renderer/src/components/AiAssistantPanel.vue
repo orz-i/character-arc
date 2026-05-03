@@ -49,7 +49,7 @@ const selectedExcerpt = computed(() =>
     ? appStore.currentChapterSelection.text
     : ''
 )
-// 当前章节的前后章节信息（用于 AI 理解上下文衔接）
+// 当前章节的前后章节信息（用于 AI 理解上下文衔接，Tier 1）
 const relatedChapters = computed(() => {
   const chapter = currentChapter.value
   if (!chapter) {
@@ -69,6 +69,26 @@ const relatedChapters = computed(() => {
       summary: item.summary,
       preview: getChapterPreviewText(item.content, '该章节暂无正文')
     }))
+})
+// 当前分卷内其他章节的摘要（Tier 2，排除已在 relatedChapters 中的章节）
+const volumeChapterSummaries = computed(() => {
+  const chapter = currentChapter.value
+  if (!chapter) return []
+  const related = relatedChapters.value
+  const relatedTitles = new Set(related.map((r) => r.title))
+  return appStore.chapters
+    .filter((c) => c.volumeId === chapter.volumeId && c.id !== chapter.id && !relatedTitles.has(c.title))
+    .map((c) => ({ title: c.title, summary: c.summary }))
+})
+// 全书第 1 章摘要（Tier 3，世界/角色基调参照，仅当不在前两层时才添加）
+const novelOpenerSummary = computed(() => {
+  const first = appStore.chapters[0]
+  if (!first) return undefined
+  const chapter = currentChapter.value
+  if (first.id === chapter?.id) return undefined
+  const related = relatedChapters.value
+  if (related.some((r) => r.title === first.title)) return undefined
+  return { title: first.title, summary: first.summary }
 })
 // 最近 4 条对话消息（用于 AI 理解上下文）
 const recentAssistantMessages = computed(() =>
@@ -172,6 +192,8 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
         chapter: currentChapter.value,
         chapterVolume: appStore.selectedChapterVolume,
         relatedChapters: relatedChapters.value,
+        volumeChapterSummaries: volumeChapterSummaries.value,
+        novelOpenerSummary: novelOpenerSummary.value,
         recentMessages: recentAssistantMessages.value,
         worldviewEntries: appStore.worldviewEntries,
         characters: appStore.characters,
@@ -180,6 +202,7 @@ async function sendPrompt(promptText?: string, quickAction?: string): Promise<vo
         organizationMemberships: appStore.organizationMemberships,
         inspirationEntries: appStore.inspirationEntries,
         outlineItems: appStore.outlineItems,
+        plotThreads: appStore.plotThreads,
         selectedText: selectedExcerpt.value,
         responseMode: responseMode.value,
         responseLength: responseLength.value,

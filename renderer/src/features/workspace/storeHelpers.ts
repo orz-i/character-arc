@@ -18,6 +18,7 @@ import type {
   OrganizationMembership,
   OutlineItem,
   OutlineVolume,
+  PlotThread,
   ProjectSummary,
   ProjectSkillItem,
   ReferenceWorkItem,
@@ -243,7 +244,8 @@ export function normalizeProjectWorkspaceData(
     chapters: normalized.chapters.map(normalizeChapterDraft),
     chapterVersions: normalized.chapterVersions.map(normalizeChapterVersion),
     messages: normalized.messages,
-    workflowDocuments: normalizeWorkflowDocuments(normalized.workflowDocuments)
+    workflowDocuments: normalizeWorkflowDocuments(normalized.workflowDocuments),
+    plotThreads: normalized.plotThreads
   }
 }
 
