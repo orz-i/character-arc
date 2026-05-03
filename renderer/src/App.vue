@@ -75,6 +75,17 @@ watch(
   { immediate: true }
 )
 
+// 将 CSS 变量同步到 :root，使 Naive UI 弹出层（portal 渲染到 body）也能继承正确的深色值
+watch(
+  appStyleVars,
+  (vars) => {
+    for (const [key, value] of Object.entries(vars)) {
+      document.documentElement.style.setProperty(key, value)
+    }
+  },
+  { immediate: true }
+)
+
 // 监听深色模式切换，同步更新 Windows 原生标题栏 Overlay 颜色
 watch(
   () => appStore.appSettings.darkMode,
