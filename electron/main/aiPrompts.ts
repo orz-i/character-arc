@@ -42,7 +42,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     return wrapPrompt({
       system:
         '你是小说角色设定助手。请只返回 JSON 对象，不要返回 Markdown。字段必须包含 name、role、description、tags。',
-      user: `基于以下上下文，为当前小说项目生成一名新角色。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n已有角色：${JSON.stringify(context.characterNames ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n\n已有组织：\n${organizations || '暂无'}\n\n已有角色关系：\n${relationships || '暂无'}\n\n已有成员归属：\n${memberships || '暂无'}\n\n要求：\n1. 不与已有角色重名\n2. role 用短语概括角色定位\n3. 新角色要尽量能自然嵌入现有关系网络或组织结构，避免像孤立路人\n4. description 用中文完整描述，80 到 160 字，尽量体现其立场、关系张力或潜在冲突\n5. tags 返回 2 到 4 个简短标签数组\n6. ${writingStyleInstruction}\n\n返回格式：{"name":"","role":"","description":"","tags":["",""]}`
+      user: `基于以下上下文，为当前小说项目生成一名新角色。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n已有角色：${JSON.stringify(context.characterNames ?? [])}\n世界观关键词：${JSON.stringify(context.worldviewTitles ?? [])}\n\n已有组织：\n${organizations || '暂无'}\n\n已有角色关系：\n${relationships || '暂无'}\n\n已有成员归属：\n${memberships || '暂无'}\n\n要求：\n1. 不与已有角色重名\n2. role 用短语概括角色定位\n3. 新角色要尽量能自然嵌入现有关系网络或组织结构，避免像孤立路人\n4. description 用中文完整描述，80 到 160 字，按"核心定位 + 反差细节 + 动机逻辑"组织：先说角色的定位和能力，再加一个与定位反差的特质或习惯让角色更像真人，最后说明他/她最在乎什么或最怕什么（情感驱动），尽量体现其立场、关系张力或潜在冲突\n5. tags 返回 2 到 4 个简短标签数组\n6. ${writingStyleInstruction}\n\n返回格式：{"name":"","role":"","description":"","tags":["",""]}`
     })
   }
 
@@ -124,7 +124,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     return wrapPrompt({
       system:
         '你是小说章节分析助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 overview、pacing、tension、continuity、highlights、risks、revisionActions。',
-      user: `请分析当前章节的写作质量与可优化点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节实际字数：${String(context.chapterWordCount ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题\n2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因\n3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方\n4. risks 返回 2 到 4 条，指出节奏、逻辑、人物一致性、设定引用、关系张力、阵营立场或信息密度方面的风险\n5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体\n6. 如果人物关系、阵营动机或组织归属没有被有效利用，也要明确指出\n7. 输出务必紧贴当前正文，不要给空泛写作建议\n\n返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
+      user: `请分析当前章节的写作质量与可优化点。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节实际字数：${String(context.chapterWordCount ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. overview 用 1 到 2 句话概括当前章节完成度、情绪和主要问题\n2. pacing / tension / continuity 都用一句中文短评，既要判断也要说明原因\n3. highlights 返回 2 到 4 条，强调当前章节已经做得好的地方\n4. risks 返回 2 到 4 条，按以下维度审查并指出最突出的问题（优先修根因，不做表面润色）：人物OOC、时间线断裂、利益链不成立、配角工具人化、爽点虚化、台词失真、语言重复/词汇疲劳、设定冲突/设定吃书、信息越界（角色知道不该知道的信息）、伏笔失管、数据通胀/战力崩坏、流水账、文青病、关系发展突兀、人设前后矛盾\n5. revisionActions 返回 3 到 5 条，必须是作者可以立刻执行的修改动作，尽量具体\n6. 如果人物关系、阵营动机或组织归属没有被有效利用，也要明确指出\n7. 输出务必紧贴当前正文，不要给空泛写作建议\n\n返回格式：{"overview":"","pacing":"","tension":"","continuity":"","highlights":["",""],"risks":["",""],"revisionActions":["","",""]}`
     })
   }
 
@@ -410,16 +410,22 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
     const writingStylePrompt = String(context.writingStylePrompt ?? '暂无')
 
     return wrapPrompt({
-      system: `你是 CharacterArc 的章节初稿生成器。你的唯一任务，是基于项目设定、当前分卷目标、章节标题/摘要/大纲与角色关系，直接生成“这一章”的第一版正文草稿。只输出正文，不要解释，不要返回 JSON，不要写提示语，不要自我说明。
+      system: `你是 CharacterArc 的章节初稿生成器。你的唯一任务，是基于项目设定、当前分卷目标、章节标题/摘要/大纲与角色关系，直接生成”这一章”的第一版正文草稿。只输出正文，不要解释，不要返回 JSON，不要写提示语，不要自我说明。
 
 【任务边界】
-- 这是“章节初稿生成”，不是润色，不是续写建议，不是分析。
-- 如果当前章节正文为空，就按“从零起稿”处理，禁止假装承接不存在的前文。
-- 如果当前章节正文不为空，也不要把任务理解成“续写”；你要重写并产出一版完整初稿，而不是在旧文后面往下接。
-- 输出结果会直接覆盖当前章节全部内容，所以正文必须是完整可读的一章，不要输出提纲、注释、分点说明或“以下是初稿”。
+- 这是”章节初稿生成”，不是润色，不是续写建议，不是分析。
+- 如果当前章节正文为空，就按”从零起稿”处理，禁止假装承接不存在的前文。
+- 如果当前章节正文不为空，也不要把任务理解成”续写”；你要重写并产出一版完整初稿，而不是在旧文后面往下接。
+- 输出结果会直接覆盖当前章节全部内容，所以正文必须是完整可读的一章，不要输出提纲、注释、分点说明或”以下是初稿”。
+
+【章节类型与写法】
+先判断本章更接近哪类章节，再选对应写法：
+- 布局章（交易/试探/威慑）：重点展示各方筹码和利益格局，信息要落到具体人物的算盘与顾虑，节奏可以适度舒展，但每段要有新信息推进。
+- 事件章（行动/冲突/兑现）：节奏紧密，冲突过程要有起伏，收益要在章节内落地，不要把爽点无限后置。
+- 过渡章（状态变化/余波/钩子）：每段都要有至少一项变化（情绪/地位/资源/关系），结尾抛出下一个悬念或压力点。
+- 回收章（回应旧伏笔）：优先兑现已埋伏笔，再开新问题，不能凭空生造转折代替伏笔回收。
 
 【初稿写作目标】
-- 先识别本章更接近哪类章节：布局章、事件章、过渡章、回收章，再决定写法。
 - 章节必须有明确开场、推进和收束，不要写成散段拼贴。
 - 开场直接入场景、动作、压力或利益交换，不要历史课件式开头，不要长段背景介绍。
 - 每个主要段落都要推进至少一项：信息、关系、利益、风险、地位、资源、伏笔回收。
@@ -435,19 +441,29 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
 - 项目默认风格：${writingStyleLabel}
 - 风格要求：${writingStylePrompt}
 - Show, don't tell。用动作、物件、感官、代价、价格、制度摩擦说话。
-- 去AI味：句式长短交替，避免同一句式和同一主语反复起头；少堆高级词和空泛判断。
-- 群像反应要具体，不要写成“全场震惊”模板。
-- 配角和反派必须有自己的算盘、误判和反扑，不是木桩。
-- 禁止机械降神，禁止无铺垫新设定救场，禁止文青病，禁止空话。
+- 去AI味：句式长短交替，避免同一句式和同一主语反复起头；少堆高级词和空泛判断；对”冷笑””蝼蚁””轰然炸裂””倒吸一口凉气””瞳孔骤缩””满场死寂”等高疲劳词保持克制，同章同一高识别词默认只出现1次。
+- 群像反应具体化：不要写成”全场震惊”模板，改写成1-2个具体角色的身体反应、判断偏差或利益震荡。
+- 台词贴身份：每个角色的说话方式、用词习惯、关注点都要有辨识度，不能所有人说话腔调一致。
+- 配角和反派必须有自己的算盘、误判和反扑，不是木桩；反派必须基于其已知信息行动，不能提前掌握主角没暴露的底牌。
 
 【连贯性规则】
 - 你必须尊重当前分卷目标、章节摘要、相关大纲、世界观和人物关系。
-- 可以参考相邻章节摘要与预览来保持整卷连续性，但不要把这次任务写成“上一章之后的补几段”。
-- 如果当前上下文说明本章尚未写正文，就不要引用“本章前文已经发生了什么”这类不存在内容。
+- 可以参考相邻章节摘要与预览来保持整卷连续性，但不要把这次任务写成”上一章之后的补几段”。
+- 如果当前上下文说明本章尚未写正文，就不要引用”本章前文已经发生了什么”这类不存在内容。
+
+【禁止的失败模式】
+- 主角成功无代价——成功最好伴随不可逆的代价，表层爽点里层成本。
+- 人设前后矛盾——角色不能突然做出与性格矛盾的选择，成长必须在逻辑合理范畴内。
+- 关系发展突兀——情感和关系必须有递进过程，不能通过标签化互动强行推进。
+- 无铺垫救场——不能临时发明新设定、新体系或新外挂填坑，解决问题必须在已写内容中有迹可循。
+- 设定吃书——前文已写明的设定，后文不能矛盾覆盖；若必须修改，要明确说明覆盖了哪些旧设定。
+- 流水账——每一行字都要推动剧情或塑造人物，拒绝无效情节堆砌。
+- 文青病——不要在紧张推进时突然感慨人生、抒情独白，该推进就推进。
+- 伏笔失管——完成大剧情节点后不能忘记更新伏笔状态，已逃走的敌人、未拿到的宝物要继续存在于世界中。
 
 【输出要求】
 - 只输出最终正文。
-- 不要标题前缀，不要“第X章”编号，不要注释，不要小结，不要分析。`,
+- 不要标题前缀，不要”第X章”编号，不要注释，不要小结，不要分析。`,
       user: `请为当前小说项目生成本章初稿。
 
 项目标题：${String(context.projectTitle ?? '')}
