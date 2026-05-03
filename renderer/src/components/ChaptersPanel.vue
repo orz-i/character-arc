@@ -873,6 +873,7 @@ async function detectPlotThreads(chapter: ChapterDraft): Promise<void> {
 
   isDetectingThreads.value = true
   threadDetectChapterId.value = chapter.id
+  const loadingMsg = message.loading('正在分析正文，识别潜在伏笔…', { duration: 0 })
 
   try {
     const existingThreads = appStore.plotThreads
@@ -888,6 +889,8 @@ async function detectPlotThreads(chapter: ChapterDraft): Promise<void> {
         existingThreads
       }
     }))
+
+    loadingMsg.destroy()
 
     if (!result.success) {
       throw new Error(result.error ?? 'AI 识别伏笔失败')
@@ -913,6 +916,7 @@ async function detectPlotThreads(chapter: ChapterDraft): Promise<void> {
 
     threadDetectVisible.value = true
   } catch (error) {
+    loadingMsg.destroy()
     message.error(error instanceof Error ? error.message : 'AI 识别伏笔失败，请稍后重试')
     console.error('[detect-threads]', error)
   } finally {
