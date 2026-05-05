@@ -99,6 +99,27 @@ const lastUserPrompt = computed(() => {
   }
 })
 const quickActions = computed(() => getResolvedChapterAssistantTemplates(currentProject.value))
+const latestAiRun = computed(() => {
+  const projectId = currentProject.value?.id
+  const chapterId = currentChapter.value?.id
+  const runs = [...appStore.aiRuns].reverse()
+  return runs.find((run) => run.projectId === projectId && (!chapterId || run.chapterId === chapterId || run.task === 'chapter-assistant'))
+})
+const latestAiRunKnowledge = computed(() => latestAiRun.value?.usedKnowledge ?? [])
+const latestAiRunStatusText = computed(() => {
+  switch (latestAiRun.value?.status) {
+    case 'running':
+      return '运行中'
+    case 'success':
+      return '已完成'
+    case 'error':
+      return '失败'
+    case 'canceled':
+      return '已停止'
+    default:
+      return ''
+  }
+})
 
 async function scrollToBottom(): Promise<void> {
   await nextTick()
@@ -409,6 +430,36 @@ watch(
           <span>{{ action.label }}</span>
         </button>
       </div>
+    </section>
+
+    <section v-if="latestAiRun" class="assistant-run-card">
+      <div class="assistant-run-head">
+        <strong>本次 AI 上下文</strong>
+        <span class="assistant-run-status" :class="latestAiRun.status">{{ latestAiRunStatusText }}</span>
+      </div>
+      <p v-if="latestAiRun.error" class="assistant-run-error">{{ latestAiRun.error }}</p>
+      <p v-else class="assistant-run-meta">
+        {{ latestAiRun.model }}
+        <span v-if="latestAiRun.durationMs"> · {{ Math.max(1, Math.round(latestAiRun.durationMs / 100) / 10) }}s</span>
+        <span v-if="latestAiRun.repairTriggered"> · 已触发修复</span>
+      </p>
+      <div v-if="latestAiRunKnowledge.length" class="assistant-knowledge-list">
+        <article
+          v-for="item in latestAiRunKnowledge"
+          :key="`${latestAiRun?.id}-${item.documentId}`"
+          class="assistant-knowledge-item"
+        >
+          <div class="assistant-knowledge-title-row">
+            <strong>{{ item.title }}</strong>
+            <span>{{ item.sourceLabel || item.sourceType }}</span>
+          </div>
+          <p>{{ item.snippet }}</p>
+          <div v-if="item.keywords.length" class="assistant-knowledge-tags">
+            <span v-for="keyword in item.keywords" :key="keyword">{{ keyword }}</span>
+          </div>
+        </article>
+      </div>
+      <p v-else class="assistant-run-empty">这次回复没有命中额外知识片段。</p>
     </section>
 
     <div ref="messagesViewport" class="assistant-messages arc-scrollbar">

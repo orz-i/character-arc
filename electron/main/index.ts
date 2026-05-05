@@ -4,10 +4,64 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import { generateAiTask, streamAiTask, testAiConnection, type AiTaskPayload } from './ai'
+import {
+  generateAiTask,
+  streamAiTask,
+  testAiConnection,
+  type AiTaskPayload
+} from './ai'
+
 import { fetchModels, type FetchedModel } from './aiTransport'
-import { extractReferenceNovelContext, type ReferenceStyleMetric } from './referenceAnalysis'
+import {
+  extractReferenceNovelContext,
+  type ReferenceNovelLocalContext,
+  type ReferenceStyleMetric
+} from './referenceAnalysis'
 import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './aiShared'
+
+type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk'
+
+type WorkspaceKnowledgeDocument = {
+  id: string
+  projectId: string
+  title: string
+  sourceType: KnowledgeDocumentSourceType
+  sourceLabel: string
+  content: string
+  summary: string
+  keywords: string[]
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+type WorkspaceAiRunKnowledgeItem = {
+  documentId: string
+  title: string
+  sourceType: KnowledgeDocumentSourceType
+  sourceLabel: string
+  snippet: string
+  keywords: string[]
+}
+
+type WorkspaceAiRunStatus = 'running' | 'success' | 'error' | 'canceled'
+
+type WorkspaceAiRunRecord = {
+  id: string
+  projectId: string
+  chapterId?: string
+  task: string
+  provider: string
+  model: string
+  status: WorkspaceAiRunStatus
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  usedKnowledge: WorkspaceAiRunKnowledgeItem[]
+  repairTriggered: boolean
+  error: string
+  responsePreview: string
+}
 
 // ── 窗口尺寸常量 ──
 const APP_DEFAULT_WIDTH = 1480     // 主窗口默认宽度
@@ -40,6 +94,7 @@ type AssistantContextPayload = {
 
 type ReferenceNovelImportRequest = {
   settings: AiTaskPayload['settings']
+  projectId?: string
   projectTitle?: string
   projectGenre?: string
   projectPlatform?: string
@@ -56,15 +111,119 @@ type ReferenceImportProgressPayload = {
   sourceTitle?: string
 }
 
-// 缓存最新的助手上下文和提示词，新窗口打开时可立即同步
-let latestAssistantContext: AssistantContextPayload = {}
-let latestAssistantPrompt: {
-  id: string
-  prompt: string
-  quickAction?: string
-} | null = null
+type WorkspaceAiRunEventPayload = {
+  projectId: string
+  meta: Omit<WorkspaceAiRunRecord, 'projectId'>
+}
 
-/** 根据屏幕工作区尺寸计算主窗口的宽高和最小尺寸，小屏幕时自动缩小 */
+let latestWorkspaceSnapshot: WorkspacePayload | null = null
+let latestAssistantContext: AssistantContextPayload = {}
+let latestAssistantPrompt: { id: string; prompt: string; quickAction?: string } | null = null
+
+function updateLatestWorkspaceSnapshot(payload: WorkspacePayload | null): void {
+  latestWorkspaceSnapshot = payload
+}
+
+function tokenizeKnowledgeText(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+}
+
+function buildKnowledgeQuery(task: AiTaskPayload): string {
+  return [
+    String(task.context.userPrompt ?? ''),
+    String(task.context.chapterTitle ?? ''),
+    String(task.context.chapterSummary ?? ''),
+    String(task.context.selectedText ?? ''),
+    String(task.context.sceneFocus ?? ''),
+    String(task.context.chapterContent ?? '').slice(0, 1200)
+  ].filter(Boolean).join('\n')
+}
+
+function retrieveKnowledgeContext(task: AiTaskPayload): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
+  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft') {
+    return { usedKnowledge: [] }
+  }
+
+  const projectId = String(task.context.projectId ?? '').trim()
+  if (!projectId || !latestWorkspaceSnapshot?.workspaces?.[projectId]) {
+    return { usedKnowledge: [] }
+  }
+
+  const workspace = latestWorkspaceSnapshot.workspaces[projectId]
+  const documents = Array.isArray(workspace.knowledgeDocuments) ? workspace.knowledgeDocuments : []
+  if (!documents.length) {
+    return { usedKnowledge: [] }
+  }
+
+  const queryText = buildKnowledgeQuery(task)
+  const queryTokens = Array.from(new Set(tokenizeKnowledgeText(queryText)))
+  if (!queryTokens.length) {
+    return { usedKnowledge: [] }
+  }
+
+  const ranked = documents
+    .map((document) => {
+      const title = String(document.title ?? '')
+      const summary = String(document.summary ?? '')
+      const content = String(document.content ?? '')
+      const sourceLabel = String(document.sourceLabel ?? '')
+      const keywords = Array.isArray(document.keywords)
+        ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean)
+        : []
+      const haystack = `${title}\n${summary}\n${content}\n${sourceLabel}`.toLowerCase()
+      let score = document.sourceType === 'reference-summary' ? 1.5 : 1
+
+      for (const token of queryTokens) {
+        if (keywords.some((keyword) => keyword.toLowerCase() === token)) score += 4
+        else if (keywords.some((keyword) => keyword.toLowerCase().includes(token) || token.includes(keyword.toLowerCase()))) score += 2.5
+        if (title.toLowerCase().includes(token)) score += 2
+        if (sourceLabel.toLowerCase().includes(token)) score += 1.5
+        if (summary.toLowerCase().includes(token)) score += 1.2
+        if (haystack.includes(token)) score += 0.6
+      }
+
+      return {
+        score,
+        document,
+        keywords
+      }
+    })
+    .filter((entry) => entry.score > 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ document, keywords }) => ({
+      documentId: document.id,
+      title: document.title,
+      sourceType: document.sourceType,
+      sourceLabel: document.sourceLabel,
+      snippet: (document.summary || document.content || '').trim().slice(0, 220),
+      keywords: keywords.slice(0, 8)
+    }))
+
+  return {
+    usedKnowledge: ranked
+  }
+}
+
+function appendAiRunToLatestSnapshot(payload: WorkspaceAiRunEventPayload): void {
+  if (!latestWorkspaceSnapshot?.workspaces?.[payload.projectId]) {
+    return
+  }
+
+  const workspace = latestWorkspaceSnapshot.workspaces[payload.projectId]
+  workspace.aiRuns = [...(workspace.aiRuns ?? []), payload.meta].slice(-200)
+}
+
+function emitAiRunEvent(payload: WorkspaceAiRunEventPayload): void {
+  appendAiRunToLatestSnapshot(payload)
+  broadcastWindowEvent('characterarc:ai-run-event', payload)
+}
+
+
 function getMainWindowMetrics() {
   const { workAreaSize } = screen.getPrimaryDisplay()
   const compactScreen = workAreaSize.width <= 1366 || workAreaSize.height <= 820
@@ -564,6 +723,40 @@ async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_label TEXT NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      keywords_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ai_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      chapter_id TEXT NOT NULL DEFAULT '',
+      task TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER,
+      used_knowledge_json TEXT NOT NULL DEFAULT '[]',
+      repair_triggered INTEGER NOT NULL DEFAULT 0,
+      error TEXT NOT NULL DEFAULT '',
+      response_preview TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS workflow_documents (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -925,6 +1118,8 @@ type WorkspacePayload = {
         role: 'user' | 'assistant'
         content: string
       }>
+      knowledgeDocuments: Array<Omit<WorkspaceKnowledgeDocument, 'projectId'>>
+      aiRuns: Array<Omit<WorkspaceAiRunRecord, 'projectId'>>
       workflowDocuments: Array<{
         key: 'task_plan' | 'findings' | 'progress' | 'current_status' | 'novel_setting' | 'character_relationships' | 'pending_hooks' | 'resource_ledger'
         title: string
@@ -1132,6 +1327,77 @@ function normalizeProjectRecord(project: Partial<WorkspacePayload['projects'][nu
   }
 }
 
+function buildImportedReferenceKnowledgeDocuments(
+  projectId: string,
+  title: string,
+  localContext: ReferenceNovelLocalContext,
+  analysis: ReferenceStyleAnalysisResult,
+  importedAt: string
+): WorkspaceKnowledgeDocument[] {
+  const summaryDocument: WorkspaceKnowledgeDocument = {
+    id: `knowledge-reference-summary-${randomUUID()}`,
+    projectId,
+    title: `${title}｜拆书总纲`,
+    sourceType: 'reference-summary',
+    sourceLabel: localContext.fileName,
+    content: [
+      `作品：${title}`,
+      `风格总述：${analysis.overview}`,
+      `句式特征：${analysis.sentenceStyle}`,
+      `对白策略：${analysis.dialogueRatio}`,
+      `节奏控制：${analysis.pacingControl}`,
+      `情绪表达：${analysis.emotionExpression}`,
+      `叙事视角：${analysis.narrativePerspective}`,
+      localContext.topKeywords.length ? `关键词：${localContext.topKeywords.join('、')}` : '',
+      analysis.styleRules.length ? `风格规则：${analysis.styleRules.join('；')}` : '',
+      analysis.avoidRules.length ? `避免照搬：${analysis.avoidRules.join('；')}` : '',
+      `剧情骨架：${analysis.plotOutline}`,
+      `仿写模板：${analysis.reusableStylePrompt}`
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    summary: analysis.overview,
+    keywords: Array.from(new Set([...localContext.topKeywords, ...analysis.styleRules])).slice(0, 20),
+    metadata: {
+      sourceTitle: title,
+      fileName: localContext.fileName,
+      fileType: localContext.fileType,
+      characterCount: localContext.characterCount,
+      chapterCount: localContext.chapterCount,
+      metrics: localContext.metrics,
+      styleRules: analysis.styleRules,
+      avoidRules: analysis.avoidRules
+    },
+    createdAt: importedAt,
+    updatedAt: importedAt
+  }
+
+  const chunkDocuments = localContext.analysisChunks.map((chunk) => ({
+    id: `knowledge-reference-chunk-${randomUUID()}`,
+    projectId,
+    title: `${title}｜${chunk.label}`,
+    sourceType: 'reference-chunk' as const,
+    sourceLabel: `${localContext.fileName} / ${chunk.label}`,
+    content: chunk.text,
+    summary: `${chunk.label}，约 ${chunk.characterCount} 字；关键词：${chunk.topKeywords.join('、') || '待补充'}`,
+    keywords: chunk.topKeywords,
+    metadata: {
+      sourceTitle: title,
+      fileName: localContext.fileName,
+      fileType: localContext.fileType,
+      chunkId: chunk.id,
+      chunkLabel: chunk.label,
+      chunkOrder: chunk.order,
+      characterCount: chunk.characterCount,
+      metrics: chunk.metrics
+    },
+    createdAt: importedAt,
+    updatedAt: importedAt
+  }))
+
+  return [summaryDocument, ...chunkDocuments]
+}
+
 function buildImportedReferenceStylePrompt(title: string, analysis: ReferenceStyleAnalysisResult): string {
   return [
     `以下规则来自参考作品《${title}》的拆书结果，已做去具体化处理，只借鉴文笔和结构骨架，不复用专有设定：`,
@@ -1286,6 +1552,8 @@ function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePa
             : [],
         chapterVersions: project.id === selectedProjectId ? legacyPayload.chapterVersions ?? [] : [],
         messages: project.id === selectedProjectId ? legacyPayload.messages ?? [] : [],
+        knowledgeDocuments: [],
+        aiRuns: [],
         workflowDocuments: []
       }
     ])
@@ -1455,6 +1723,67 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
     ORDER BY project_id ASC, sort_order ASC
   `).all() as Array<WorkspacePayload['workspaces'][string]['messages'][number] & { projectId: string }>
 
+  const knowledgeDocuments = db.prepare(`
+    SELECT project_id AS projectId, id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
+      keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
+    FROM knowledge_documents
+    ORDER BY project_id ASC, created_at DESC, rowid DESC
+  `).all().map((row) => ({
+    projectId: row.projectId as string,
+    id: row.id as string,
+    title: row.title as string,
+    sourceType: row.sourceType as KnowledgeDocumentSourceType,
+    sourceLabel: row.sourceLabel as string,
+    content: row.content as string,
+    summary: row.summary as string,
+    keywords: (() => {
+      try {
+        return JSON.parse(row.keywordsJson as string) as string[]
+      } catch {
+        return []
+      }
+    })(),
+    metadata: (() => {
+      try {
+        return JSON.parse(row.metadataJson as string) as Record<string, unknown>
+      } catch {
+        return {}
+      }
+    })(),
+    createdAt: row.createdAt as string,
+    updatedAt: row.updatedAt as string
+  })) as Array<WorkspacePayload['workspaces'][string]['knowledgeDocuments'][number] & { projectId: string }>
+
+  const aiRuns = db.prepare(`
+    SELECT project_id AS projectId, id, chapter_id AS chapterId, task, provider, model, status,
+      started_at AS startedAt, finished_at AS finishedAt, duration_ms AS durationMs,
+      used_knowledge_json AS usedKnowledgeJson, repair_triggered AS repairTriggered,
+      error, response_preview AS responsePreview
+    FROM ai_runs
+    ORDER BY project_id ASC, sort_order ASC
+  `).all().map((row) => ({
+    projectId: row.projectId as string,
+    id: row.id as string,
+    chapterId: (row.chapterId as string) || undefined,
+    task: row.task as string,
+    provider: row.provider as string,
+    model: row.model as string,
+    status: row.status as WorkspaceAiRunStatus,
+    startedAt: row.startedAt as string,
+    finishedAt: (row.finishedAt as string) || undefined,
+    durationMs: typeof row.durationMs === 'number' ? row.durationMs : undefined,
+    usedKnowledge: (() => {
+      try {
+        return JSON.parse(row.usedKnowledgeJson as string) as WorkspaceAiRunKnowledgeItem[]
+      } catch {
+        return []
+      }
+    })(),
+    repairTriggered: Boolean(row.repairTriggered),
+    error: row.error as string,
+    responsePreview: row.responsePreview as string
+  })) as Array<WorkspacePayload['workspaces'][string]['aiRuns'][number] & { projectId: string }>
+
   const workflowDocuments = db.prepare(`
     SELECT project_id AS projectId, volume_id AS volumeId, doc_key AS docKey, title, content, updated_at AS updatedAt
     FROM workflow_documents
@@ -1535,6 +1864,12 @@ function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null {
         messages: messages
           .filter((message) => message.projectId === project.id)
           .map(({ projectId: _projectId, ...message }) => message),
+        knowledgeDocuments: knowledgeDocuments
+          .filter((document) => document.projectId === project.id)
+          .map(({ projectId: _projectId, ...document }) => document),
+        aiRuns: aiRuns
+          .filter((run) => run.projectId === project.id)
+          .map(({ projectId: _projectId, ...run }) => run),
         workflowDocuments: []
       }
     ])
@@ -1579,6 +1914,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
       DELETE FROM chapter_versions;
       DELETE FROM chapters;
       DELETE FROM ai_messages;
+      DELETE FROM knowledge_documents;
+      DELETE FROM ai_runs;
       DELETE FROM workflow_documents;
       DELETE FROM app_settings;
     `)
@@ -1655,11 +1992,21 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
       INSERT INTO chapter_versions (id, project_id, chapter_id, title, summary, status, word_target, content, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-
     const insertMessage = db.prepare(`
       INSERT INTO ai_messages (id, project_id, role, content, sort_order)
       VALUES (?, ?, ?, ?, ?)
     `)
+
+    const insertKnowledgeDocument = db.prepare(`
+      INSERT INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const insertAiRun = db.prepare(`
+      INSERT INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, repair_triggered, error, response_preview, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
     const insertWorkflowDocument = db.prepare(`
       INSERT INTO workflow_documents (id, project_id, volume_id, doc_key, title, content, updated_at, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1678,6 +2025,8 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
         chapters: [],
         chapterVersions: [],
         messages: [],
+        knowledgeDocuments: [],
+        aiRuns: [],
         workflowDocuments: []
       }
 
@@ -1810,8 +2159,45 @@ function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): vo
         )
       })
 
+
       workspace.messages.forEach((message, index) => {
         insertMessage.run(message.id, project.id, message.role, message.content, index)
+      })
+
+      workspace.knowledgeDocuments.forEach((document) => {
+        insertKnowledgeDocument.run(
+          document.id,
+          project.id,
+          document.title,
+          document.sourceType,
+          document.sourceLabel,
+          document.content,
+          document.summary,
+          JSON.stringify(document.keywords ?? []),
+          JSON.stringify(document.metadata ?? {}),
+          document.createdAt,
+          document.updatedAt
+        )
+      })
+
+      workspace.aiRuns.forEach((run, index) => {
+        insertAiRun.run(
+          run.id,
+          project.id,
+          run.chapterId ?? '',
+          run.task,
+          run.provider,
+          run.model,
+          run.status,
+          run.startedAt,
+          run.finishedAt ?? '',
+          typeof run.durationMs === 'number' ? Math.max(0, Math.round(run.durationMs)) : null,
+          JSON.stringify(run.usedKnowledge ?? []),
+          run.repairTriggered ? 1 : 0,
+          run.error ?? '',
+          run.responsePreview ?? '',
+          index
+        )
       })
 
       const volumeWorkflowSources =
@@ -2435,7 +2821,7 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
             chunkKeywords: chunk.topKeywords,
             chunkText: chunk.text
           }
-        })) as ReferenceStyleChunkResult
+        })).result as ReferenceStyleChunkResult
       })
     }
     emitReferenceImportProgress(window, {
@@ -2446,7 +2832,7 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
       percent: 90,
       sourceTitle: resolvedTitle
     })
-    const analysis = await generateAiTask({
+    const analysis = (await generateAiTask({
       task: 'reference-style-analysis',
       settings: request.settings,
       context: {
@@ -2463,9 +2849,12 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
         analysisSample: localContext.analysisSample,
         chunkSummaries: formatReferenceChunkSummaries(chunkResults)
       }
-    }) as ReferenceStyleAnalysisResult
+    })).result as ReferenceStyleAnalysisResult
 
     const importedAt = new Date().toISOString()
+    const knowledgeDocuments = request.projectId
+      ? buildImportedReferenceKnowledgeDocuments(request.projectId, resolvedTitle, localContext, analysis, importedAt)
+      : []
     emitReferenceImportProgress(window, {
       phase: 'saving',
       message: '正在整理结果并回填到项目风格规则与流程文件...',
@@ -2524,7 +2913,8 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
           analysis,
           localContext.metrics,
           localContext.topKeywords
-        )
+        ),
+        knowledgeDocuments
       }
     }
   } catch (error) {
@@ -2538,13 +2928,61 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
 
 /** 执行非流式 AI 生成任务 */
 ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload) => {
+  const knowledgeContext = retrieveKnowledgeContext(payload)
+
   try {
-    const result = await generateAiTask(payload)
+    const result = await generateAiTask(payload, knowledgeContext)
+    if (result.meta.projectId) {
+      emitAiRunEvent({
+        projectId: result.meta.projectId,
+        meta: {
+          id: randomUUID(),
+          chapterId: result.meta.chapterId,
+          task: result.meta.task,
+          provider: result.meta.provider,
+          model: result.meta.model,
+          status: result.meta.status,
+          startedAt: result.meta.startedAt,
+          finishedAt: result.meta.finishedAt,
+          durationMs: result.meta.durationMs,
+          usedKnowledge: result.meta.usedKnowledge,
+          repairTriggered: result.meta.repairTriggered,
+          error: result.meta.error,
+          responsePreview: result.meta.responsePreview
+        }
+      })
+    }
+
     return {
       success: true,
       result
     }
   } catch (error) {
+    const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
+      ? (error as { aiRunMeta?: Omit<WorkspaceAiRunRecord, 'projectId'> & { projectId: string } }).aiRunMeta
+      : undefined
+
+    if (aiRunMeta?.projectId) {
+      emitAiRunEvent({
+        projectId: aiRunMeta.projectId,
+        meta: {
+          id: randomUUID(),
+          chapterId: aiRunMeta.chapterId,
+          task: aiRunMeta.task,
+          provider: aiRunMeta.provider,
+          model: aiRunMeta.model,
+          status: aiRunMeta.status,
+          startedAt: aiRunMeta.startedAt,
+          finishedAt: aiRunMeta.finishedAt,
+          durationMs: aiRunMeta.durationMs,
+          usedKnowledge: aiRunMeta.usedKnowledge,
+          repairTriggered: aiRunMeta.repairTriggered,
+          error: aiRunMeta.error,
+          responsePreview: aiRunMeta.responsePreview
+        }
+      })
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'AI 调用失败'
@@ -2552,11 +2990,13 @@ ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload
   }
 })
 
+
 /** 启动流式 AI 任务，通过 SSE 事件实时推送增量文本到渲染进程 */
 ipcMain.handle('characterarc:ai-stream-start', async (event, payload: AiTaskPayload) => {
   try {
     const streamId = `stream-${randomUUID()}`
     const controller = new AbortController()
+    const knowledgeContext = retrieveKnowledgeContext(payload)
     activeAiStreams.set(streamId, controller)
 
     let streamedContent = ''
@@ -2576,17 +3016,64 @@ ipcMain.handle('characterarc:ai-stream-start', async (event, payload: AiTaskPayl
               }
             }
           },
-          controller.signal
+          controller.signal,
+          knowledgeContext
         )
+
+        if (result.meta.projectId) {
+          emitAiRunEvent({
+            projectId: result.meta.projectId,
+            meta: {
+              id: randomUUID(),
+              chapterId: result.meta.chapterId,
+              task: result.meta.task,
+              provider: result.meta.provider,
+              model: result.meta.model,
+              status: result.meta.status,
+              startedAt: result.meta.startedAt,
+              finishedAt: result.meta.finishedAt,
+              durationMs: result.meta.durationMs,
+              usedKnowledge: result.meta.usedKnowledge,
+              repairTriggered: result.meta.repairTriggered,
+              error: result.meta.error,
+              responsePreview: result.meta.responsePreview
+            }
+          })
+        }
 
         if (!event.sender.isDestroyed()) {
           event.sender.send('characterarc:ai-stream-event', {
             streamId,
             type: 'done',
-            content: result.content
+            content: (result.result as { content?: string }).content ?? ''
           })
         }
       } catch (error) {
+        const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
+          ? (error as { aiRunMeta?: Omit<WorkspaceAiRunRecord, 'projectId'> & { projectId: string } }).aiRunMeta
+          : undefined
+
+        if (aiRunMeta?.projectId) {
+          emitAiRunEvent({
+            projectId: aiRunMeta.projectId,
+            meta: {
+              id: randomUUID(),
+              chapterId: aiRunMeta.chapterId,
+              task: aiRunMeta.task,
+              provider: aiRunMeta.provider,
+              model: aiRunMeta.model,
+              status: aiRunMeta.status,
+              startedAt: aiRunMeta.startedAt,
+              finishedAt: aiRunMeta.finishedAt,
+              durationMs: aiRunMeta.durationMs,
+              usedKnowledge: aiRunMeta.usedKnowledge,
+              repairTriggered: aiRunMeta.repairTriggered,
+              error: aiRunMeta.error,
+              responsePreview: aiRunMeta.responsePreview
+            }
+          })
+        }
+
         if (!event.sender.isDestroyed()) {
           event.sender.send('characterarc:ai-stream-event', controller.signal.aborted
             ? {
@@ -2768,6 +3255,9 @@ ipcMain.handle('characterarc:assistant-prompt-clear', (_event, promptId: unknown
 
 /** 主窗口广播工作区数据同步到其他窗口（排除发送者自身） */
 ipcMain.handle('characterarc:workspace-sync-publish', (event, payload: unknown) => {
+  if (payload && typeof payload === 'object') {
+    updateLatestWorkspaceSnapshot(normalizeWorkspacePayload(payload as WorkspacePayload | LegacyWorkspacePayload))
+  }
   broadcastWindowEvent('characterarc:workspace-sync-event', payload, event.sender.id)
   return {
     success: true
@@ -2825,6 +3315,7 @@ ipcMain.handle('characterarc:load-workspace', async () => {
       }
     }
 
+    updateLatestWorkspaceSnapshot(workspace)
     nativeTheme.themeSource = workspace.appSettings.darkMode ? 'dark' : 'light'
 
     return {
@@ -2890,6 +3381,7 @@ ipcMain.handle('characterarc:save-workspace', async (_event, payload: unknown) =
     const db = await ensureWorkspaceDb()
     const normalized = normalizeWorkspacePayload(payload as WorkspacePayload | LegacyWorkspacePayload)
     writeWorkspaceSnapshot(db, normalized)
+    updateLatestWorkspaceSnapshot(normalized)
     nativeTheme.themeSource = normalized.appSettings.darkMode ? 'dark' : 'light'
 
     return {

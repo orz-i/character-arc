@@ -562,10 +562,26 @@ function hasChapterContext(context) {
 function hasWritingStyleContext(context) {
   return Boolean(String(context.writingStyleLabel ?? "").trim() || String(context.writingStylePrompt ?? "").trim());
 }
-function buildTaskPrompt(task) {
+function formatRetrievedKnowledge(knowledge) {
+  if (!knowledge?.length) {
+    return "";
+  }
+  return knowledge.slice(0, 5).map((item, index) => [
+    `资料${index + 1}｜${item.title}`,
+    `来源：${item.sourceLabel}`,
+    item.keywords.length ? `关键词：${item.keywords.join("、")}` : "",
+    `片段：${item.snippet}`
+  ].filter(Boolean).join("\n")).join("\n\n");
+}
+function buildTaskPrompt(task, knowledgeContext) {
   const { context } = task;
   const writingStyleInstruction = resolveWritingStyleInstruction(context);
   const projectSkills = formatProjectSkills(context.projectSkills);
+  const retrievedKnowledge = formatRetrievedKnowledge(knowledgeContext?.usedKnowledge);
+  const retrievalBlock = retrievedKnowledge ? `
+
+检索到的参考知识：
+${retrievedKnowledge}` : "";
   const wrapPrompt = (prompt) => {
     const capabilityPrompt = buildCapabilityPromptContext(task);
     return {
@@ -1099,7 +1115,7 @@ ${memberships || "暂无"}
 ${inspirationEntries || "暂无"}
 
 相关大纲：
-${outlineItems || "暂无"}
+${outlineItems || "暂无"}${retrievalBlock}
 
 最近对话：
 ${recentMessages || "暂无"}
@@ -1272,7 +1288,7 @@ ${memberships || "暂无"}
 ${inspirationEntries || "暂无"}
 
 相关大纲：
-${outlineItems || "暂无"}
+${outlineItems || "暂无"}${retrievalBlock}
 
 当前项目启用 skills：
 ${projectSkills || "暂无"}
@@ -1962,6 +1978,36 @@ async function writePromptLogFile(content) {
     console.error("[ai] failed to write prompt log file:", error);
   }
 }
+function buildResponsePreview(result) {
+  if ("content" in result && typeof result.content === "string") {
+    return result.content.trim().slice(0, 240);
+  }
+  try {
+    return JSON.stringify(result).slice(0, 240);
+  } catch {
+    return "";
+  }
+}
+function buildRunMeta(task, settings, status, startedAt, finishedAt, usedKnowledge, repairTriggered, responsePreview, error) {
+  const startedAtMs = new Date(startedAt).getTime();
+  const finishedAtMs = new Date(finishedAt).getTime();
+  const durationMs = Number.isFinite(startedAtMs) && Number.isFinite(finishedAtMs) ? Math.max(0, finishedAtMs - startedAtMs) : void 0;
+  return {
+    task: task.task,
+    projectId: String(task.context.projectId ?? "").trim(),
+    chapterId: String(task.context.chapterId ?? "").trim() || void 0,
+    provider: settings.provider,
+    model: settings.model,
+    status,
+    startedAt,
+    finishedAt,
+    durationMs,
+    usedKnowledge: usedKnowledge.slice(0, 5),
+    repairTriggered,
+    error,
+    responsePreview: responsePreview.trim().slice(0, 240)
+  };
+}
 function logPrompt(label, settings, prompt, task) {
   const taskLabel = task?.task ?? "unknown";
   const provider = settings.provider || "unknown";
@@ -2245,16 +2291,22 @@ function normalizeTaskResult(task, rawText) {
       return normalizeOutlineResult(parsed);
   }
 }
-async function resolveTaskResult(task, settings, rawText) {
+async function resolveTaskResult(task, settings, rawText, knowledgeContext) {
   try {
     const normalized = normalizeTaskResult(task, rawText);
     if (isTaskResultUsable(task, normalized)) {
-      return normalized;
+      return {
+        result: normalized,
+        repairTriggered: false
+      };
     }
   } catch {
   }
   if (!isStructuredTask(task)) {
-    return normalizeTaskResult(task, rawText);
+    return {
+      result: normalizeTaskResult(task, rawText),
+      repairTriggered: false
+    };
   }
   const repairPrompt = buildRepairPrompt(task, rawText);
   logPrompt("REPAIR", settings, repairPrompt, task);
@@ -2263,7 +2315,10 @@ async function resolveTaskResult(task, settings, rawText) {
   if (!isTaskResultUsable(task, repairedResult)) {
     throw new Error("AI 返回的结构化结果不完整，请稍后重试或调整提示词。");
   }
-  return repairedResult;
+  return {
+    result: repairedResult,
+    repairTriggered: true
+  };
 }
 async function testAiConnection(rawSettings) {
   const settings = normalizeSettings(rawSettings);
@@ -2282,24 +2337,94 @@ async function testAiConnection(rawSettings) {
     model: settings.model
   };
 }
-async function generateAiTask(task) {
+async function generateAiTask(task, knowledgeContext) {
   const settings = normalizeSettings(task.settings);
   validateSettings(settings);
-  const prompt = buildTaskPrompt(task);
+  const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const prompt = buildTaskPrompt(task, knowledgeContext);
   logPrompt("REQUEST", settings, prompt, task);
-  const rawText = await requestAiText(settings, prompt, task);
-  return resolveTaskResult(task, settings, rawText);
+  try {
+    const rawText = await requestAiText(settings, prompt, task);
+    const resolved = await resolveTaskResult(task, settings, rawText, knowledgeContext);
+    const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    return {
+      result: resolved.result,
+      meta: buildRunMeta(
+        task,
+        settings,
+        "success",
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        resolved.repairTriggered,
+        buildResponsePreview(resolved.result),
+        ""
+      )
+    };
+  } catch (error) {
+    const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const message = error instanceof Error ? error.message : "AI 调用失败";
+    throw Object.assign(new Error(message), {
+      aiRunMeta: buildRunMeta(
+        task,
+        settings,
+        "error",
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        "",
+        message
+      )
+    });
+  }
 }
-async function streamAiTask(task, handlers, signal) {
+async function streamAiTask(task, handlers, signal, knowledgeContext) {
   if (task.task !== "chapter-assistant" && task.task !== "chapter-first-draft") {
     throw new Error("当前流式输出仅支持章节创作助理和章节初稿生成。");
   }
   const settings = normalizeSettings(task.settings);
   validateSettings(settings);
-  const prompt = buildTaskPrompt(task);
+  const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const prompt = buildTaskPrompt(task, knowledgeContext);
   logPrompt("STREAM", settings, prompt, task);
-  const rawText = await requestAiTextStream(settings, prompt, handlers, signal, task);
-  return normalizeAssistantText(rawText);
+  try {
+    const rawText = await requestAiTextStream(settings, prompt, handlers, signal, task);
+    const result = normalizeAssistantText(rawText);
+    const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const status = signal.aborted ? "canceled" : "success";
+    return {
+      result,
+      meta: buildRunMeta(
+        task,
+        settings,
+        status,
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        buildResponsePreview(result),
+        ""
+      )
+    };
+  } catch (error) {
+    const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const status = signal.aborted ? "canceled" : "error";
+    const message = signal.aborted ? "" : error instanceof Error ? error.message : "AI 流式调用失败";
+    throw Object.assign(new Error(message || "AI 流式调用失败"), {
+      aiRunMeta: buildRunMeta(
+        task,
+        settings,
+        status,
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        "",
+        message
+      )
+    });
+  }
 }
 let jiebaRuntimePromise = null;
 const CHAPTER_HEADING_RE = /^(第[0-9零一二三四五六七八九十百千万两]+[章节回卷部集][^\n]{0,40})$/gm;
@@ -2583,8 +2708,90 @@ const WORKSPACE_FILE = "workspace.json";
 const activeAiStreams = /* @__PURE__ */ new Map();
 let mainWindow = null;
 let assistantWindow = null;
+let latestWorkspaceSnapshot = null;
 let latestAssistantContext = {};
 let latestAssistantPrompt = null;
+function updateLatestWorkspaceSnapshot(payload) {
+  latestWorkspaceSnapshot = payload;
+}
+function tokenizeKnowledgeText(value) {
+  return value.toLowerCase().split(/[^\p{L}\p{N}_]+/u).map((token) => token.trim()).filter((token) => token.length >= 2);
+}
+function buildKnowledgeQuery(task) {
+  return [
+    String(task.context.userPrompt ?? ""),
+    String(task.context.chapterTitle ?? ""),
+    String(task.context.chapterSummary ?? ""),
+    String(task.context.selectedText ?? ""),
+    String(task.context.sceneFocus ?? ""),
+    String(task.context.chapterContent ?? "").slice(0, 1200)
+  ].filter(Boolean).join("\n");
+}
+function retrieveKnowledgeContext(task) {
+  if (task.task !== "chapter-assistant" && task.task !== "chapter-first-draft") {
+    return { usedKnowledge: [] };
+  }
+  const projectId = String(task.context.projectId ?? "").trim();
+  if (!projectId || !latestWorkspaceSnapshot?.workspaces?.[projectId]) {
+    return { usedKnowledge: [] };
+  }
+  const workspace = latestWorkspaceSnapshot.workspaces[projectId];
+  const documents = Array.isArray(workspace.knowledgeDocuments) ? workspace.knowledgeDocuments : [];
+  if (!documents.length) {
+    return { usedKnowledge: [] };
+  }
+  const queryText = buildKnowledgeQuery(task);
+  const queryTokens = Array.from(new Set(tokenizeKnowledgeText(queryText)));
+  if (!queryTokens.length) {
+    return { usedKnowledge: [] };
+  }
+  const ranked = documents.map((document) => {
+    const title = String(document.title ?? "");
+    const summary = String(document.summary ?? "");
+    const content = String(document.content ?? "");
+    const sourceLabel = String(document.sourceLabel ?? "");
+    const keywords = Array.isArray(document.keywords) ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean) : [];
+    const haystack = `${title}
+${summary}
+${content}
+${sourceLabel}`.toLowerCase();
+    let score = document.sourceType === "reference-summary" ? 1.5 : 1;
+    for (const token of queryTokens) {
+      if (keywords.some((keyword) => keyword.toLowerCase() === token)) score += 4;
+      else if (keywords.some((keyword) => keyword.toLowerCase().includes(token) || token.includes(keyword.toLowerCase()))) score += 2.5;
+      if (title.toLowerCase().includes(token)) score += 2;
+      if (sourceLabel.toLowerCase().includes(token)) score += 1.5;
+      if (summary.toLowerCase().includes(token)) score += 1.2;
+      if (haystack.includes(token)) score += 0.6;
+    }
+    return {
+      score,
+      document,
+      keywords
+    };
+  }).filter((entry) => entry.score > 2).sort((a, b) => b.score - a.score).slice(0, 5).map(({ document, keywords }) => ({
+    documentId: document.id,
+    title: document.title,
+    sourceType: document.sourceType,
+    sourceLabel: document.sourceLabel,
+    snippet: (document.summary || document.content || "").trim().slice(0, 220),
+    keywords: keywords.slice(0, 8)
+  }));
+  return {
+    usedKnowledge: ranked
+  };
+}
+function appendAiRunToLatestSnapshot(payload) {
+  if (!latestWorkspaceSnapshot?.workspaces?.[payload.projectId]) {
+    return;
+  }
+  const workspace = latestWorkspaceSnapshot.workspaces[payload.projectId];
+  workspace.aiRuns = [...workspace.aiRuns ?? [], payload.meta].slice(-200);
+}
+function emitAiRunEvent(payload) {
+  appendAiRunToLatestSnapshot(payload);
+  broadcastWindowEvent("characterarc:ai-run-event", payload);
+}
 function getMainWindowMetrics() {
   const { workAreaSize } = electron.screen.getPrimaryDisplay();
   const compactScreen = workAreaSize.width <= 1366 || workAreaSize.height <= 820;
@@ -2989,6 +3196,40 @@ async function ensureWorkspaceDb() {
       FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_label TEXT NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      keywords_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS ai_runs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      chapter_id TEXT NOT NULL DEFAULT '',
+      task TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER,
+      used_knowledge_json TEXT NOT NULL DEFAULT '[]',
+      repair_triggered INTEGER NOT NULL DEFAULT 0,
+      error TEXT NOT NULL DEFAULT '',
+      response_preview TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS workflow_documents (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -3195,6 +3436,66 @@ function normalizeProjectRecord(project) {
     chapterAssistantTemplates: Array.isArray(project.chapterAssistantTemplates) ? project.chapterAssistantTemplates : []
   };
 }
+function buildImportedReferenceKnowledgeDocuments(projectId, title, localContext, analysis, importedAt) {
+  const summaryDocument = {
+    id: `knowledge-reference-summary-${node_crypto.randomUUID()}`,
+    projectId,
+    title: `${title}｜拆书总纲`,
+    sourceType: "reference-summary",
+    sourceLabel: localContext.fileName,
+    content: [
+      `作品：${title}`,
+      `风格总述：${analysis.overview}`,
+      `句式特征：${analysis.sentenceStyle}`,
+      `对白策略：${analysis.dialogueRatio}`,
+      `节奏控制：${analysis.pacingControl}`,
+      `情绪表达：${analysis.emotionExpression}`,
+      `叙事视角：${analysis.narrativePerspective}`,
+      localContext.topKeywords.length ? `关键词：${localContext.topKeywords.join("、")}` : "",
+      analysis.styleRules.length ? `风格规则：${analysis.styleRules.join("；")}` : "",
+      analysis.avoidRules.length ? `避免照搬：${analysis.avoidRules.join("；")}` : "",
+      `剧情骨架：${analysis.plotOutline}`,
+      `仿写模板：${analysis.reusableStylePrompt}`
+    ].filter(Boolean).join("\n"),
+    summary: analysis.overview,
+    keywords: Array.from(/* @__PURE__ */ new Set([...localContext.topKeywords, ...analysis.styleRules])).slice(0, 20),
+    metadata: {
+      sourceTitle: title,
+      fileName: localContext.fileName,
+      fileType: localContext.fileType,
+      characterCount: localContext.characterCount,
+      chapterCount: localContext.chapterCount,
+      metrics: localContext.metrics,
+      styleRules: analysis.styleRules,
+      avoidRules: analysis.avoidRules
+    },
+    createdAt: importedAt,
+    updatedAt: importedAt
+  };
+  const chunkDocuments = localContext.analysisChunks.map((chunk) => ({
+    id: `knowledge-reference-chunk-${node_crypto.randomUUID()}`,
+    projectId,
+    title: `${title}｜${chunk.label}`,
+    sourceType: "reference-chunk",
+    sourceLabel: `${localContext.fileName} / ${chunk.label}`,
+    content: chunk.text,
+    summary: `${chunk.label}，约 ${chunk.characterCount} 字；关键词：${chunk.topKeywords.join("、") || "待补充"}`,
+    keywords: chunk.topKeywords,
+    metadata: {
+      sourceTitle: title,
+      fileName: localContext.fileName,
+      fileType: localContext.fileType,
+      chunkId: chunk.id,
+      chunkLabel: chunk.label,
+      chunkOrder: chunk.order,
+      characterCount: chunk.characterCount,
+      metrics: chunk.metrics
+    },
+    createdAt: importedAt,
+    updatedAt: importedAt
+  }));
+  return [summaryDocument, ...chunkDocuments];
+}
 function buildImportedReferenceStylePrompt(title, analysis) {
   return [
     `以下规则来自参考作品《${title}》的拆书结果，已做去具体化处理，只借鉴文笔和结构骨架，不复用专有设定：`,
@@ -3305,6 +3606,8 @@ function normalizeWorkspacePayload(payload) {
         })) : [],
         chapterVersions: project.id === selectedProjectId ? legacyPayload.chapterVersions ?? [] : [],
         messages: project.id === selectedProjectId ? legacyPayload.messages ?? [] : [],
+        knowledgeDocuments: [],
+        aiRuns: [],
         workflowDocuments: []
       }
     ])
@@ -3446,6 +3749,65 @@ function readWorkspaceSnapshot(db) {
     FROM ai_messages
     ORDER BY project_id ASC, sort_order ASC
   `).all();
+  const knowledgeDocuments = db.prepare(`
+    SELECT project_id AS projectId, id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
+      keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
+    FROM knowledge_documents
+    ORDER BY project_id ASC, created_at DESC, rowid DESC
+  `).all().map((row) => ({
+    projectId: row.projectId,
+    id: row.id,
+    title: row.title,
+    sourceType: row.sourceType,
+    sourceLabel: row.sourceLabel,
+    content: row.content,
+    summary: row.summary,
+    keywords: (() => {
+      try {
+        return JSON.parse(row.keywordsJson);
+      } catch {
+        return [];
+      }
+    })(),
+    metadata: (() => {
+      try {
+        return JSON.parse(row.metadataJson);
+      } catch {
+        return {};
+      }
+    })(),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  }));
+  const aiRuns = db.prepare(`
+    SELECT project_id AS projectId, id, chapter_id AS chapterId, task, provider, model, status,
+      started_at AS startedAt, finished_at AS finishedAt, duration_ms AS durationMs,
+      used_knowledge_json AS usedKnowledgeJson, repair_triggered AS repairTriggered,
+      error, response_preview AS responsePreview
+    FROM ai_runs
+    ORDER BY project_id ASC, sort_order ASC
+  `).all().map((row) => ({
+    projectId: row.projectId,
+    id: row.id,
+    chapterId: row.chapterId || void 0,
+    task: row.task,
+    provider: row.provider,
+    model: row.model,
+    status: row.status,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt || void 0,
+    durationMs: typeof row.durationMs === "number" ? row.durationMs : void 0,
+    usedKnowledge: (() => {
+      try {
+        return JSON.parse(row.usedKnowledgeJson);
+      } catch {
+        return [];
+      }
+    })(),
+    repairTriggered: Boolean(row.repairTriggered),
+    error: row.error,
+    responsePreview: row.responsePreview
+  }));
   const workflowDocuments = db.prepare(`
     SELECT project_id AS projectId, volume_id AS volumeId, doc_key AS docKey, title, content, updated_at AS updatedAt
     FROM workflow_documents
@@ -3481,6 +3843,8 @@ function readWorkspaceSnapshot(db) {
         chapters: chapters.filter((chapter) => chapter.projectId === project.id).map(({ projectId: _projectId, ...chapter }) => chapter),
         chapterVersions: chapterVersions.filter((version) => version.projectId === project.id).map(({ projectId: _projectId, ...version }) => version),
         messages: messages.filter((message) => message.projectId === project.id).map(({ projectId: _projectId, ...message }) => message),
+        knowledgeDocuments: knowledgeDocuments.filter((document) => document.projectId === project.id).map(({ projectId: _projectId, ...document }) => document),
+        aiRuns: aiRuns.filter((run) => run.projectId === project.id).map(({ projectId: _projectId, ...run }) => run),
         workflowDocuments: []
       }
     ])
@@ -3519,6 +3883,8 @@ function writeWorkspaceSnapshot(db, payload) {
       DELETE FROM chapter_versions;
       DELETE FROM chapters;
       DELETE FROM ai_messages;
+      DELETE FROM knowledge_documents;
+      DELETE FROM ai_runs;
       DELETE FROM workflow_documents;
       DELETE FROM app_settings;
     `);
@@ -3588,6 +3954,14 @@ function writeWorkspaceSnapshot(db, payload) {
       INSERT INTO ai_messages (id, project_id, role, content, sort_order)
       VALUES (?, ?, ?, ?, ?)
     `);
+    const insertKnowledgeDocument = db.prepare(`
+      INSERT INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertAiRun = db.prepare(`
+      INSERT INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, repair_triggered, error, response_preview, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
     const insertWorkflowDocument = db.prepare(`
       INSERT INTO workflow_documents (id, project_id, volume_id, doc_key, title, content, updated_at, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -3605,6 +3979,8 @@ function writeWorkspaceSnapshot(db, payload) {
         chapters: [],
         chapterVersions: [],
         messages: [],
+        knowledgeDocuments: [],
+        aiRuns: [],
         workflowDocuments: []
       };
       workspace.worldviewEntries.forEach((entry, index) => {
@@ -3728,6 +4104,40 @@ function writeWorkspaceSnapshot(db, payload) {
       });
       workspace.messages.forEach((message, index) => {
         insertMessage.run(message.id, project.id, message.role, message.content, index);
+      });
+      workspace.knowledgeDocuments.forEach((document) => {
+        insertKnowledgeDocument.run(
+          document.id,
+          project.id,
+          document.title,
+          document.sourceType,
+          document.sourceLabel,
+          document.content,
+          document.summary,
+          JSON.stringify(document.keywords ?? []),
+          JSON.stringify(document.metadata ?? {}),
+          document.createdAt,
+          document.updatedAt
+        );
+      });
+      workspace.aiRuns.forEach((run, index) => {
+        insertAiRun.run(
+          run.id,
+          project.id,
+          run.chapterId ?? "",
+          run.task,
+          run.provider,
+          run.model,
+          run.status,
+          run.startedAt,
+          run.finishedAt ?? "",
+          typeof run.durationMs === "number" ? Math.max(0, Math.round(run.durationMs)) : null,
+          JSON.stringify(run.usedKnowledge ?? []),
+          run.repairTriggered ? 1 : 0,
+          run.error ?? "",
+          run.responsePreview ?? "",
+          index
+        );
       });
       const volumeWorkflowSources = workspace.outlineVolumes.flatMap(
         (volume) => (volume.workflowDocuments ?? []).map((document, index) => ({
@@ -4133,7 +4543,7 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
       chunkResults.push({
         label: chunk.label,
         characterCount: chunk.characterCount,
-        result: await generateAiTask({
+        result: (await generateAiTask({
           task: "reference-style-chunk",
           settings: request.settings,
           context: {
@@ -4149,7 +4559,7 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
             chunkKeywords: chunk.topKeywords,
             chunkText: chunk.text
           }
-        })
+        })).result
       });
     }
     emitReferenceImportProgress(window, {
@@ -4160,7 +4570,7 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
       percent: 90,
       sourceTitle: resolvedTitle
     });
-    const analysis = await generateAiTask({
+    const analysis = (await generateAiTask({
       task: "reference-style-analysis",
       settings: request.settings,
       context: {
@@ -4177,8 +4587,9 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
         analysisSample: localContext.analysisSample,
         chunkSummaries: formatReferenceChunkSummaries(chunkResults)
       }
-    });
+    })).result;
     const importedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const knowledgeDocuments = request.projectId ? buildImportedReferenceKnowledgeDocuments(request.projectId, resolvedTitle, localContext, analysis, importedAt) : [];
     emitReferenceImportProgress(window, {
       phase: "saving",
       message: "正在整理结果并回填到项目风格规则与流程文件...",
@@ -4236,7 +4647,8 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
           analysis,
           localContext.metrics,
           localContext.topKeywords
-        )
+        ),
+        knowledgeDocuments
       }
     };
   } catch (error) {
@@ -4248,13 +4660,55 @@ electron.ipcMain.handle("characterarc:import-reference-novel-analysis", async (_
   }
 });
 electron.ipcMain.handle("characterarc:ai-generate", async (_event, payload) => {
+  const knowledgeContext = retrieveKnowledgeContext(payload);
   try {
-    const result = await generateAiTask(payload);
+    const result = await generateAiTask(payload, knowledgeContext);
+    if (result.meta.projectId) {
+      emitAiRunEvent({
+        projectId: result.meta.projectId,
+        meta: {
+          id: node_crypto.randomUUID(),
+          chapterId: result.meta.chapterId,
+          task: result.meta.task,
+          provider: result.meta.provider,
+          model: result.meta.model,
+          status: result.meta.status,
+          startedAt: result.meta.startedAt,
+          finishedAt: result.meta.finishedAt,
+          durationMs: result.meta.durationMs,
+          usedKnowledge: result.meta.usedKnowledge,
+          repairTriggered: result.meta.repairTriggered,
+          error: result.meta.error,
+          responsePreview: result.meta.responsePreview
+        }
+      });
+    }
     return {
       success: true,
       result
     };
   } catch (error) {
+    const aiRunMeta = error && typeof error === "object" && "aiRunMeta" in error ? error.aiRunMeta : void 0;
+    if (aiRunMeta?.projectId) {
+      emitAiRunEvent({
+        projectId: aiRunMeta.projectId,
+        meta: {
+          id: node_crypto.randomUUID(),
+          chapterId: aiRunMeta.chapterId,
+          task: aiRunMeta.task,
+          provider: aiRunMeta.provider,
+          model: aiRunMeta.model,
+          status: aiRunMeta.status,
+          startedAt: aiRunMeta.startedAt,
+          finishedAt: aiRunMeta.finishedAt,
+          durationMs: aiRunMeta.durationMs,
+          usedKnowledge: aiRunMeta.usedKnowledge,
+          repairTriggered: aiRunMeta.repairTriggered,
+          error: aiRunMeta.error,
+          responsePreview: aiRunMeta.responsePreview
+        }
+      });
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : "AI 调用失败"
@@ -4265,6 +4719,7 @@ electron.ipcMain.handle("characterarc:ai-stream-start", async (event, payload) =
   try {
     const streamId = `stream-${node_crypto.randomUUID()}`;
     const controller = new AbortController();
+    const knowledgeContext = retrieveKnowledgeContext(payload);
     activeAiStreams.set(streamId, controller);
     let streamedContent = "";
     void (async () => {
@@ -4283,16 +4738,58 @@ electron.ipcMain.handle("characterarc:ai-stream-start", async (event, payload) =
               }
             }
           },
-          controller.signal
+          controller.signal,
+          knowledgeContext
         );
+        if (result.meta.projectId) {
+          emitAiRunEvent({
+            projectId: result.meta.projectId,
+            meta: {
+              id: node_crypto.randomUUID(),
+              chapterId: result.meta.chapterId,
+              task: result.meta.task,
+              provider: result.meta.provider,
+              model: result.meta.model,
+              status: result.meta.status,
+              startedAt: result.meta.startedAt,
+              finishedAt: result.meta.finishedAt,
+              durationMs: result.meta.durationMs,
+              usedKnowledge: result.meta.usedKnowledge,
+              repairTriggered: result.meta.repairTriggered,
+              error: result.meta.error,
+              responsePreview: result.meta.responsePreview
+            }
+          });
+        }
         if (!event.sender.isDestroyed()) {
           event.sender.send("characterarc:ai-stream-event", {
             streamId,
             type: "done",
-            content: result.content
+            content: result.result.content ?? ""
           });
         }
       } catch (error) {
+        const aiRunMeta = error && typeof error === "object" && "aiRunMeta" in error ? error.aiRunMeta : void 0;
+        if (aiRunMeta?.projectId) {
+          emitAiRunEvent({
+            projectId: aiRunMeta.projectId,
+            meta: {
+              id: node_crypto.randomUUID(),
+              chapterId: aiRunMeta.chapterId,
+              task: aiRunMeta.task,
+              provider: aiRunMeta.provider,
+              model: aiRunMeta.model,
+              status: aiRunMeta.status,
+              startedAt: aiRunMeta.startedAt,
+              finishedAt: aiRunMeta.finishedAt,
+              durationMs: aiRunMeta.durationMs,
+              usedKnowledge: aiRunMeta.usedKnowledge,
+              repairTriggered: aiRunMeta.repairTriggered,
+              error: aiRunMeta.error,
+              responsePreview: aiRunMeta.responsePreview
+            }
+          });
+        }
         if (!event.sender.isDestroyed()) {
           event.sender.send(
             "characterarc:ai-stream-event",
@@ -4433,6 +4930,9 @@ electron.ipcMain.handle("characterarc:assistant-prompt-clear", (_event, promptId
   };
 });
 electron.ipcMain.handle("characterarc:workspace-sync-publish", (event, payload) => {
+  if (payload && typeof payload === "object") {
+    updateLatestWorkspaceSnapshot(normalizeWorkspacePayload(payload));
+  }
   broadcastWindowEvent("characterarc:workspace-sync-event", payload, event.sender.id);
   return {
     success: true
@@ -4482,6 +4982,7 @@ electron.ipcMain.handle("characterarc:load-workspace", async () => {
         payload: null
       };
     }
+    updateLatestWorkspaceSnapshot(workspace);
     electron.nativeTheme.themeSource = workspace.appSettings.darkMode ? "dark" : "light";
     return {
       success: true,
@@ -4535,6 +5036,7 @@ electron.ipcMain.handle("characterarc:save-workspace", async (_event, payload) =
     const db = await ensureWorkspaceDb();
     const normalized = normalizeWorkspacePayload(payload);
     writeWorkspaceSnapshot(db, normalized);
+    updateLatestWorkspaceSnapshot(normalized);
     electron.nativeTheme.themeSource = normalized.appSettings.darkMode ? "dark" : "light";
     return {
       success: true

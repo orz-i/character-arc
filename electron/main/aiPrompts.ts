@@ -1,4 +1,4 @@
-import type { AiTaskPayload, PromptPair } from './aiShared'
+import type { AiTaskKnowledgeContext, AiTaskPayload, PromptPair } from './aiShared'
 import { resolveProjectBootstrapPromptParts } from './projectBootstrapPrompts'
 import {
   buildCapabilityPromptContext,
@@ -7,15 +7,33 @@ import {
   resolveChapterAssistantQuickActionInstruction
 } from './promptLibrary'
 
+function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['usedKnowledge']): string {
+  if (!knowledge?.length) {
+    return ''
+  }
+
+  return knowledge
+    .slice(0, 5)
+    .map((item, index) => [
+      `资料${index + 1}｜${item.title}`,
+      `来源：${item.sourceLabel}`,
+      item.keywords.length ? `关键词：${item.keywords.join('、')}` : '',
+      `片段：${item.snippet}`
+    ].filter(Boolean).join('\n'))
+    .join('\n\n')
+}
+
 /**
  * 根据任务类型构建完整的提示词对（system + user）。
  * 每种任务类型有独立的提示词模板，上下文信息通过 context 对象注入。
  * 章节助理任务会额外注入写作风格、输出模式、响应长度等指令。
  */
-export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
+export function buildTaskPrompt(task: AiTaskPayload, knowledgeContext?: AiTaskKnowledgeContext): PromptPair {
   const { context } = task
   const writingStyleInstruction = resolveWritingStyleInstruction(context)
   const projectSkills = formatProjectSkills(context.projectSkills)
+  const retrievedKnowledge = formatRetrievedKnowledge(knowledgeContext?.usedKnowledge)
+  const retrievalBlock = retrievedKnowledge ? `\n\n检索到的参考知识：\n${retrievedKnowledge}` : ''
   const wrapPrompt = (prompt: PromptPair): PromptPair => {
     const capabilityPrompt = buildCapabilityPromptContext(task)
     return {
@@ -331,7 +349,7 @@ export function buildTaskPrompt(task: AiTaskPayload): PromptPair {
 
 【质量审查框架】
 审查时按"问题→证据→最小修法"输出，优先修根因，不做表面润色。审查维度包括：设定冲突、人物OOC、爽点缺失、节奏拖沓、配角降智、敌方信息越界、战力崩坏、伏笔失管、语言机械、词汇疲劳、利益链不成立、台词失真。`,
-      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考（含正文预览）：\n${relatedChapters || '暂无'}\n\n本卷章节概览（摘要，供情节衔接参考）：\n${volumeChapterSummaries || '暂无'}\n\n全书开篇（世界与角色基调参照）：\n${novelOpenerSummary || '暂无'}\n\n未收伏笔 / 活跃剧情线：\n${openPlotThreads || '暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n最近对话：\n${recentMessages || '暂无'}\n\n当前项目启用 skills：\n${projectSkills || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果\n9. 如果当前项目启用了 skills，优先吸收其中与正文创作、优化、审查相关的规则与口径\n10. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n11. 续写或改写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源\n12. 如果"未收伏笔 / 活跃剧情线"不为空，本次内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确收束情节\n13. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节\n14. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智\n15. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡\n16. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升\n17. ${modeInstruction}\n18. ${lengthInstruction}\n19. ${quickActionInstruction}`
+      user: `请处理当前写作请求，并优先给出可直接使用的结果。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前项目默认风格：${String(context.writingStyleLabel ?? '未指定')}\n风格要求：${String(context.writingStylePrompt ?? '暂无')}\n当前分卷：${String(context.chapterVolumeTitle ?? '')}\n当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节状态：${String(context.chapterStatus ?? '')}\n当前章节预估字数：${String(context.chapterWordTarget ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n当前选中文本：\n${selectedText || '暂无'}\n\n相邻章节参考（含正文预览）：\n${relatedChapters || '暂无'}\n\n本卷章节概览（摘要，供情节衔接参考）：\n${volumeChapterSummaries || '暂无'}\n\n全书开篇（世界与角色基调参照）：\n${novelOpenerSummary || '暂无'}\n\n未收伏笔 / 活跃剧情线：\n${openPlotThreads || '暂无（请注意：若有遗漏伏笔，请不要引入与已有伏笔矛盾的设定）'}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n当前可用灵感：\n${inspirationEntries || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}${retrievalBlock}\n\n最近对话：\n${recentMessages || '暂无'}\n\n当前项目启用 skills：\n${projectSkills || '暂无'}\n\n快捷动作：${quickAction}\n输出模式：${responseMode}\n输出长度：${responseLength}\n用户请求：${String(context.userPrompt ?? '')}\n\n要求：\n1. 回答要紧贴当前章节上下文\n2. 如果请求是润色、续写、描写，请优先输出可直接插入正文的内容\n3. 如果提供了当前选中文本，并且请求与润色、改写、分析有关，请优先只围绕这段文本处理，不要重写整章\n4. 如果请求是分析或建议，请给出清晰可执行的建议\n5. 避免与最近几条对话重复表达，除非用户明确要求重写\n6. 如果是续写，请尽量与相邻章节和当前分卷的情绪、节奏保持连续\n7. 若当前可用灵感不为空，可优先借用其中最贴合的一条，把它自然落到正文、桥段或冲突推进中\n8. 如果角色关系、组织立场或成员归属会影响人物行为、冲突走向或措辞，请优先把这些因素写进结果\n9. 如果当前项目启用了 skills，优先吸收其中与正文创作、优化、审查相关的规则与口径\n10. 必须遵循当前项目默认风格；若用户请求与风格冲突，以用户请求优先，但尽量保留风格骨架\n11. 续写或改写前确认最近章节中的人物状态、已公开情报和未回收伏笔，确保因果连续，不凭空引入未铺垫的设定或资源\n12. 如果"未收伏笔 / 活跃剧情线"不为空，本次内容不得与这些线索相矛盾；若本章计划收尾某条线，请在正文中给出明确收束情节\n13. 先识别当前章节类型（布局章/事件章/过渡章/回收章），再选择对应写法，不要用同一种模板写所有章节\n14. 配角和反派必须有反扑、误判和自己的算盘，不能工具人化或为了推剧情而降智\n15. 去AI味：句式长短交替，避免重复句式和相同主语开头；对高疲劳词保持克制，同章同一高识别词默认只出现1次；群像反应不要一律"全场震惊"，改写成具体角色的身体反应或利益震荡\n16. 收益必须落到具体资源、地位变化、信息获取或伏笔回收，不能只写抽象提升\n17. ${modeInstruction}\n18. ${lengthInstruction}\n19. ${quickActionInstruction}`
     })
   }
 
@@ -510,7 +528,7 @@ ${memberships || '暂无'}
 ${inspirationEntries || '暂无'}
 
 相关大纲：
-${outlineItems || '暂无'}
+${outlineItems || '暂无'}${retrievalBlock}
 
 当前项目启用 skills：
 ${projectSkills || '暂无'}

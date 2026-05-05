@@ -46,6 +46,8 @@ import type {
   InspirationEntry,
   ImportConflictMode,
   ImportExportModuleType,
+  KnowledgeDocument,
+  AiRunRecord,
   NovelLength,
   OrganizationEntry,
   OrganizationMembership,
@@ -214,6 +216,10 @@ export const useAppStore = defineStore('app', () => {
   const messages = computed(() => currentWorkspace.value.messages)
   /** 当前项目的剧情线索列表 */
   const plotThreads = computed(() => currentWorkspace.value.plotThreads)
+  /** 当前项目的知识文档列表 */
+  const knowledgeDocuments = computed(() => currentWorkspace.value.knowledgeDocuments)
+  /** 当前项目的 AI 运行记录列表 */
+  const aiRuns = computed(() => currentWorkspace.value.aiRuns)
   /** 流程面板当前激活的分卷（回退到第一个分卷） */
   const activeWorkflowVolume = computed(
     () => outlineVolumes.value.find((v) => v.id === activeWorkflowVolumeId.value) ?? outlineVolumes.value[0]
@@ -372,6 +378,14 @@ export const useAppStore = defineStore('app', () => {
     } finally {
       isApplyingRemoteWorkspaceSync = false
     }
+  }
+
+  function handleAiRunEvent(payload: CharacterArcAiRunEventPayload): void {
+    if (!payload?.projectId || !payload.meta) {
+      return
+    }
+
+    appendAiRun(payload.projectId, payload.meta)
   }
 
   /** 处理助手窗口发送的命令（如将 AI 结果插入正文），仅主窗口响应 */
@@ -1007,7 +1021,6 @@ export const useAppStore = defineStore('app', () => {
     )
     schedulePersist('fast')
   }
-
   function updateWorkflowDocument(volumeId: string, documentKey: string, content: string): void {
     updateCurrentWorkspace((workspace) => ({
       ...workspace,
@@ -1023,6 +1036,58 @@ export const useAppStore = defineStore('app', () => {
               )
             }
       )
+    }))
+    schedulePersist('fast')
+  }
+
+  function replaceKnowledgeDocuments(projectId: string, documents: KnowledgeDocument[]): void {
+    const normalizedDocuments = documents.map((document) => ({
+      ...document,
+      projectId,
+      title: document.title?.trim() || '未命名知识文档',
+      sourceLabel: document.sourceLabel?.trim() || '',
+      content: document.content?.trim() || '',
+      summary: document.summary?.trim() || '',
+      keywords: Array.isArray(document.keywords)
+        ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 20)
+        : []
+    }))
+
+    updateProjectWorkspace(projectId, (workspace) => ({
+      ...workspace,
+      knowledgeDocuments: normalizedDocuments
+    }))
+    schedulePersist('fast')
+  }
+
+  function appendAiRun(projectId: string, record: Omit<AiRunRecord, 'projectId'>): void {
+    if (!projectId.trim()) {
+      return
+    }
+
+    updateProjectWorkspace(projectId, (workspace) => ({
+      ...workspace,
+      aiRuns: [
+        ...(workspace.aiRuns ?? []),
+        {
+          ...record,
+          projectId,
+          usedKnowledge: Array.isArray(record.usedKnowledge)
+            ? record.usedKnowledge.map((item) => ({
+                documentId: String(item.documentId ?? '').trim(),
+                title: String(item.title ?? '').trim() || '未命名知识片段',
+                sourceType: item.sourceType === 'reference-summary'
+                  ? 'reference-summary' as const
+                  : 'reference-chunk' as const,
+                sourceLabel: String(item.sourceLabel ?? '').trim(),
+                snippet: String(item.snippet ?? '').trim(),
+                keywords: Array.isArray(item.keywords)
+                  ? item.keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 8)
+                  : []
+              }))
+            : []
+        }
+      ].slice(-200)
     }))
     schedulePersist('fast')
   }
@@ -2089,6 +2154,7 @@ export const useAppStore = defineStore('app', () => {
   // ── 跨窗口事件监听注册 ──
   // 监听工作区同步事件（来自其他窗口的状态更新）
   window.characterArc.onWorkspaceSync(handleRemoteWorkspaceSync)
+  window.characterArc.onAiRunEvent(handleAiRunEvent)
   window.characterArc.onAssistantWindowVisibility((payload) => {
     aiVisible.value = payload.visible
   })
@@ -2157,6 +2223,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     activePanel,
     autoSaveIntervalLabel,
+    aiRuns,
     aiVisible,
     appSettings,
     backToProjects,
@@ -2241,6 +2308,8 @@ export const useAppStore = defineStore('app', () => {
     activeWorkflowVolumeId,
     activeWorkflowVolume,
     setActiveWorkflowVolumeId,
+    replaceKnowledgeDocuments,
+    knowledgeDocuments,
     updateWorkflowDocument,
     updateWorkflowDocuments,
     appendWorkflowDocumentEntry,

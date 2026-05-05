@@ -47,6 +47,14 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
       electron.ipcRenderer.removeListener("characterarc:ai-stream-event", listener);
     };
   },
+  /** 监听 AI 运行记录事件 */
+  onAiRunEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    electron.ipcRenderer.on("characterarc:ai-run-event", listener);
+    return () => {
+      electron.ipcRenderer.removeListener("characterarc:ai-run-event", listener);
+    };
+  },
   /** 测试 AI 连接是否通畅，发送探测请求验证鉴权和网络 */
   testAiConnection: (settings) => electron.ipcRenderer.invoke("characterarc:ai-test-connection", toIpcPayload(settings)),
   /** 获取 AI 供应商的可用模型列表 */

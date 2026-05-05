@@ -158,7 +158,133 @@
   cursor: not-allowed;
 }
 
-/* ── 消息列表 ── */
+
+.assistant-run-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 16px 0;
+  padding: 14px;
+  border: 1px solid var(--assistant-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.assistant-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assistant-run-head strong {
+  color: #111827;
+  font-size: 13px;
+}
+
+.assistant-run-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475467;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.assistant-run-status.success {
+  color: #166534;
+  background: rgba(220, 252, 231, 0.92);
+}
+
+.assistant-run-status.error {
+  color: #b42318;
+  background: rgba(254, 226, 226, 0.92);
+}
+
+.assistant-run-status.canceled {
+  color: #92400e;
+  background: rgba(254, 243, 199, 0.92);
+}
+
+.assistant-run-status.running {
+  color: var(--arc-primary);
+  background: color-mix(in srgb, var(--arc-primary) 10%, white);
+}
+
+.assistant-run-meta,
+.assistant-run-error,
+.assistant-run-empty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.assistant-run-meta,
+.assistant-run-empty {
+  color: var(--assistant-muted);
+}
+
+.assistant-run-error {
+  color: #b42318;
+}
+
+.assistant-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-knowledge-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--assistant-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.assistant-knowledge-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assistant-knowledge-title-row strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.assistant-knowledge-title-row span,
+.assistant-knowledge-item p {
+  color: var(--assistant-muted);
+  font-size: 11px;
+}
+
+.assistant-knowledge-item p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.assistant-knowledge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assistant-knowledge-tags span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: color-mix(in srgb, var(--arc-primary) 8%, white);
+  color: var(--arc-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
 .assistant-messages {
   display: flex;
   flex: 1;

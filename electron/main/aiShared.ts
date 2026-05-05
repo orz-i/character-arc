@@ -32,9 +32,41 @@ export type AiTaskName =
   | 'chapter-analysis'    // 章节质量分析
   | 'inspiration-pack'    // 批量生成灵感卡片
 
+/** AI 调用使用的知识片段 */
+export type AiRunKnowledgeItem = {
+  documentId: string
+  title: string
+  sourceType: 'reference-summary' | 'reference-chunk'
+  sourceLabel: string
+  snippet: string
+  keywords: string[]
+}
+
+/** AI 运行元数据 */
+export type AiRunMeta = {
+  task: AiTaskName
+  projectId: string
+  chapterId?: string
+  provider: string
+  model: string
+  status: 'running' | 'success' | 'error' | 'canceled'
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  usedKnowledge: AiRunKnowledgeItem[]
+  repairTriggered: boolean
+  error: string
+  responsePreview: string
+}
+
+/** 可选的知识检索上下文 */
+export type AiTaskKnowledgeContext = {
+  usedKnowledge: AiRunKnowledgeItem[]
+}
+
 /** AI 任务请求载荷，包含任务类型、设置和上下文信息 */
 export type AiTaskPayload = {
-  /** 任务类型，决定提示词和解析策略 */
+  /** 任务类型，决定提示词构建和结果解析策略 */
   task: AiTaskName
   /** 调用 AI 时使用的设置 */
   settings: AppSettings
@@ -227,6 +259,12 @@ export type AiTaskResult =
   | InspirationPackResult
   | PlotThreadDetectResult
   | ChapterScenePlanResult
+
+/** AI 返回给调用方的完整响应 */
+export type AiTaskResponse = {
+  result: AiTaskResult
+  meta: AiRunMeta
+}
 
 /** 提示词对：系统提示词 + 用户提示词 */
 export type PromptPair = {

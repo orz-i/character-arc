@@ -8,11 +8,14 @@ import {
 import {
   normalizeSettings,
   validateSettings,
+  type AiRunMeta,
   type AiStreamHandlers,
-  type ChapterAnalysisResult,
+  type AiTaskKnowledgeContext,
   type AiTaskPayload,
+  type AiTaskResponse,
   type AiTaskResult,
   type AppSettings,
+  type ChapterAnalysisResult,
   type ChapterAssistantResult,
   type CharacterResult,
   type InspirationPackResult,
@@ -40,6 +43,52 @@ async function writePromptLogFile(content: string): Promise<void> {
     await appendFile(AI_PROMPT_LOG_FILE, `${content}\n`, 'utf8')
   } catch (error) {
     console.error('[ai] failed to write prompt log file:', error)
+  }
+}
+
+function buildResponsePreview(result: AiTaskResult): string {
+  if ('content' in result && typeof result.content === 'string') {
+    return result.content.trim().slice(0, 240)
+  }
+
+  try {
+    return JSON.stringify(result).slice(0, 240)
+  } catch {
+    return ''
+  }
+}
+
+function buildRunMeta(
+  task: AiTaskPayload,
+  settings: AppSettings,
+  status: AiRunMeta['status'],
+  startedAt: string,
+  finishedAt: string,
+  usedKnowledge: AiTaskKnowledgeContext['usedKnowledge'],
+  repairTriggered: boolean,
+  responsePreview: string,
+  error: string
+): AiRunMeta {
+  const startedAtMs = new Date(startedAt).getTime()
+  const finishedAtMs = new Date(finishedAt).getTime()
+  const durationMs = Number.isFinite(startedAtMs) && Number.isFinite(finishedAtMs)
+    ? Math.max(0, finishedAtMs - startedAtMs)
+    : undefined
+
+  return {
+    task: task.task,
+    projectId: String(task.context.projectId ?? '').trim(),
+    chapterId: String(task.context.chapterId ?? '').trim() || undefined,
+    provider: settings.provider,
+    model: settings.model,
+    status,
+    startedAt,
+    finishedAt,
+    durationMs,
+    usedKnowledge: usedKnowledge.slice(0, 5),
+    repairTriggered,
+    error,
+    responsePreview: responsePreview.trim().slice(0, 240)
   }
 }
 
@@ -473,22 +522,31 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
  * 先尝试直接解析原始文本；若结果不可用且为结构化任务，则用修复提示词让 AI 重新生成合法 JSON。
  * 修复后仍不合格则抛出错误。
  */
-async function resolveTaskResult(task: AiTaskPayload, settings: AppSettings, rawText: string): Promise<AiTaskResult> {
+async function resolveTaskResult(
+  task: AiTaskPayload,
+  settings: AppSettings,
+  rawText: string,
+  knowledgeContext?: AiTaskKnowledgeContext
+): Promise<{ result: AiTaskResult; repairTriggered: boolean }> {
   try {
     const normalized = normalizeTaskResult(task, rawText)
     if (isTaskResultUsable(task, normalized)) {
-      return normalized
+      return {
+        result: normalized,
+        repairTriggered: false
+      }
     }
   } catch {
     // 解析或校验失败，进入修复流程
   }
 
-  // 章节助理等非结构化任务不走修复流程，直接返回
   if (!isStructuredTask(task)) {
-    return normalizeTaskResult(task, rawText)
+    return {
+      result: normalizeTaskResult(task, rawText),
+      repairTriggered: false
+    }
   }
 
-  // 用修复提示词让 AI 重新生成合法 JSON
   const repairPrompt = buildRepairPrompt(task, rawText)
   logPrompt('REPAIR', settings, repairPrompt, task)
   const repairedText = await requestAiText(settings, repairPrompt, task)
@@ -498,8 +556,12 @@ async function resolveTaskResult(task: AiTaskPayload, settings: AppSettings, raw
     throw new Error('AI 返回的结构化结果不完整，请稍后重试或调整提示词。')
   }
 
-  return repairedResult
+  return {
+    result: repairedResult,
+    repairTriggered: true
+  }
 }
+
 
 /** 测试 AI 连接是否可用，发送一条极简探测请求验证鉴权和网络通畅 */
 export async function testAiConnection(rawSettings: AppSettings): Promise<{ provider: string; model: string }> {
@@ -528,14 +590,53 @@ export async function testAiConnection(rawSettings: AppSettings): Promise<{ prov
  * 执行一次非流式 AI 任务。
  * 完整流程：标准化设置 → 校验 → 构建提示词 → 发送请求 → 解析/修复结果。
  */
-export async function generateAiTask(task: AiTaskPayload): Promise<AiTaskResult> {
+export async function generateAiTask(
+  task: AiTaskPayload,
+  knowledgeContext?: AiTaskKnowledgeContext
+): Promise<AiTaskResponse> {
   const settings = normalizeSettings(task.settings)
   validateSettings(settings)
-  const prompt = buildTaskPrompt(task)
+  const startedAt = new Date().toISOString()
+  const prompt = buildTaskPrompt(task, knowledgeContext)
   logPrompt('REQUEST', settings, prompt, task)
-  const rawText = await requestAiText(settings, prompt, task)
-  return resolveTaskResult(task, settings, rawText)
+
+  try {
+    const rawText = await requestAiText(settings, prompt, task)
+    const resolved = await resolveTaskResult(task, settings, rawText, knowledgeContext)
+    const finishedAt = new Date().toISOString()
+    return {
+      result: resolved.result,
+      meta: buildRunMeta(
+        task,
+        settings,
+        'success',
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        resolved.repairTriggered,
+        buildResponsePreview(resolved.result),
+        ''
+      )
+    }
+  } catch (error) {
+    const finishedAt = new Date().toISOString()
+    const message = error instanceof Error ? error.message : 'AI 调用失败'
+    throw Object.assign(new Error(message), {
+      aiRunMeta: buildRunMeta(
+        task,
+        settings,
+        'error',
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        '',
+        message
+      )
+    })
+  }
 }
+
 
 /**
  * 执行一次流式 AI 任务（仅支持章节创作助理）。
@@ -544,16 +645,55 @@ export async function generateAiTask(task: AiTaskPayload): Promise<AiTaskResult>
 export async function streamAiTask(
   task: AiTaskPayload,
   handlers: AiStreamHandlers,
-  signal: AbortSignal
-): Promise<ChapterAssistantResult> {
+  signal: AbortSignal,
+  knowledgeContext?: AiTaskKnowledgeContext
+): Promise<AiTaskResponse> {
   if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft') {
     throw new Error('当前流式输出仅支持章节创作助理和章节初稿生成。')
   }
 
   const settings = normalizeSettings(task.settings)
   validateSettings(settings)
-  const prompt = buildTaskPrompt(task)
+  const startedAt = new Date().toISOString()
+  const prompt = buildTaskPrompt(task, knowledgeContext)
   logPrompt('STREAM', settings, prompt, task)
-  const rawText = await requestAiTextStream(settings, prompt, handlers, signal, task)
-  return normalizeAssistantText(rawText)
+
+  try {
+    const rawText = await requestAiTextStream(settings, prompt, handlers, signal, task)
+    const result = normalizeAssistantText(rawText)
+    const finishedAt = new Date().toISOString()
+    const status = signal.aborted ? 'canceled' : 'success'
+
+    return {
+      result,
+      meta: buildRunMeta(
+        task,
+        settings,
+        status,
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        buildResponsePreview(result),
+        ''
+      )
+    }
+  } catch (error) {
+    const finishedAt = new Date().toISOString()
+    const status = signal.aborted ? 'canceled' : 'error'
+    const message = signal.aborted ? '' : (error instanceof Error ? error.message : 'AI 流式调用失败')
+    throw Object.assign(new Error(message || 'AI 流式调用失败'), {
+      aiRunMeta: buildRunMeta(
+        task,
+        settings,
+        status,
+        startedAt,
+        finishedAt,
+        knowledgeContext?.usedKnowledge ?? [],
+        false,
+        '',
+        message
+      )
+    })
+  }
 }

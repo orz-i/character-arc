@@ -5,6 +5,7 @@ import { DEFAULT_CHAPTER_WORD_TARGET, normalizeChapterWordTarget } from '@/featu
 import { createOutlineVolume as createWorkspaceVolume } from '@/features/workspace/outlineVolumes'
 import { createDemoWorkspace, normalizeWorkspace } from '@/features/workspace/projectWorkspace'
 import type {
+  AiRunRecord,
   AppSettings,
   ChapterAssistantPromptTemplate,
   ChapterDraft,
@@ -13,6 +14,7 @@ import type {
   CharacterRelationship,
   CharacterCard,
   InspirationEntry,
+  KnowledgeDocument,
   NovelLength,
   OrganizationEntry,
   OrganizationMembership,
@@ -183,6 +185,55 @@ export const defaultAppSettings: AppSettings = {
 }
 
 // 合并用户设置与默认设置，uiScale 限制在 0.75-1.75 的合理范围内
+function normalizeKnowledgeDocuments(documents?: KnowledgeDocument[] | null): KnowledgeDocument[] {
+  return Array.isArray(documents)
+    ? documents.map((document) => ({
+        ...document,
+        title: document.title?.trim() || '未命名知识文档',
+        sourceType: document.sourceType === 'reference-summary' ? 'reference-summary' : 'reference-chunk',
+        sourceLabel: document.sourceLabel?.trim() || '',
+        content: document.content?.trim() || '',
+        summary: document.summary?.trim() || '',
+        keywords: Array.isArray(document.keywords)
+          ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 20)
+          : [],
+        metadata: document.metadata && typeof document.metadata === 'object' ? document.metadata : {},
+        createdAt: document.createdAt || new Date().toISOString(),
+        updatedAt: document.updatedAt || document.createdAt || new Date().toISOString()
+      }))
+    : []
+}
+
+function normalizeAiRuns(aiRuns?: AiRunRecord[] | null): AiRunRecord[] {
+  return Array.isArray(aiRuns)
+    ? aiRuns.map((run) => ({
+        ...run,
+        status:
+          run.status === 'running' || run.status === 'success' || run.status === 'error' || run.status === 'canceled'
+            ? run.status
+            : 'success',
+        startedAt: run.startedAt || new Date().toISOString(),
+        finishedAt: run.finishedAt || undefined,
+        durationMs: Number.isFinite(run.durationMs) ? Math.max(0, Number(run.durationMs)) : undefined,
+        repairTriggered: Boolean(run.repairTriggered),
+        error: run.error?.trim() || '',
+        responsePreview: run.responsePreview?.trim() || '',
+        usedKnowledge: Array.isArray(run.usedKnowledge)
+          ? run.usedKnowledge.map((item) => ({
+              ...item,
+              title: item.title?.trim() || '未命名知识片段',
+              sourceType: item.sourceType === 'reference-summary' ? 'reference-summary' : 'reference-chunk',
+              sourceLabel: item.sourceLabel?.trim() || '',
+              snippet: item.snippet?.trim() || '',
+              keywords: Array.isArray(item.keywords)
+                ? item.keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 12)
+                : []
+            }))
+          : []
+      }))
+    : []
+}
+
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
   return {
     ...defaultAppSettings,
@@ -244,6 +295,8 @@ export function normalizeProjectWorkspaceData(
     chapters: normalized.chapters.map(normalizeChapterDraft),
     chapterVersions: normalized.chapterVersions.map(normalizeChapterVersion),
     messages: normalized.messages,
+    knowledgeDocuments: normalizeKnowledgeDocuments(normalized.knowledgeDocuments),
+    aiRuns: normalizeAiRuns(normalized.aiRuns),
     workflowDocuments: normalizeWorkflowDocuments(normalized.workflowDocuments),
     plotThreads: normalized.plotThreads
   }

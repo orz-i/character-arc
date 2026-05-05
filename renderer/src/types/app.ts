@@ -357,6 +357,86 @@ export interface ChatMessage {
   content: string
 }
 
+/** 项目知识文档来源类型 */
+export type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk'
+
+/** 项目级知识文档 */
+export interface KnowledgeDocument {
+  /** 文档唯一标识 */
+  id: string
+  /** 所属项目 ID */
+  projectId: string
+  /** 展示标题 */
+  title: string
+  /** 来源类型 */
+  sourceType: KnowledgeDocumentSourceType
+  /** 来源标签，如文件名或分块名 */
+  sourceLabel: string
+  /** 文档正文 */
+  content: string
+  /** 简要摘要 */
+  summary: string
+  /** 关键词 */
+  keywords: string[]
+  /** 扩展元数据 */
+  metadata: Record<string, unknown>
+  /** 创建时间 */
+  createdAt: string
+  /** 最后更新时间 */
+  updatedAt: string
+}
+
+/** 某次 AI 调用实际使用的知识项 */
+export interface AiRunKnowledgeItem {
+  /** 命中的知识文档 ID */
+  documentId: string
+  /** 文档标题 */
+  title: string
+  /** 文档来源类型 */
+  sourceType: KnowledgeDocumentSourceType
+  /** 来源标签 */
+  sourceLabel: string
+  /** 给用户展示的命中片段 */
+  snippet: string
+  /** 命中关键词 */
+  keywords: string[]
+}
+
+/** AI 运行状态 */
+export type AiRunStatus = 'running' | 'success' | 'error' | 'canceled'
+
+/** AI 调用运行记录 */
+export interface AiRunRecord {
+  /** 运行记录唯一标识 */
+  id: string
+  /** 所属项目 ID */
+  projectId: string
+  /** 关联章节 ID */
+  chapterId?: string
+  /** 任务类型 */
+  task: string
+  /** AI 供应商 */
+  provider: string
+  /** 模型名称 */
+  model: string
+  /** 运行状态 */
+  status: AiRunStatus
+  /** 开始时间 */
+  startedAt: string
+  /** 结束时间 */
+  finishedAt?: string
+  /** 总耗时（毫秒） */
+  durationMs?: number
+  /** 本次使用的知识项 */
+  usedKnowledge: AiRunKnowledgeItem[]
+  /** 是否触发结构化修复 */
+  repairTriggered: boolean
+  /** 错误摘要 */
+  error: string
+  /** 响应预览 */
+  responsePreview: string
+}
+
 /** 主窗口向助手窗口发送的提示词请求 */
 export interface AssistantPromptRequest {
   /** 请求唯一标识，用于消费确认（避免重复处理） */
@@ -476,6 +556,10 @@ export interface ProjectWorkspaceData {
   chapterVersions: ChapterVersion[]
   /** AI 聊天消息列表 */
   messages: ChatMessage[]
+  /** 项目知识文档列表 */
+  knowledgeDocuments: KnowledgeDocument[]
+  /** AI 运行记录列表 */
+  aiRuns: AiRunRecord[]
   /** 项目固定流程文件 */
   workflowDocuments: WorkflowDocument[]
   /** 剧情线索 / 伏笔追踪列表 */

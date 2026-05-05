@@ -71,6 +71,7 @@ declare global {
 
   type CharacterArcReferenceImportPayload = {
     settings: import('@/types/app').AppSettings
+    projectId?: string
     projectTitle?: string
     projectGenre?: string
     projectPlatform?: string
@@ -82,6 +83,7 @@ declare global {
     referenceWork: import('@/types/app').ReferenceWorkItem
     suggestedWritingStylePrompt: string
     findingsMarkdown: string
+    knowledgeDocuments: import('@/types/app').KnowledgeDocument[]
   }
 
   type CharacterArcReferenceImportProgressPayload = {
@@ -91,6 +93,11 @@ declare global {
     total: number
     percent: number
     sourceTitle?: string
+  }
+
+  type CharacterArcAiRunEventPayload = {
+    projectId: string
+    meta: Omit<import('@/types/app').AiRunRecord, 'projectId'>
   }
 
   interface Window {
@@ -129,6 +136,7 @@ declare global {
         error?: string
       }>
       onAiStreamEvent: (callback: (payload: CharacterArcAiStreamEvent) => void) => () => void
+      onAiRunEvent: (callback: (payload: CharacterArcAiRunEventPayload) => void) => () => void
       testAiConnection: (settings: unknown) => Promise<{
         success: boolean
         result?: unknown

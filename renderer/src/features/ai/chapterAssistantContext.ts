@@ -115,6 +115,7 @@ export function buildChapterAssistantContext(input: ChapterAssistantContextInput
   )
 
   return {
+    projectId: input.project?.id,
     projectTitle: input.project?.title,
     projectGenre: input.project?.genre,
     writingStyleLabel: writingStyle.label,
@@ -204,6 +205,7 @@ export function buildChapterFirstDraftContext(input: ChapterFirstDraftContextInp
   )
 
   return {
+    projectId: input.project?.id,
     projectTitle: input.project?.title,
     projectGenre: input.project?.genre,
     writingStyleLabel: writingStyle.label,

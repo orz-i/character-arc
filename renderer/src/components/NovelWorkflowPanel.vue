@@ -201,6 +201,7 @@ async function importReferenceNovelAnalysis(): Promise<void> {
   try {
     const result = await window.characterArc.importReferenceNovelAnalysis(toIpcPayload({
       settings: appStore.appSettings,
+      projectId: currentProject.value.id,
       projectTitle: currentProject.value.title,
       projectGenre: currentProject.value.genre,
       projectPlatform: currentProject.value.targetPlatform || ''
@@ -224,6 +225,8 @@ async function importReferenceNovelAnalysis(): Promise<void> {
         result.result.referenceWork.title
       )
     })
+
+    appStore.replaceKnowledgeDocuments(currentProject.value.id, result.result.knowledgeDocuments)
 
     if (activeWorkflowVolume.value?.id) {
       appStore.appendWorkflowDocumentEntry(
