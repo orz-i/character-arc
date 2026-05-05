@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案一：线性极简</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: #f0f0f5;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+
+  .app-frame {
+    width: 1100px; height: 680px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column;
+    background: #f5f5f7;
+  }
+
+  /* Titlebar */
+  .titlebar {
+    height: 36px; background: #fafafa;
+    border-bottom: 1px solid #e5e5e5;
+    display: flex; align-items: center; padding: 0 16px;
+    flex-shrink: 0;
+    -webkit-app-region: drag;
+  }
+  .titlebar-dots { display: flex; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f57; }
+  .dot.yellow { background: #febc2e; }
+  .dot.green { background: #28c840; }
+  .titlebar-title {
+    flex: 1; text-align: center;
+    font-size: 12px; font-weight: 500; color: #6e6e73;
+    letter-spacing: 0.01em;
+  }
+
+  /* Main layout */
+  .workspace {
+    flex: 1; display: flex; overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: #fafafa;
+    border-right: 1px solid #e5e5e5;
+    display: flex; flex-direction: column;
+  }
+
+  .sidebar-top {
+    padding: 16px 14px 10px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .sidebar-project-label {
+    font-size: 10px; font-weight: 600;
+    color: #a1a1aa; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .sidebar-project-name {
+    font-size: 14px; font-weight: 700; color: #18181b;
+    line-height: 1.3;
+  }
+  .sidebar-project-meta {
+    font-size: 11px; color: #71717a; margin-top: 2px;
+  }
+
+  .sidebar-section-label {
+    font-size: 10px; font-weight: 600;
+    color: #a1a1aa; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px 14px 4px;
+  }
+
+  .sidebar-nav { padding: 4px 8px; flex: 1; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px; font-weight: 500;
+    color: #52525b;
+    transition: all 0.12s ease;
+    position: relative; margin-bottom: 1px;
+  }
+  .nav-item:hover { background: #f0f0f5; color: #18181b; }
+  .nav-item.active {
+    background: #fff; color: #18181b;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.05);
+    font-weight: 600;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute; left: 0; top: 8px; bottom: 8px;
+    width: 2.5px; border-radius: 999px;
+    background: #0066cc;
+  }
+  .nav-icon {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; opacity: 0.7;
+  }
+  .nav-item.active .nav-icon { opacity: 1; }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 11px; font-weight: 600;
+    color: #a1a1aa; padding: 1px 5px;
+    background: #f4f4f5; border-radius: 4px;
+  }
+  .nav-item.active .nav-badge {
+    background: #eff6ff; color: #0066cc;
+  }
+
+  .sidebar-bottom {
+    padding: 8px; border-top: 1px solid #e5e5e5;
+  }
+
+  /* Main content */
+  .main {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    background: #fff;
+  }
+
+  .main-header {
+    height: 48px; border-bottom: 1px solid #e5e5e5;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; flex-shrink: 0;
+  }
+  .breadcrumb {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #a1a1aa;
+  }
+  .breadcrumb-current {
+    color: #18181b; font-weight: 600;
+  }
+  .breadcrumb-sep { color: #d4d4d8; }
+  .search-box {
+    display: flex; align-items: center; gap: 6px;
+    background: #f4f4f5; border: 1px solid #e5e5e5;
+    border-radius: 6px; padding: 5px 10px;
+    font-size: 12px; color: #a1a1aa;
+    width: 200px;
+  }
+
+  .main-body { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* Chapter list area */
+  .chapter-layout { display: flex; gap: 20px; height: 100%; }
+  .chapter-sidebar {
+    width: 220px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .chapter-group-label {
+    font-size: 11px; font-weight: 700; color: #a1a1aa;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0 4px;
+  }
+  .chapter-item {
+    padding: 9px 12px; border-radius: 7px;
+    cursor: pointer; border: 1px solid transparent;
+    background: #fafafa;
+    transition: all 0.12s ease;
+  }
+  .chapter-item:hover { background: #f0f0f5; border-color: #e5e5e5; }
+  .chapter-item.active {
+    background: #eff6ff; border-color: #bfdbfe;
+  }
+  .chapter-num {
+    font-size: 10px; font-weight: 700;
+    color: #a1a1aa; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .chapter-item.active .chapter-num { color: #3b82f6; }
+  .chapter-title-text {
+    font-size: 13px; font-weight: 600; color: #18181b;
+    margin-top: 2px; line-height: 1.3;
+  }
+  .chapter-meta-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 4px;
+  }
+  .chapter-words { font-size: 11px; color: #a1a1aa; }
+  .chapter-status {
+    font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .status-done { background: #dcfce7; color: #16a34a; }
+  .status-draft { background: #fef9c3; color: #ca8a04; }
+
+  /* Editor area */
+  .editor-area {
+    flex: 1; display: flex; flex-direction: column;
+    border: 1px solid #e5e5e5; border-radius: 8px;
+    overflow: hidden; background: #fff;
+  }
+  .editor-toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
+  }
+  .toolbar-btn {
+    padding: 4px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+    color: #71717a; cursor: pointer;
+    border: 1px solid #e5e5e5; background: #fff;
+  }
+  .toolbar-btn.active {
+    background: #eff6ff; color: #0066cc; border-color: #bfdbfe;
+  }
+  .toolbar-sep { width: 1px; height: 16px; background: #e5e5e5; margin: 0 2px; }
+  .toolbar-right { margin-left: auto; font-size: 12px; color: #a1a1aa; }
+  .editor-content {
+    flex: 1; padding: 24px 32px; overflow-y: auto;
+    font-size: 15px; line-height: 1.85; color: #18181b;
+  }
+  .editor-content .chapter-heading {
+    font-size: 18px; font-weight: 700; margin-bottom: 16px;
+    color: #09090b;
+  }
+  .editor-content p { margin-bottom: 1em; color: #3f3f46; }
+  .editor-content .placeholder { color: #a1a1aa; }
+
+  /* Labels */
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+
+  /* Description block */
+  .demo-desc {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #18181b; color: #fff; border-radius: 8px;
+    padding: 10px 20px; font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-frame">
+  <div class="titlebar">
+    <div class="titlebar-dots">
+      <div class="dot red"></div>
+      <div class="dot yellow"></div>
+      <div class="dot green"></div>
+    </div>
+    <div class="titlebar-title">弧光 — 倾城之恋</div>
+  </div>
+
+  <div class="workspace">
+    <div class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-project-label">当前项目</div>
+        <div class="sidebar-project-name">倾城之恋</div>
+        <div class="sidebar-project-meta">玄幻 · 长篇 · 进行中</div>
+      </div>
+
+      <div class="sidebar-section-label">创作模块</div>
+
+      <div class="sidebar-nav">
+        <div class="nav-item">
+          <span class="nav-icon">📖</span>小说流程
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">📊</span>作品概览
+          <span class="nav-badge">—</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🌐</span>世界观设定
+          <span class="nav-badge">12</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">👥</span>角色图鉴
+          <span class="nav-badge">5</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔗</span>关系组织
+          <span class="nav-badge">8</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">💡</span>灵感模块
+          <span class="nav-badge">24</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🗂</span>剧情大纲
+          <span class="nav-badge">31</span>
+        </div>
+        <div class="nav-item active">
+          <span class="nav-icon">📝</span>章节创作
+          <span class="nav-badge">8</span>
+        </div>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="nav-item">
+          <span class="nav-icon">⚙️</span>项目设置
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="main-header">
+        <div class="breadcrumb">
+          <span>项目工作台</span>
+          <span class="breadcrumb-sep">›</span>
+          <span class="breadcrumb-current">章节创作</span>
+        </div>
+        <div class="search-box">
+          🔍 &nbsp; 搜索设定、角色、章节...
+        </div>
+      </div>
+
+      <div class="main-body">
+        <div class="chapter-layout">
+          <div class="chapter-sidebar">
+            <div class="chapter-group-label">第一卷 · 序章篇</div>
+            <div class="chapter-item">
+              <div class="chapter-num">第 001 章</div>
+              <div class="chapter-title-text">黎明之前</div>
+              <div class="chapter-meta-row">
+                <span class="chapter-words">8,234 字</span>
+                <span class="chapter-status status-done">完稿</span>
+              </div>
+            </div>
+            <div class="chapter-item active">
+              <div class="chapter-num">第 002 章</div>
+              <div class="chapter-title-text">惊变</div>
+              <div class="chapter-meta-row">
+                <span class="chapter-words">3,421 字</span>
+                <span class="chapter-status status-draft">草稿</span>
+              </div>
+            </div>
+            <div class="chapter-item">
+              <div class="chapter-num">第 003 章</div>
+              <div class="chapter-title-text">抉择</div>
+              <div class="chapter-meta-row">
+                <span class="chapter-words">5,672 字</span>
+                <span class="chapter-status status-done">完稿</span>
+              </div>
+            </div>
+            <div class="chapter-group-label" style="margin-top:12px">第二卷 · 觉醒篇</div>
+            <div class="chapter-item">
+              <div class="chapter-num">第 004 章</div>
+              <div class="chapter-title-text">新生</div>
+              <div class="chapter-meta-row">
+                <span class="chapter-words">未开始</span>
+                <span class="chapter-status" style="background:#f4f4f5;color:#a1a1aa">待写</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-area">
+            <div class="editor-toolbar">
+              <div class="toolbar-btn active">正文</div>
+              <div class="toolbar-btn">H2</div>
+              <div class="toolbar-btn">H3</div>
+              <div class="toolbar-sep"></div>
+              <div class="toolbar-btn"><i>I</i></div>
+              <div class="toolbar-btn"><u>U</u></div>
+              <div class="toolbar-btn">列表</div>
+              <div class="toolbar-right">3,421 字 &nbsp; ↩ &nbsp; ↪</div>
+            </div>
+            <div class="editor-content">
+              <div class="chapter-heading">第 002 章 · 惊变</div>
+              <p>夜风裹着烟火的余温穿过破碎的窗框，沈临看着手中那份泛黄的地图，沉默良久。</p>
+              <p>他知道这一天迟早会来。只是没料到会来得这样快，这样猝不及防。</p>
+              <p>走廊尽头传来脚步声，沉而有力，带着一种不容置疑的压迫感。</p>
+              <p class="placeholder">从这里继续创作...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-desc">方案一：线性极简 — 纯白底色 · 收敛边框 · 内容为王 · 对齐 Linear / Notion 审美</div>
+
+</body>
+</html>

@@ -51,7 +51,6 @@ dist_embed/
 .kiro/
 .roo/
 .junie/
-.agents/
 .claude/
 
 # OS files

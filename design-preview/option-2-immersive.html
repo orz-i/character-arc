@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案二：沉浸创作台</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: #1a1a2e;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+
+  .app-frame {
+    width: 1100px; height: 680px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07);
+    display: flex; flex-direction: column;
+    background: #111115;
+  }
+
+  /* Titlebar */
+  .titlebar {
+    height: 36px; background: #111115;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; padding: 0 16px;
+    flex-shrink: 0;
+  }
+  .titlebar-dots { display: flex; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #ff5f57; }
+  .dot.yellow { background: #febc2e; }
+  .dot.green { background: #28c840; }
+  .titlebar-title {
+    flex: 1; text-align: center;
+    font-size: 12px; font-weight: 500;
+    color: rgba(255,255,255,0.28);
+    letter-spacing: 0.01em;
+  }
+
+  /* Main layout */
+  .workspace {
+    flex: 1; display: flex; overflow: hidden;
+  }
+
+  /* Icon rail sidebar */
+  .sidebar-rail {
+    width: 64px; flex-shrink: 0;
+    background: #111115;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column;
+    align-items: center; padding: 10px 0;
+    gap: 2px;
+  }
+
+  .rail-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 18px;
+    color: rgba(255,255,255,0.32);
+    transition: all 0.15s ease;
+    position: relative;
+  }
+  .rail-icon:hover {
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.72);
+  }
+  .rail-icon.active {
+    background: rgba(99,102,241,0.16);
+    color: #818cf8;
+  }
+  .rail-icon.active::before {
+    content: '';
+    position: absolute;
+    right: 0; top: 12px; bottom: 12px;
+    width: 2px; border-radius: 999px;
+    background: #818cf8;
+  }
+  .rail-back {
+    margin-bottom: 8px; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    width: 100%; display: flex; justify-content: center;
+  }
+  .rail-spacer { flex: 1; }
+  .rail-sep {
+    width: 32px; height: 1px;
+    background: rgba(255,255,255,0.06);
+    margin: 4px 0;
+  }
+
+  /* Chapter Panel */
+  .chapter-panel {
+    width: 240px; flex-shrink: 0;
+    background: #16161a;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-header {
+    padding: 18px 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .panel-title {
+    font-size: 11px; font-weight: 700;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .panel-sub {
+    font-size: 15px; font-weight: 700;
+    color: rgba(255,255,255,0.88);
+  }
+
+  .volume-label {
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 12px 14px 4px;
+  }
+
+  .chapter-list { overflow-y: auto; flex: 1; padding: 4px 8px; }
+
+  .chapter-item {
+    padding: 9px 10px; border-radius: 8px;
+    cursor: pointer; margin-bottom: 2px;
+    border: 1px solid transparent;
+    transition: all 0.14s ease;
+  }
+  .chapter-item:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.06);
+  }
+  .chapter-item.active {
+    background: rgba(99,102,241,0.1);
+    border-color: rgba(99,102,241,0.24);
+  }
+  .chapter-num-text {
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,0.25); letter-spacing: 0.06em;
+  }
+  .chapter-item.active .chapter-num-text { color: #818cf8; }
+  .chapter-name {
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.72);
+    margin-top: 2px;
+  }
+  .chapter-item.active .chapter-name { color: rgba(255,255,255,0.92); }
+  .chapter-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 4px;
+  }
+  .chapter-wc { font-size: 11px; color: rgba(255,255,255,0.28); }
+  .ch-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 5px;
+    border-radius: 4px;
+  }
+  .badge-done { background: rgba(34,197,94,0.14); color: #4ade80; }
+  .badge-draft { background: rgba(234,179,8,0.12); color: #facc15; }
+  .badge-todo { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.28); }
+
+  /* Editor / Main */
+  .main-area {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    background: #111115;
+  }
+
+  .editor-topbar {
+    height: 48px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; flex-shrink: 0;
+  }
+  .chapter-breadcrumb {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: rgba(255,255,255,0.28);
+  }
+  .chapter-breadcrumb span { color: rgba(255,255,255,0.72); font-weight: 600; }
+  .editor-actions { display: flex; align-items: center; gap: 8px; }
+  .action-btn {
+    padding: 5px 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.09);
+    color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.14s;
+  }
+  .action-btn:hover {
+    background: rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.8);
+  }
+  .action-btn.primary {
+    background: rgba(99,102,241,0.24);
+    border-color: rgba(99,102,241,0.36);
+    color: #a5b4fc;
+  }
+
+  .editor-toolbar {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    background: rgba(255,255,255,0.02);
+  }
+  .tb-btn {
+    padding: 4px 7px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,0.32); cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.12s;
+  }
+  .tb-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.65);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .tb-btn.on {
+    background: rgba(99,102,241,0.16);
+    color: #a5b4fc;
+    border-color: rgba(99,102,241,0.2);
+  }
+  .tb-sep { width: 1px; height: 14px; background: rgba(255,255,255,0.08); margin: 0 2px; }
+  .tb-right { margin-left: auto; font-size: 12px; color: rgba(255,255,255,0.22); }
+
+  .editor-canvas {
+    flex: 1; overflow-y: auto; padding: 36px 60px;
+  }
+  .editor-canvas h2 {
+    font-size: 20px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    margin-bottom: 24px; letter-spacing: -0.01em;
+  }
+  .editor-canvas p {
+    font-size: 15.5px; line-height: 1.9;
+    color: rgba(255,255,255,0.62);
+    margin-bottom: 1.1em;
+    font-variant-numeric: proportional-nums;
+  }
+  .editor-canvas .cursor {
+    display: inline-block; width: 2px; height: 1em;
+    background: #818cf8; vertical-align: text-bottom;
+    animation: blink 1.1s infinite;
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  .placeholder-text { color: rgba(255,255,255,0.18); }
+
+  /* Desc */
+  .demo-desc {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(99,102,241,0.9); color: #fff;
+    border-radius: 8px; padding: 10px 20px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.4);
+    white-space: nowrap; backdrop-filter: blur(8px);
+  }
+</style>
+</head>
+<body>
+
+<div class="app-frame">
+  <div class="titlebar">
+    <div class="titlebar-dots">
+      <div class="dot red"></div>
+      <div class="dot yellow"></div>
+      <div class="dot green"></div>
+    </div>
+    <div class="titlebar-title">弧光 — 倾城之恋</div>
+  </div>
+
+  <div class="workspace">
+
+    <!-- Icon rail -->
+    <div class="sidebar-rail">
+      <div class="rail-back" style="width:100%;padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:center">
+        <div class="rail-icon" style="font-size:16px">‹</div>
+      </div>
+      <div class="rail-icon">📖</div>
+      <div class="rail-icon">📊</div>
+      <div class="rail-icon">🌐</div>
+      <div class="rail-icon">👥</div>
+      <div class="rail-icon">🔗</div>
+      <div class="rail-icon">💡</div>
+      <div class="rail-icon">🗂</div>
+      <div class="rail-icon active">📝</div>
+      <div class="rail-spacer"></div>
+      <div class="rail-sep"></div>
+      <div class="rail-icon">⚙️</div>
+    </div>
+
+    <!-- Chapter sidebar -->
+    <div class="chapter-panel">
+      <div class="panel-header">
+        <div class="panel-title">章节创作</div>
+        <div class="panel-sub">倾城之恋</div>
+      </div>
+      <div class="chapter-list">
+        <div class="volume-label">第一卷 · 序章篇</div>
+        <div class="chapter-item">
+          <div class="chapter-num-text">第 001 章</div>
+          <div class="chapter-name">黎明之前</div>
+          <div class="chapter-foot">
+            <span class="chapter-wc">8,234 字</span>
+            <span class="ch-badge badge-done">完稿</span>
+          </div>
+        </div>
+        <div class="chapter-item active">
+          <div class="chapter-num-text">第 002 章</div>
+          <div class="chapter-name">惊变</div>
+          <div class="chapter-foot">
+            <span class="chapter-wc">3,421 字</span>
+            <span class="ch-badge badge-draft">草稿</span>
+          </div>
+        </div>
+        <div class="chapter-item">
+          <div class="chapter-num-text">第 003 章</div>
+          <div class="chapter-name">抉择</div>
+          <div class="chapter-foot">
+            <span class="chapter-wc">5,672 字</span>
+            <span class="ch-badge badge-done">完稿</span>
+          </div>
+        </div>
+        <div class="volume-label" style="margin-top:10px">第二卷 · 觉醒篇</div>
+        <div class="chapter-item">
+          <div class="chapter-num-text">第 004 章</div>
+          <div class="chapter-name">新生</div>
+          <div class="chapter-foot">
+            <span class="chapter-wc">未开始</span>
+            <span class="ch-badge badge-todo">待写</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="main-area">
+      <div class="editor-topbar">
+        <div class="chapter-breadcrumb">
+          章节创作 › <span>第 002 章 · 惊变</span>
+        </div>
+        <div class="editor-actions">
+          <div class="action-btn">✨ AI 续写</div>
+          <div class="action-btn">历史版本</div>
+          <div class="action-btn primary">保存草稿</div>
+        </div>
+      </div>
+
+      <div class="editor-toolbar">
+        <div class="tb-btn on">正文</div>
+        <div class="tb-btn">H2</div>
+        <div class="tb-btn">H3</div>
+        <div class="tb-sep"></div>
+        <div class="tb-btn"><i>I</i></div>
+        <div class="tb-btn"><u>U</u></div>
+        <div class="tb-btn">「 」</div>
+        <div class="tb-btn">≡ 列表</div>
+        <div class="tb-right">3,421 字 &nbsp;↩&nbsp;↪</div>
+      </div>
+
+      <div class="editor-canvas">
+        <h2>第 002 章 · 惊变</h2>
+        <p>夜风裹着烟火的余温穿过破碎的窗框，沈临看着手中那份泛黄的地图，沉默良久。</p>
+        <p>他知道这一天迟早会来。只是没料到会来得这样快，这样猝不及防。</p>
+        <p>走廊尽头传来脚步声，沉而有力，带着一种不容置疑的压迫感。沈临缓缓抬头，将地图叠好，压在枕下。<span class="cursor"></span></p>
+        <p class="placeholder-text">从这里继续创作...</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="demo-desc">方案二：沉浸创作台 — 深色底色 · 64px 图标轨道 · 紫色主调 · 聚焦写作沉浸感</div>
+
+</body>
+</html>
