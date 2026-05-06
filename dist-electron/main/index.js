@@ -419,7 +419,6 @@ function buildCapabilityPromptContext(task) {
   return {
     system: [
       "你正在 CharacterArc 当前已实现的功能范围内工作。",
-      "不要把“/小说流程”或“/小说流程2”当成固定模板来源；它们只能作为参考样式，真正的输出必须按当前任务和当前可用模块适配。",
       `本次任务类型：${task.task}。`,
       `本次任务功能定位：${taskProfile.label}。`,
       "本次任务相关的已实现功能模块：",
