@@ -15,6 +15,8 @@ import {
   type AiTaskResponse,
   type AiTaskResult,
   type AppSettings,
+  type AssistantActionProposalResult,
+  type AssistantIntentResult,
   type ChapterAnalysisResult,
   type ChapterAssistantResult,
   type CharacterResult,
@@ -145,6 +147,47 @@ function normalizeAssistantText(text: string): ChapterAssistantResult {
 
   return {
     content: cleaned
+  }
+}
+
+function normalizeAssistantIntentResult(result: AiTaskResult): AssistantIntentResult {
+  const payload = result as Partial<AssistantIntentResult>
+  return {
+    intent: payload.intent === 'proposal' ? 'proposal' : 'chat',
+    reason: String(payload.reason ?? '').trim() || '当前请求更适合先走普通文本回复。'
+  }
+}
+
+function normalizeAssistantActionProposalResult(result: AiTaskResult): AssistantActionProposalResult {
+  const payload = result as Partial<AssistantActionProposalResult>
+  const commandType = payload.commandType === 'update-chapter-title'
+    || payload.commandType === 'update-chapter-summary'
+    || payload.commandType === 'create-outline-item'
+    || payload.commandType === 'append-workflow-document-entry'
+    || payload.commandType === 'update-workflow-document'
+    || payload.commandType === 'save-knowledge-document'
+    ? payload.commandType
+    : 'insert-into-chapter'
+
+  const target = payload.target === 'chapter-title'
+    || payload.target === 'chapter-summary'
+    || payload.target === 'outline-item'
+    || payload.target === 'workflow-document'
+    || payload.target === 'knowledge-document'
+    ? payload.target
+    : 'chapter-content'
+
+  return {
+    commandType,
+    target,
+    reason: String(payload.reason ?? '').trim() || 'AI 提议执行一个写作动作。',
+    title: String(payload.title ?? '').trim() || '写作动作提议',
+    summary: String(payload.summary ?? '').trim() || '准备执行一个与当前章节相关的写作动作。',
+    before: typeof payload.before === 'string' ? payload.before.trim() : undefined,
+    after: typeof payload.after === 'string' ? payload.after.trim() : undefined,
+    destructive: Boolean(payload.destructive),
+    requiresConfirmation: payload.requiresConfirmation !== false,
+    payload: payload.payload && typeof payload.payload === 'object' ? payload.payload as Record<string, unknown> : {}
   }
 }
 
@@ -399,6 +442,25 @@ function isTaskResultUsable(task: AiTaskPayload, result: AiTaskResult): boolean 
     )
   }
 
+  if (task.task === 'assistant-intent') {
+    const payload = result as AssistantIntentResult
+    return Boolean(payload.intent && payload.reason.trim())
+  }
+
+  if (task.task === 'assistant-action-proposal') {
+    const payload = result as AssistantActionProposalResult
+    return Boolean(
+      payload.commandType &&
+      payload.target &&
+      payload.reason.trim() &&
+      payload.title.trim() &&
+      payload.summary.trim() &&
+      payload.payload &&
+      typeof payload.payload === 'object' &&
+      Object.keys(payload.payload).length > 0
+    )
+  }
+
   if (task.task === 'reference-style-analysis') {
     const analysis = result as ReferenceStyleAnalysisResult
     return Boolean(
@@ -488,6 +550,10 @@ function normalizeTaskResult(task: AiTaskPayload, rawText: string): AiTaskResult
   const parsed = extractJsonObject(rawText)
 
   switch (task.task) {
+    case 'assistant-intent':
+      return normalizeAssistantIntentResult(parsed)
+    case 'assistant-action-proposal':
+      return normalizeAssistantActionProposalResult(parsed)
     case 'worldview-entry':
       return normalizeWorldviewResult(parsed)
     case 'character-card':

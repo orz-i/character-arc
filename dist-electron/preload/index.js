@@ -85,8 +85,40 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
   clearAssistantPrompt: (promptId) => electron.ipcRenderer.invoke("characterarc:assistant-prompt-clear", promptId),
   /** 主窗口向助手窗口广播工作区数据同步 */
   publishWorkspaceSync: (payload) => electron.ipcRenderer.invoke("characterarc:workspace-sync-publish", toIpcPayload(payload)),
+  /** 助手窗口请求主窗口追加一条聊天消息 */
+  publishAssistantMessage: (payload) => electron.ipcRenderer.invoke("characterarc:assistant-message-publish", toIpcPayload(payload)),
   /** 主窗口向助手窗口发送命令（如插入正文等） */
   publishAssistantCommand: (payload) => electron.ipcRenderer.invoke("characterarc:assistant-command-publish", toIpcPayload(payload)),
+  /** 助手窗口确认当前 proposal，由主窗口执行 */
+  approveAssistantProposal: () => electron.ipcRenderer.invoke("characterarc:assistant-proposal-approve"),
+  /** 助手窗口拒绝当前 proposal */
+  rejectAssistantProposal: () => electron.ipcRenderer.invoke("characterarc:assistant-proposal-reject"),
+  /** 助手窗口关闭当前 proposal 卡片 */
+  clearAssistantProposal: () => electron.ipcRenderer.invoke("characterarc:assistant-proposal-clear"),
+  /** 主窗口监听助手窗口发起的 proposal 确认 */
+  onAssistantProposalApprove: (callback) => {
+    const listener = () => callback();
+    electron.ipcRenderer.on("characterarc:assistant-proposal-approve", listener);
+    return () => {
+      electron.ipcRenderer.removeListener("characterarc:assistant-proposal-approve", listener);
+    };
+  },
+  /** 主窗口监听助手窗口发起的 proposal 拒绝 */
+  onAssistantProposalReject: (callback) => {
+    const listener = () => callback();
+    electron.ipcRenderer.on("characterarc:assistant-proposal-reject", listener);
+    return () => {
+      electron.ipcRenderer.removeListener("characterarc:assistant-proposal-reject", listener);
+    };
+  },
+  /** 主窗口监听助手窗口关闭 proposal 卡片 */
+  onAssistantProposalClear: (callback) => {
+    const listener = () => callback();
+    electron.ipcRenderer.on("characterarc:assistant-proposal-clear", listener);
+    return () => {
+      electron.ipcRenderer.removeListener("characterarc:assistant-proposal-clear", listener);
+    };
+  },
   // ── 事件监听（返回清理函数，组件卸载时调用以移除监听） ──
   /** 监听助手窗口可见性变化事件 */
   onAssistantWindowVisibility: (callback) => {
@@ -126,6 +158,14 @@ electron.contextBridge.exposeInMainWorld("characterArc", {
     electron.ipcRenderer.on("characterarc:reference-import-progress", listener);
     return () => {
       electron.ipcRenderer.removeListener("characterarc:reference-import-progress", listener);
+    };
+  },
+  /** 主窗口监听助手窗口发来的聊天消息追加请求 */
+  onAssistantMessage: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    electron.ipcRenderer.on("characterarc:assistant-message", listener);
+    return () => {
+      electron.ipcRenderer.removeListener("characterarc:assistant-message", listener);
     };
   },
   /** 监听主窗口发送的命令事件（如将 AI 结果插入正文） */

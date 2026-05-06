@@ -364,6 +364,14 @@ const PROMPT_TASK_PROFILES = {
     label: "流程文件生成",
     defaultCapabilities: ["settings", "workflow", "import-export"]
   },
+  "assistant-intent": {
+    label: "小说助理意图判断",
+    defaultCapabilities: ["settings", "chapters", "analysis", "versioning"]
+  },
+  "assistant-action-proposal": {
+    label: "小说助理动作提议",
+    defaultCapabilities: ["settings", "chapters", "worldview", "characters", "relations", "outline", "inspiration", "writing-style", "project-skills", "versioning"]
+  },
   "chapter-assistant": {
     label: "章节创作助理",
     defaultCapabilities: ["settings", "chapters", "worldview", "characters", "relations", "outline", "inspiration", "writing-style", "project-skills", "versioning"]
@@ -562,16 +570,49 @@ function hasChapterContext(context) {
 function hasWritingStyleContext(context) {
   return Boolean(String(context.writingStyleLabel ?? "").trim() || String(context.writingStylePrompt ?? "").trim());
 }
+function resolveKnowledgeSourceGroupLabel(sourceType) {
+  return sourceType === "workflow-document" || sourceType === "canon-fact" || sourceType === "chapter-summary" ? "项目记忆" : "参考资料";
+}
+function resolveKnowledgeSourceTypeLabel(sourceType) {
+  switch (sourceType) {
+    case "canon-fact":
+      return "项目 canon";
+    case "chapter-summary":
+      return "章节摘要";
+    case "workflow-document":
+      return "流程文档";
+    case "reference-summary":
+      return "参考总纲";
+    case "reference-chunk":
+    default:
+      return "参考分块";
+  }
+}
 function formatRetrievedKnowledge(knowledge) {
   if (!knowledge?.length) {
     return "";
   }
-  return knowledge.slice(0, 5).map((item, index) => [
-    `资料${index + 1}｜${item.title}`,
-    `来源：${item.sourceLabel}`,
-    item.keywords.length ? `关键词：${item.keywords.join("、")}` : "",
-    `片段：${item.snippet}`
-  ].filter(Boolean).join("\n")).join("\n\n");
+  const projectKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === "项目记忆");
+  const referenceKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === "参考资料");
+  const formatSection = (label, entries) => {
+    if (!entries.length) {
+      return "";
+    }
+    return [
+      `${label}：`,
+      ...entries.slice(0, 5).map((item, index) => [
+        `${label}${index + 1}｜${item.title}`,
+        `类型：${resolveKnowledgeSourceTypeLabel(item.sourceType)}`,
+        `来源：${item.sourceLabel}`,
+        item.keywords.length ? `关键词：${item.keywords.join("、")}` : "",
+        `片段：${item.snippet}`
+      ].filter(Boolean).join("\n"))
+    ].join("\n\n");
+  };
+  return [
+    formatSection("项目记忆", projectKnowledge),
+    formatSection("参考资料", referenceKnowledge)
+  ].filter(Boolean).join("\n\n");
 }
 function buildTaskPrompt(task, knowledgeContext) {
   const { context } = task;
@@ -580,7 +621,7 @@ function buildTaskPrompt(task, knowledgeContext) {
   const retrievedKnowledge = formatRetrievedKnowledge(knowledgeContext?.usedKnowledge);
   const retrievalBlock = retrievedKnowledge ? `
 
-检索到的参考知识：
+检索到的项目记忆与参考资料：
 ${retrievedKnowledge}` : "";
   const wrapPrompt = (prompt) => {
     const capabilityPrompt = buildCapabilityPromptContext(task);
@@ -971,6 +1012,110 @@ ${outlineItems || "暂无"}
 8. ${writingStyleInstruction}
 
 返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
+    });
+  }
+  if (task.task === "assistant-intent") {
+    return wrapPrompt({
+      system: "你是小说创作助手的意图路由器。请只返回 JSON 对象，不要返回 Markdown、解释或额外文本。字段必须包含 intent、reason。",
+      user: `请判断当前用户请求更适合：
+1. 普通聊天回答（chat）
+2. 发起一个可执行的写作动作提议（proposal）
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节摘要：${String(context.chapterSummary ?? "")}
+当前选中文本：
+${String(context.selectedText ?? "") || "暂无"}
+快捷动作：${String(context.quickAction ?? "自由提问")}
+用户请求：${String(context.userPrompt ?? "")}
+
+判断规则：
+1. 如果用户是在询问、讨论、要建议、要分析、要说明、要思路，返回 chat
+2. 如果用户明确要求你改写、替换、设为标题、设为摘要、生成并创建大纲节点、更新流程文件、记录进度、沉淀设定到知识库，返回 proposal
+3. 如果请求明显包含“替换”“覆盖”“更新标题”“更新摘要”“创建下一章大纲”“追加到 task_plan/findings/progress”“写入知识库/canon”这类落地动作，优先返回 proposal
+4. 如果只是想看候选文案、候选标题、候选摘要、建议方案，而没有明确要求写入，返回 chat
+5. 只能返回 chat 或 proposal 二选一
+6. reason 用一句中文简要说明判断依据，20 到 60 字
+
+返回格式：{"intent":"chat","reason":""}`
+    });
+  }
+  if (task.task === "assistant-action-proposal") {
+    return wrapPrompt({
+      system: "你是小说创作助手的动作提议生成器。请只返回 JSON 对象，不要返回 Markdown、解释或额外文本。你只能从受控动作白名单中选择一个动作。字段必须包含 commandType、target、reason、title、summary、destructive、requiresConfirmation、payload。",
+      user: `请基于当前小说项目上下文，把用户请求转换成一个单步、可确认的写作动作提议。
+
+允许动作白名单：
+1. insert-into-chapter
+2. update-chapter-title
+3. update-chapter-summary
+4. create-outline-item
+5. append-workflow-document-entry
+6. update-workflow-document
+7. save-knowledge-document
+
+动作目标映射：
+- insert-into-chapter -> chapter-content
+- update-chapter-title -> chapter-title
+- update-chapter-summary -> chapter-summary
+- create-outline-item -> outline-item
+- append-workflow-document-entry -> workflow-document
+- update-workflow-document -> workflow-document
+- save-knowledge-document -> knowledge-document
+
+项目标题：${String(context.projectTitle ?? "")}
+项目题材：${String(context.projectGenre ?? "")}
+当前分卷：${String(context.chapterVolumeTitle ?? "")}
+当前分卷摘要：${String(context.chapterVolumeSummary ?? "")}
+当前章节标题：${String(context.chapterTitle ?? "")}
+当前章节摘要：${String(context.chapterSummary ?? "")}
+当前章节正文：
+${String(context.chapterContent ?? "")}
+
+当前选中文本：
+${String(context.selectedText ?? "") || "暂无"}
+
+当前流程文档：
+${Array.isArray(context.workflowDocuments) ? context.workflowDocuments.map((document) => `${String(document.key ?? "")} / ${String(document.title ?? "")}：${String(document.content ?? "")}`).join("\n\n") : "暂无"}
+
+当前项目知识摘要：
+${Array.isArray(context.knowledgeDocuments) ? context.knowledgeDocuments.map((document) => `${String(document.title ?? "")} / ${String(document.sourceType ?? "")}：${String(document.summary ?? "")}`).join("\n") : "暂无"}
+
+相关世界观：
+${Array.isArray(context.worldviewEntries) ? context.worldviewEntries.map((entry) => `${String(entry.title ?? "")}：${String(entry.content ?? "")}`).join("\n") : "暂无"}
+
+相关角色：
+${Array.isArray(context.characters) ? context.characters.map((character) => `${String(character.name ?? "")} / ${String(character.role ?? "")}：${String(character.description ?? "")}`).join("\n") : "暂无"}
+
+相关大纲：
+${Array.isArray(context.outlineItems) ? context.outlineItems.map((item) => `${String(item.title ?? "")}：${String(item.summary ?? "")}`).join("\n") : "暂无"}${retrievalBlock}
+
+快捷动作：${String(context.quickAction ?? "自由提问")}
+用户请求：${String(context.userPrompt ?? "")}
+
+生成规则：
+1. 一次只允许提议一个动作，不要组合多个写操作
+2. 如果是正文写入，commandType 只能是 insert-into-chapter，payload 必须包含 content 和 mode
+3. mode 只能是 cursor、append、replace-selection 三选一；如果用户明确说替换选区或覆盖某段，优先用 replace-selection
+4. 如果是标题更新，payload 必须包含 value，且内容应是简洁标题，不要多行
+5. 如果是摘要更新，payload 必须包含 value，且内容应是可直接保存的章节摘要
+6. 如果是创建大纲，payload 必须包含至少 title、summary，可附带 wordTarget、conflict、volumeId
+6.1 如果提供 volumeId，必须使用系统里的真实分卷 id，而不是“第一卷/第二卷/故事开端”这类展示文本；若不能确定真实 id，就不要返回 volumeId
+7. 如果是追加流程文档条目，commandType 只能是 append-workflow-document-entry，payload 必须包含 documentKey、entryTitle、content，可附带 volumeId
+8. 如果是覆盖流程文档，commandType 只能是 update-workflow-document，payload 必须包含 documentKey、content，可附带 volumeId
+9. 如果是沉淀项目知识，commandType 只能是 save-knowledge-document，target 必须是 knowledge-document；payload 必须至少包含 document，并在 document 内提供 title、content、summary、sourceType，可附带 sourceLabel、keywords、metadata
+10. 对会覆盖已有内容的动作，destructive 必须为 true，requiresConfirmation 必须为 true
+11. 对 create-outline-item，destructive 应为 false，requiresConfirmation 可为 false
+12. 对 append-workflow-document-entry，destructive 应为 false，requiresConfirmation 应为 true
+13. 对 update-workflow-document 和 save-knowledge-document，requiresConfirmation 必须为 true；如果会覆盖已有流程文档正文，destructive 必须为 true
+14. title / summary 是给确认卡片展示的短文案，要简洁明确
+15. before / after 可选；如果能从上下文里可靠给出，就返回；不能可靠给出可以省略
+16. payload 只能包含执行该动作真正需要的字段，不要塞解释文本
+17. 普通聊天、未确认猜测、风格参考摘录不得直接写入知识库；只有相对稳定的项目事实、设定、关系、伏笔结论才能用 save-knowledge-document
+18. 所有文本均用简体中文
+
+返回示例：{"commandType":"update-chapter-summary","target":"chapter-summary","reason":"这会覆盖当前章节摘要，建议确认后再写入。","title":"更新章节摘要","summary":"准备使用 AI 生成内容覆盖当前章节摘要。","before":"旧摘要","after":"新摘要","destructive":true,"requiresConfirmation":true,"payload":{"value":"新摘要"}}`
     });
   }
   if (task.task === "chapter-assistant") {
@@ -2046,6 +2191,30 @@ function normalizeAssistantText(text) {
     content: cleaned
   };
 }
+function normalizeAssistantIntentResult(result) {
+  const payload = result;
+  return {
+    intent: payload.intent === "proposal" ? "proposal" : "chat",
+    reason: String(payload.reason ?? "").trim() || "当前请求更适合先走普通文本回复。"
+  };
+}
+function normalizeAssistantActionProposalResult(result) {
+  const payload = result;
+  const commandType = payload.commandType === "update-chapter-title" || payload.commandType === "update-chapter-summary" || payload.commandType === "create-outline-item" || payload.commandType === "append-workflow-document-entry" || payload.commandType === "update-workflow-document" || payload.commandType === "save-knowledge-document" ? payload.commandType : "insert-into-chapter";
+  const target = payload.target === "chapter-title" || payload.target === "chapter-summary" || payload.target === "outline-item" || payload.target === "workflow-document" || payload.target === "knowledge-document" ? payload.target : "chapter-content";
+  return {
+    commandType,
+    target,
+    reason: String(payload.reason ?? "").trim() || "AI 提议执行一个写作动作。",
+    title: String(payload.title ?? "").trim() || "写作动作提议",
+    summary: String(payload.summary ?? "").trim() || "准备执行一个与当前章节相关的写作动作。",
+    before: typeof payload.before === "string" ? payload.before.trim() : void 0,
+    after: typeof payload.after === "string" ? payload.after.trim() : void 0,
+    destructive: Boolean(payload.destructive),
+    requiresConfirmation: payload.requiresConfirmation !== false,
+    payload: payload.payload && typeof payload.payload === "object" ? payload.payload : {}
+  };
+}
 function normalizeWorldviewResult(result) {
   const entry = result;
   return {
@@ -2212,6 +2381,16 @@ function isTaskResultUsable(task, result) {
       analysis.overview.trim() && analysis.pacing.trim() && analysis.tension.trim() && analysis.continuity.trim() && analysis.highlights.length > 0 && analysis.risks.length > 0 && analysis.revisionActions.length > 0
     );
   }
+  if (task.task === "assistant-intent") {
+    const payload = result;
+    return Boolean(payload.intent && payload.reason.trim());
+  }
+  if (task.task === "assistant-action-proposal") {
+    const payload = result;
+    return Boolean(
+      payload.commandType && payload.target && payload.reason.trim() && payload.title.trim() && payload.summary.trim() && payload.payload && typeof payload.payload === "object" && Object.keys(payload.payload).length > 0
+    );
+  }
   if (task.task === "reference-style-analysis") {
     const analysis = result;
     return Boolean(
@@ -2263,6 +2442,10 @@ function normalizeTaskResult(task, rawText) {
   }
   const parsed = extractJsonObject(rawText);
   switch (task.task) {
+    case "assistant-intent":
+      return normalizeAssistantIntentResult(parsed);
+    case "assistant-action-proposal":
+      return normalizeAssistantActionProposalResult(parsed);
     case "worldview-entry":
       return normalizeWorldviewResult(parsed);
     case "character-card":
@@ -2720,6 +2903,11 @@ function tokenizeKnowledgeText(value) {
 function buildKnowledgeQuery(task) {
   return [
     String(task.context.userPrompt ?? ""),
+    String(task.context.quickAction ?? ""),
+    String(task.context.projectTitle ?? ""),
+    String(task.context.projectGenre ?? ""),
+    String(task.context.chapterVolumeTitle ?? ""),
+    String(task.context.chapterVolumeSummary ?? ""),
     String(task.context.chapterTitle ?? ""),
     String(task.context.chapterSummary ?? ""),
     String(task.context.selectedText ?? ""),
@@ -2727,8 +2915,26 @@ function buildKnowledgeQuery(task) {
     String(task.context.chapterContent ?? "").slice(0, 1200)
   ].filter(Boolean).join("\n");
 }
+function isProjectKnowledgeSource(sourceType) {
+  return sourceType === "workflow-document" || sourceType === "canon-fact" || sourceType === "chapter-summary";
+}
+function resolveKnowledgeSourceBaseScore(sourceType) {
+  switch (sourceType) {
+    case "canon-fact":
+      return 3.4;
+    case "chapter-summary":
+      return 2.8;
+    case "workflow-document":
+      return 2.4;
+    case "reference-summary":
+      return 1.4;
+    case "reference-chunk":
+    default:
+      return 1;
+  }
+}
 function retrieveKnowledgeContext(task) {
-  if (task.task !== "chapter-assistant" && task.task !== "chapter-first-draft") {
+  if (task.task !== "chapter-assistant" && task.task !== "chapter-first-draft" && task.task !== "assistant-action-proposal") {
     return { usedKnowledge: [] };
   }
   const projectId = String(task.context.projectId ?? "").trim();
@@ -2751,14 +2957,15 @@ function retrieveKnowledgeContext(task) {
     const content = String(document.content ?? "");
     const sourceLabel = String(document.sourceLabel ?? "");
     const keywords = Array.isArray(document.keywords) ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean) : [];
+    const lowerKeywords = keywords.map((keyword) => keyword.toLowerCase());
     const haystack = `${title}
 ${summary}
 ${content}
 ${sourceLabel}`.toLowerCase();
-    let score = document.sourceType === "reference-summary" ? 1.5 : 1;
+    let score = resolveKnowledgeSourceBaseScore(document.sourceType);
     for (const token of queryTokens) {
-      if (keywords.some((keyword) => keyword.toLowerCase() === token)) score += 4;
-      else if (keywords.some((keyword) => keyword.toLowerCase().includes(token) || token.includes(keyword.toLowerCase()))) score += 2.5;
+      if (lowerKeywords.some((keyword) => keyword === token)) score += 4;
+      else if (lowerKeywords.some((keyword) => keyword.includes(token) || token.includes(keyword))) score += 2.5;
       if (title.toLowerCase().includes(token)) score += 2;
       if (sourceLabel.toLowerCase().includes(token)) score += 1.5;
       if (summary.toLowerCase().includes(token)) score += 1.2;
@@ -2767,18 +2974,40 @@ ${sourceLabel}`.toLowerCase();
     return {
       score,
       document,
-      keywords
+      keywords,
+      projectSource: isProjectKnowledgeSource(document.sourceType)
     };
-  }).filter((entry) => entry.score > 2).sort((a, b) => b.score - a.score).slice(0, 5).map(({ document, keywords }) => ({
-    documentId: document.id,
-    title: document.title,
-    sourceType: document.sourceType,
-    sourceLabel: document.sourceLabel,
-    snippet: (document.summary || document.content || "").trim().slice(0, 220),
-    keywords: keywords.slice(0, 8)
-  }));
+  }).filter((entry) => entry.score > 2).sort((a, b) => b.score - a.score);
+  const selectedIds = /* @__PURE__ */ new Set();
+  const selected = [
+    ...ranked.filter((entry) => entry.projectSource).slice(0, 3),
+    ...ranked.filter((entry) => !entry.projectSource).slice(0, 2)
+  ].filter((entry) => {
+    if (selectedIds.has(entry.document.id)) {
+      return false;
+    }
+    selectedIds.add(entry.document.id);
+    return true;
+  });
+  for (const entry of ranked) {
+    if (selected.length >= 5) {
+      break;
+    }
+    if (selectedIds.has(entry.document.id)) {
+      continue;
+    }
+    selected.push(entry);
+    selectedIds.add(entry.document.id);
+  }
   return {
-    usedKnowledge: ranked
+    usedKnowledge: selected.sort((a, b) => b.score - a.score).slice(0, 5).map(({ document, keywords }) => ({
+      documentId: document.id,
+      title: document.title,
+      sourceType: document.sourceType,
+      sourceLabel: document.sourceLabel,
+      snippet: (document.summary || document.content || "").trim().slice(0, 220),
+      keywords: keywords.slice(0, 8)
+    }))
   };
 }
 function appendAiRunToLatestSnapshot(payload) {
@@ -4938,8 +5167,32 @@ electron.ipcMain.handle("characterarc:workspace-sync-publish", (event, payload) 
     success: true
   };
 });
+electron.ipcMain.handle("characterarc:assistant-message-publish", (_event, payload) => {
+  sendWindowEvent(mainWindow, "characterarc:assistant-message", payload);
+  return {
+    success: true
+  };
+});
 electron.ipcMain.handle("characterarc:assistant-command-publish", (_event, payload) => {
   sendWindowEvent(mainWindow, "characterarc:assistant-command", payload);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-proposal-approve", () => {
+  sendWindowEvent(mainWindow, "characterarc:assistant-proposal-approve", null);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-proposal-reject", () => {
+  sendWindowEvent(mainWindow, "characterarc:assistant-proposal-reject", null);
+  return {
+    success: true
+  };
+});
+electron.ipcMain.handle("characterarc:assistant-proposal-clear", () => {
+  sendWindowEvent(mainWindow, "characterarc:assistant-proposal-clear", null);
   return {
     success: true
   };

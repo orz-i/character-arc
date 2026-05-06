@@ -62,7 +62,7 @@ const builtInTemplates: BuiltInTemplateDefinition[] = [
     group: 'planning',
     mode: 'suggest',
     length: 'medium',
-    task: 'outline-draft',
+    task: 'chat',
     requiresSelection: false
   },
   {

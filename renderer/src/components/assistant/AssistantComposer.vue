@@ -56,7 +56,7 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
 
       <div class="claude-assistant-composer__footer">
         <div class="claude-assistant-composer__menu-area">
-          <NPopover v-model:show="commandMenuOpen" trigger="click" placement="top-start">
+          <NPopover v-model:show="commandMenuOpen" trigger="click" placement="top-start" :show-arrow="false" content-class="claude-assistant-command-popover-shell">
             <template #trigger>
               <button type="button" class="claude-assistant-command-trigger">
                 <span class="claude-assistant-command-trigger__prefix">/</span>

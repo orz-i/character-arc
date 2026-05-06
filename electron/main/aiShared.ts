@@ -23,6 +23,8 @@ export type AiTaskName =
   | 'reference-style-chunk' // 拆书分块分析
   | 'reference-style-analysis' // 拆书提炼仿写规则
   | 'workflow-documents'  // 生成项目流程文件
+  | 'assistant-intent'    // 判断小说助理当前请求应走聊天还是动作提议
+  | 'assistant-action-proposal' // 为小说助理生成单个结构化动作提议
   | 'chapter-assistant'   // 章节创作助理（支持流式）
   | 'chapter-first-draft' // 章节初稿生成（支持流式）
   | 'chapter-summarize'   // 章节摘要自动生成（4维结构化文本）
@@ -36,7 +38,7 @@ export type AiTaskName =
 export type AiRunKnowledgeItem = {
   documentId: string
   title: string
-  sourceType: 'reference-summary' | 'reference-chunk'
+  sourceType: 'reference-summary' | 'reference-chunk' | 'workflow-document' | 'canon-fact' | 'chapter-summary'
   sourceLabel: string
   snippet: string
   keywords: string[]
@@ -118,6 +120,51 @@ export type OutlineBatchResult = {
 export type ChapterAssistantResult = {
   /** 可直接插入正文的文本内容 */
   content: string
+}
+
+/** AI 返回的助理意图判断结果 */
+export type AssistantIntentResult = {
+  /** 本轮更适合普通聊天还是动作提议 */
+  intent: 'chat' | 'proposal'
+  /** 给用户的简短理由 */
+  reason: string
+}
+
+/** AI 返回的单个结构化动作提议 */
+export type AssistantActionProposalResult = {
+  /** 动作类型 */
+  commandType:
+    | 'insert-into-chapter'
+    | 'update-chapter-title'
+    | 'update-chapter-summary'
+    | 'create-outline-item'
+    | 'append-workflow-document-entry'
+    | 'update-workflow-document'
+    | 'save-knowledge-document'
+  /** 目标对象 */
+  target:
+    | 'chapter-content'
+    | 'chapter-title'
+    | 'chapter-summary'
+    | 'outline-item'
+    | 'workflow-document'
+    | 'knowledge-document'
+  /** 动作说明 */
+  reason: string
+  /** 预览标题 */
+  title: string
+  /** 预览摘要 */
+  summary: string
+  /** 写入前摘要 */
+  before?: string
+  /** 写入后摘要 */
+  after?: string
+  /** 是否属于破坏性写入 */
+  destructive: boolean
+  /** 是否需要用户确认 */
+  requiresConfirmation: boolean
+  /** 具体动作载荷 */
+  payload: Record<string, unknown>
 }
 
 /** AI 返回的项目初始化结果，包含首批世界观和大纲 */
@@ -250,6 +297,8 @@ export type AiTaskResult =
   | OutlineResult
   | OutlineBatchResult
   | ChapterAssistantResult
+  | AssistantIntentResult
+  | AssistantActionProposalResult
   | ProjectBootstrapResult
   | WorkflowDocumentsResult
   | WorkflowStageDocumentsResult

@@ -127,6 +127,14 @@ const PROMPT_TASK_PROFILES: Record<AiTaskName, PromptTaskProfile> = {
     label: '流程文件生成',
     defaultCapabilities: ['settings', 'workflow', 'import-export']
   },
+  'assistant-intent': {
+    label: '小说助理意图判断',
+    defaultCapabilities: ['settings', 'chapters', 'analysis', 'versioning']
+  },
+  'assistant-action-proposal': {
+    label: '小说助理动作提议',
+    defaultCapabilities: ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning']
+  },
   'chapter-assistant': {
     label: '章节创作助理',
     defaultCapabilities: ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning']

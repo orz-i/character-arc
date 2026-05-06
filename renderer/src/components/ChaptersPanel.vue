@@ -1230,6 +1230,31 @@ watch(
     { deep: true }
 )
 
+watch(
+    () => [
+      editorVisible.value,
+      appStore.selectedChapter?.id,
+      appStore.selectedChapter?.volumeId,
+      appStore.selectedChapter?.outlineItemId,
+      appStore.selectedChapter?.title,
+      appStore.selectedChapter?.summary,
+      appStore.selectedChapter?.status,
+      appStore.selectedChapter?.wordTarget
+    ] as const,
+    () => {
+      if (!editorVisible.value || !appStore.selectedChapter) {
+        return
+      }
+
+      chapterForm.volumeId = appStore.selectedChapter.volumeId
+      chapterForm.outlineItemId = appStore.selectedChapter.outlineItemId
+      chapterForm.title = appStore.selectedChapter.title
+      chapterForm.summary = appStore.selectedChapter.summary
+      chapterForm.status = appStore.selectedChapter.status
+      chapterForm.wordTarget = normalizeChapterWordTarget(appStore.selectedChapter.wordTarget)
+    }
+)
+
 watch(isCompactStudio, (compact) => {
   if (!compact) {
     compactSidebarVisible.value = false
@@ -1568,46 +1593,51 @@ onBeforeUnmount(() => {
                   <!-- 侧边栏也能独立内部滚动 -->
                   <div class="editor-insights-rail arc-scrollbar">
 
-                    <div v-if="linkedOutlineItem" class="side-card outline-origin-card">
+                    <div class="side-card outline-origin-card">
                       <div class="side-card-head">
                         <span class="side-card-label">来源大纲节点</span>
-                        <n-button text type="primary" size="small" @click="jumpBackToOutline()">回到大纲</n-button>
+                        <n-button v-if="linkedOutlineItem" text type="primary" size="small" @click="jumpBackToOutline()">回到大纲</n-button>
                       </div>
-                      <div class="outline-origin-meta">
-                        <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
-                        <n-tag size="small" :bordered="false">{{ linkedOutlineStatusMeta.label }}</n-tag>
-                      </div>
-                      <div class="outline-origin-summary-wrap">
-                        <p class="outline-origin-summary">
-                          <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
-                        </p>
-                        <p class="outline-origin-summary">
-                          <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
-                        </p>
-                      </div>
-                      <div class="outline-origin-actions">
-                        <n-button v-if="canSyncOutlineBack" size="small" type="primary" block @click="syncChapterBackToOutline()">
-                          同步状态与摘要
-                        </n-button>
-                        <n-button
-                            size="small"
-                            secondary
-                            block
-                            :loading="isGeneratingOutlineChain"
-                            :disabled="isGeneratingOutlineChain"
-                            @click="generateNextOutlineChain()"
-                        >
-                          生成后续剧情链
-                        </n-button>
-                      </div>
+                      <template v-if="linkedOutlineItem">
+                        <div class="outline-origin-meta">
+                          <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
+                          <n-tag size="small" :bordered="false">{{ linkedOutlineStatusMeta.label }}</n-tag>
+                        </div>
+                        <div class="outline-origin-summary-wrap">
+                          <p class="outline-origin-summary">
+                            <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
+                          </p>
+                          <p class="outline-origin-summary">
+                            <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
+                          </p>
+                        </div>
+                        <div class="outline-origin-actions">
+                          <n-button v-if="canSyncOutlineBack" size="small" type="primary" block @click="syncChapterBackToOutline()">
+                            同步状态与摘要
+                          </n-button>
+                          <n-button
+                              size="small"
+                              secondary
+                              block
+                              :loading="isGeneratingOutlineChain"
+                              :disabled="isGeneratingOutlineChain"
+                              @click="generateNextOutlineChain()"
+                          >
+                            生成后续剧情链
+                          </n-button>
+                        </div>
+                      </template>
+                      <p v-else class="outline-origin-empty">
+                        当前章节还没有绑定大纲节点。你可以先在章节信息中绑定大纲，或回到大纲页创建后再关联。
+                      </p>
                     </div>
 
-<!--                    <div class="side-card summary-card">
+                    <div class="side-card summary-card">
                       <div class="side-card-head">
                         <span class="side-card-label">本章定位</span>
                       </div>
                       <p>{{ currentSummaryText }}</p>
-                    </div>-->
+                    </div>
 
 <!--                    <div class="side-card inspiration-card">
                       <div class="side-card-head">
@@ -1738,46 +1768,51 @@ onBeforeUnmount(() => {
     >
       <div class="compact-panel compact-panel-insights arc-scrollbar">
 
-        <div v-if="linkedOutlineItem" class="side-card outline-origin-card">
+        <div class="side-card outline-origin-card">
           <div class="side-card-head">
             <span class="side-card-label">来源大纲节点</span>
-            <button class="text-link" @click="jumpBackToOutline()">回到大纲</button>
+            <button v-if="linkedOutlineItem" class="text-link" @click="jumpBackToOutline()">回到大纲</button>
           </div>
-          <div class="outline-origin-meta">
-            <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
-            <n-tag size="small" :bordered="false">{{ linkedOutlineStatusMeta.label }}</n-tag>
-          </div>
-          <div class="outline-origin-summary-wrap">
-            <p class="outline-origin-summary">
-              <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
-            </p>
-            <p class="outline-origin-summary">
-              <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
-            </p>
-          </div>
-          <div class="outline-origin-actions">
-            <n-button v-if="canSyncOutlineBack" size="small" type="primary" block @click="syncChapterBackToOutline()">
-              同步状态与摘要
-            </n-button>
-            <n-button
-                size="small"
-                secondary
-                block
-                :loading="isGeneratingOutlineChain"
-                :disabled="isGeneratingOutlineChain"
-                @click="generateNextOutlineChain()"
-            >
-              生成后续剧情链
-            </n-button>
-          </div>
+          <template v-if="linkedOutlineItem">
+            <div class="outline-origin-meta">
+              <span class="outline-origin-title">{{ linkedOutlineItem.title }}</span>
+              <n-tag size="small" :bordered="false">{{ linkedOutlineStatusMeta.label }}</n-tag>
+            </div>
+            <div class="outline-origin-summary-wrap">
+              <p class="outline-origin-summary">
+                <strong>核心冲突：</strong>{{ linkedOutlineItem.conflict || '暂无' }}
+              </p>
+              <p class="outline-origin-summary">
+                <strong>剧情推进：</strong>{{ linkedOutlineItem.summary || '暂无' }}
+              </p>
+            </div>
+            <div class="outline-origin-actions">
+              <n-button v-if="canSyncOutlineBack" size="small" type="primary" block @click="syncChapterBackToOutline()">
+                同步状态与摘要
+              </n-button>
+              <n-button
+                  size="small"
+                  secondary
+                  block
+                  :loading="isGeneratingOutlineChain"
+                  :disabled="isGeneratingOutlineChain"
+                  @click="generateNextOutlineChain()"
+              >
+                生成后续剧情链
+              </n-button>
+            </div>
+          </template>
+          <p v-else class="outline-origin-empty">
+            当前章节还没有绑定大纲节点。你可以先在章节信息中绑定大纲，或回到大纲页创建后再关联。
+          </p>
         </div>
 
-<!--        <div class="side-card summary-card">
+        <div class="side-card summary-card">
           <div class="side-card-head">
             <span class="side-card-label">本章定位</span>
           </div>
           <p>{{ currentSummaryText }}</p>
-        </div>-->
+        </div>
 
 <!--        <div class="side-card inspiration-card">
           <div class="side-card-head">
@@ -2549,8 +2584,10 @@ onBeforeUnmount(() => {
 .side-card-label { color: var(--arc-text-hint); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .outline-origin-title { font-size: 15px; font-weight: 700; color: var(--arc-text-primary); }
 .outline-origin-status { font-size: 11px; font-weight: 800; padding: 5px 9px; border-radius: var(--arc-radius-sm); }
+.outline-origin-empty { margin: 0; color: var(--arc-text-secondary); font-size: 12px; line-height: 1.7; }
 .outline-origin-summary-wrap { background: var(--arc-bg-body); border-radius: var(--arc-radius-md); padding: 10px; border: 1px solid var(--arc-border); }
 .outline-origin-summary { margin: 0; color: var(--arc-text-secondary); font-size: 12px; line-height: 1.6; }
+.summary-card p { margin: 0; color: var(--arc-text-secondary); font-size: 12px; line-height: 1.7; }
 .action-btn { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; border-radius: var(--arc-radius-md); cursor: pointer; font-size: 12px; font-weight: 700; margin-bottom: 6px;}
 .action-btn.primary { background: var(--arc-primary); color: white; border: none; }
 .action-btn.ghost { background: transparent; border: 1px solid var(--chapter-border); color: var(--arc-text-secondary); }

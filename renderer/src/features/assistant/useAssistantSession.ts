@@ -6,13 +6,17 @@ import {
   getResolvedChapterAssistantTemplates,
   type ChapterAssistantQuickAction
 } from '@/features/ai/chapterAssistantOptions'
-import { humanizeText } from '@/features/ai/humanizeProcessor'
+import { createAgentProposalFromResult } from '@/features/assistant/agentTypes'
 import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
 import { useAppStore } from '@/stores/app'
 import { isAssistantWindow } from '@/utils/windowKind'
-import type { ChapterInsertionMode } from '@/types/app'
+import type {
+  AssistantActionProposalResult,
+  AssistantIntentResult,
+  ChapterInsertionMode
+} from '@/types/app'
 
 function toIpcPayload<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -118,7 +122,9 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     }
   })
   const hasSelection = computed(() => Boolean(selectedExcerpt.value))
-  const knowledgeHitCount = computed(() => latestAiRunKnowledge.value.length)
+  const activeAgentProposal = computed(() => appStore.activeAgentProposal)
+  const agentConfirmationState = computed(() => appStore.agentConfirmationState)
+  const agentExecutionStep = computed(() => appStore.agentExecutionStep)
 
   function renderMarkdown(content: string): string {
     return marked.parse(content, { async: false }) as string
@@ -138,12 +144,169 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     isStopping.value = false
   }
 
-  async function sendPrompt(promptText?: string, quickAction?: string): Promise<void> {
-    const content = (promptText ?? draft.value).trim()
-    if (!content || isResponding.value) return
+  function normalizeAssistantReply(content: string): string {
+    return content.trim()
+  }
 
-    const userMessage = quickAction ? `【${quickAction}】${content}` : content
-    appStore.pushUserMessage(userMessage)
+  function resolveCompletedReplyContent(payloadContent?: string): string {
+    const directContent = typeof payloadContent === 'string' ? payloadContent.trim() : ''
+    if (directContent) {
+      return directContent
+    }
+
+    return streamingReply.value.trim()
+  }
+
+  async function appendConversationMessage(role: 'user' | 'assistant', content: string): Promise<void> {
+    const normalizedContent = content.trim()
+    if (!normalizedContent) {
+      return
+    }
+
+    if (isAssistantWindow) {
+      await window.characterArc.publishAssistantMessage(toIpcPayload({
+        role,
+        content: normalizedContent
+      }))
+      return
+    }
+
+    if (role === 'assistant') {
+      appStore.pushAssistantMessage(normalizedContent)
+      return
+    }
+
+    appStore.pushUserMessage(normalizedContent)
+  }
+
+  function buildProposalAssistantReply(
+    intentReason: string,
+    proposal: ReturnType<typeof createAgentProposalFromResult>
+  ): string {
+    const lines = [intentReason.trim() || proposal.reason]
+
+    switch (proposal.commandType) {
+      case 'update-chapter-title': {
+        const value = String(proposal.payload.value ?? '').trim()
+        if (value) {
+          lines.push(`建议标题：${value}`)
+        }
+        break
+      }
+      case 'update-chapter-summary': {
+        const value = String(proposal.payload.value ?? '').trim()
+        if (value) {
+          lines.push('建议摘要：')
+          lines.push(value)
+        }
+        break
+      }
+      case 'create-outline-item': {
+        const title = String(proposal.payload.title ?? '').trim()
+        const summary = String(proposal.payload.summary ?? '').trim()
+        if (title) {
+          lines.push(`大纲标题：${title}`)
+        }
+        if (summary) {
+          lines.push('大纲摘要：')
+          lines.push(summary)
+        }
+        break
+      }
+      case 'append-workflow-document-entry': {
+        const entryTitle = String(proposal.payload.entryTitle ?? '').trim()
+        const content = String(proposal.payload.content ?? '').trim()
+        if (entryTitle) {
+          lines.push(`条目标题：${entryTitle}`)
+        }
+        if (content) {
+          lines.push('条目内容：')
+          lines.push(content)
+        }
+        break
+      }
+      case 'update-workflow-document': {
+        const content = String(proposal.payload.content ?? '').trim()
+        if (content) {
+          lines.push('文档内容：')
+          lines.push(content)
+        }
+        break
+      }
+      case 'save-knowledge-document': {
+        const document = (proposal.payload.document ?? proposal.payload ?? {}) as Record<string, unknown>
+        const title = String(document.title ?? '').trim()
+        const summary = String(document.summary ?? '').trim()
+        if (title) {
+          lines.push(`知识标题：${title}`)
+        }
+        if (summary) {
+          lines.push('知识摘要：')
+          lines.push(summary)
+        }
+        break
+      }
+      case 'insert-into-chapter':
+      default: {
+        const content = String(proposal.payload.content ?? '').trim()
+        if (content) {
+          lines.push('建议内容：')
+          lines.push(content)
+        }
+        break
+      }
+    }
+
+    return lines.filter(Boolean).join('\n\n')
+  }
+
+  function shouldForceProposal(promptText: string, quickAction?: string): boolean {
+    const text = `${quickAction ?? ''}\n${promptText}`.toLowerCase()
+    return [
+      '章节标题',
+      '更新标题',
+      '设为标题',
+      '章节摘要',
+      '更新摘要',
+      '设为摘要',
+      '可直接应用',
+      '直接应用',
+      '创建大纲',
+      '下一章大纲',
+      '写入 task_plan',
+      '写入 findings',
+      '写入 progress',
+      '写入知识库',
+      '沉淀',
+      'canon',
+      '替换选区',
+      'replace-selection'
+    ].some((keyword) => text.includes(keyword.toLowerCase()))
+  }
+
+  function normalizeOutlineProposalPayload(payload: Record<string, unknown>): Partial<typeof appStore.outlineItems[number]> {
+    const nestedPayload = payload.payload && typeof payload.payload === 'object'
+      ? payload.payload as Record<string, unknown>
+      : null
+    const source = nestedPayload ?? payload
+
+    return {
+      volumeId: String(source.volumeId ?? '').trim() || undefined,
+      title: String(source.title ?? '').trim(),
+      wordTarget: String(source.wordTarget ?? '').trim(),
+      conflict: String(source.conflict ?? '').trim(),
+      summary: String(source.summary ?? '').trim(),
+      status: source.status as typeof appStore.outlineItems[number]['status'] | undefined
+    }
+  }
+
+  async function createNextOutlineProposal(promptText: string, quickAction: string): Promise<void> {
+    const content = promptText.trim()
+    if (!content || isResponding.value) {
+      return
+    }
+
+    await appendConversationMessage('user', `【${quickAction}】${content}`)
     draft.value = ''
     isResponding.value = true
     isStopping.value = false
@@ -151,33 +314,269 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     await scrollToBottom()
 
     try {
+      const projectSkills = await loadEnabledProjectSkillsContext(currentProject.value, 'draft')
+      const assistantContext = buildChapterAssistantContext({
+        project: currentProject.value,
+        chapter: currentChapter.value,
+        chapterVolume: appStore.selectedChapterVolume,
+        relatedChapters: relatedChapters.value,
+        volumeChapterSummaries: volumeChapterSummaries.value,
+        novelOpenerSummary: novelOpenerSummary.value,
+        recentMessages: recentAssistantMessages.value,
+        worldviewEntries: appStore.worldviewEntries,
+        characters: appStore.characters,
+        organizations: appStore.organizations,
+        characterRelationships: appStore.characterRelationships,
+        organizationMemberships: appStore.organizationMemberships,
+        inspirationEntries: appStore.inspirationEntries,
+        outlineItems: appStore.outlineItems,
+        plotThreads: appStore.plotThreads,
+        workflowDocuments: appStore.workflowDocuments,
+        knowledgeDocuments: appStore.knowledgeDocuments,
+        selectedText: selectedExcerpt.value,
+        responseMode: 'suggest',
+        responseLength: 'medium',
+        quickAction,
+        userPrompt: `${content}\n请务必输出 create-outline-item 动作提议，不要改成其他动作。`,
+        chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
+        projectSkills
+      })
+
+      const proposalResponse = await window.characterArc.generateAi(toIpcPayload({
+        task: 'assistant-action-proposal',
+        settings: appStore.appSettings,
+        context: assistantContext
+      }))
+
+      const proposalResult = (proposalResponse.result as { result?: AssistantActionProposalResult } | undefined)?.result
+      if (!proposalResponse.success || !proposalResult) {
+        throw new Error(proposalResponse.error ?? 'AI 未返回有效大纲提议')
+      }
+
+      const proposal = createAgentProposalFromResult(proposalResult)
+      if (proposal.commandType !== 'create-outline-item') {
+        throw new Error('AI 没有返回下一章大纲提议，请重试。')
+      }
+
+      const outlinePayload = normalizeOutlineProposalPayload({
+        ...(proposal.payload ?? {}),
+        volumeId: appStore.selectedChapterVolume?.id || currentChapter.value?.volumeId || '',
+        status: 'planned'
+      })
+
+      const commandPayload: CharacterArcAssistantCommand = {
+        type: 'create-outline-item',
+        kind: 'proposal',
+        target: 'outline-item',
+        reason: proposal.reason || '这会在当前分卷新增一个下一章大纲节点，建议确认后再写入。',
+        preview: proposal.preview,
+        destructive: proposal.destructive,
+        requiresConfirmation: true,
+        payload: outlinePayload
+      }
+
+      if (isAssistantWindow) {
+        await window.characterArc.publishAssistantCommand(toIpcPayload(commandPayload))
+      } else {
+        appStore.handleAssistantCommand(commandPayload)
+      }
+
+      await appendConversationMessage(
+        'assistant',
+        [
+          '已生成下一章大纲提议，请确认后执行。',
+          outlinePayload.title ? `大纲标题：${outlinePayload.title}` : '',
+          outlinePayload.conflict ? `核心冲突：${outlinePayload.conflict}` : '',
+          outlinePayload.summary ? `剧情摘要：\n${outlinePayload.summary}` : ''
+        ].filter(Boolean).join('\n\n')
+      )
+      await scrollToBottom()
+      message.success('已生成下一章大纲提议')
+    } catch (error) {
+      resetStreamingState()
+      message.error(error instanceof Error ? error.message : 'AI 生成下一章大纲失败')
+    } finally {
+      isResponding.value = false
+      isStopping.value = false
+    }
+  }
+
+  async function sendPrompt(promptText?: string, quickAction?: string): Promise<void> {
+    const content = (promptText ?? draft.value).trim()
+    if (!content || isResponding.value) return
+
+    const userMessage = quickAction ? `【${quickAction}】${content}` : content
+    const projectSkills = await loadEnabledProjectSkillsContext(currentProject.value, 'draft')
+    const assistantContext = buildChapterAssistantContext({
+      project: currentProject.value,
+      chapter: currentChapter.value,
+      chapterVolume: appStore.selectedChapterVolume,
+      relatedChapters: relatedChapters.value,
+      volumeChapterSummaries: volumeChapterSummaries.value,
+      novelOpenerSummary: novelOpenerSummary.value,
+      recentMessages: recentAssistantMessages.value,
+      worldviewEntries: appStore.worldviewEntries,
+      characters: appStore.characters,
+      organizations: appStore.organizations,
+      characterRelationships: appStore.characterRelationships,
+      organizationMemberships: appStore.organizationMemberships,
+      inspirationEntries: appStore.inspirationEntries,
+      outlineItems: appStore.outlineItems,
+      plotThreads: appStore.plotThreads,
+      workflowDocuments: appStore.workflowDocuments,
+      knowledgeDocuments: appStore.knowledgeDocuments,
+      selectedText: selectedExcerpt.value,
+      responseMode: responseMode.value,
+      responseLength: responseLength.value,
+      quickAction,
+      userPrompt: content,
+      chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
+      projectSkills
+    })
+
+    await appendConversationMessage('user', userMessage)
+    draft.value = ''
+    isResponding.value = true
+    isStopping.value = false
+    streamingReply.value = ''
+    await scrollToBottom()
+
+    try {
+      const intentResponse = await window.characterArc.generateAi(toIpcPayload({
+        task: 'assistant-intent',
+        settings: appStore.appSettings,
+        context: assistantContext
+      }))
+      const intentResult = (intentResponse.result as { result?: AssistantIntentResult } | undefined)?.result
+      if (!intentResponse.success || !intentResult) {
+        throw new Error(intentResponse.error ?? 'AI 意图识别失败')
+      }
+
+      if (intentResult.intent === 'proposal' || shouldForceProposal(content, quickAction)) {
+        const proposalResponse = await window.characterArc.generateAi(toIpcPayload({
+          task: 'assistant-action-proposal',
+          settings: appStore.appSettings,
+          context: assistantContext
+        }))
+        const proposalResult = (proposalResponse.result as { result?: AssistantActionProposalResult } | undefined)?.result
+        if (!proposalResponse.success || !proposalResult) {
+          throw new Error(proposalResponse.error ?? 'AI 动作提议生成失败')
+        }
+
+        const proposal = createAgentProposalFromResult(proposalResult)
+        let commandPayload: CharacterArcAssistantCommand
+
+        switch (proposal.commandType) {
+          case 'update-chapter-title':
+            commandPayload = {
+              type: 'update-chapter-title',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              value: String(proposal.payload.value ?? '').trim()
+            }
+            break
+          case 'update-chapter-summary':
+            commandPayload = {
+              type: 'update-chapter-summary',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              value: String(proposal.payload.value ?? '').trim()
+            }
+            break
+          case 'create-outline-item':
+            commandPayload = {
+              type: 'create-outline-item',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              payload: normalizeOutlineProposalPayload((proposal.payload ?? {}) as Record<string, unknown>)
+            }
+            break
+          case 'append-workflow-document-entry':
+            commandPayload = {
+              type: 'append-workflow-document-entry',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              documentKey: proposal.payload.documentKey as import('@/types/app').WorkflowDocumentKey,
+              entryTitle: String(proposal.payload.entryTitle ?? '').trim(),
+              content: String(proposal.payload.content ?? '').trim(),
+              volumeId: String(proposal.payload.volumeId ?? '').trim() || undefined
+            }
+            break
+          case 'update-workflow-document':
+            commandPayload = {
+              type: 'update-workflow-document',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              documentKey: proposal.payload.documentKey as import('@/types/app').WorkflowDocumentKey,
+              content: String(proposal.payload.content ?? '').trim(),
+              volumeId: String(proposal.payload.volumeId ?? '').trim() || undefined
+            }
+            break
+          case 'save-knowledge-document':
+            commandPayload = {
+              type: 'save-knowledge-document',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              document: (proposal.payload.document ?? proposal.payload ?? {}) as Partial<typeof appStore.knowledgeDocuments[number]>
+            }
+            break
+          case 'insert-into-chapter':
+          default:
+            commandPayload = {
+              type: 'insert-into-chapter',
+              kind: 'proposal',
+              target: proposal.target,
+              reason: proposal.reason,
+              preview: proposal.preview,
+              destructive: proposal.destructive,
+              requiresConfirmation: proposal.requiresConfirmation,
+              content: String(proposal.payload.content ?? '').trim(),
+              mode: (proposal.payload.mode as ChapterInsertionMode) || 'append'
+            }
+            break
+        }
+
+        if (isAssistantWindow) {
+          await window.characterArc.publishAssistantCommand(toIpcPayload(commandPayload))
+        } else {
+          appStore.handleAssistantCommand(commandPayload)
+        }
+
+        await appendConversationMessage('assistant', buildProposalAssistantReply(intentResult.reason, proposal))
+        resetStreamingState()
+        await scrollToBottom()
+        message.success('已生成写作动作提议，请确认后执行')
+        return
+      }
+
       const result = await window.characterArc.startAiStream(toIpcPayload({
         task: 'chapter-assistant',
         settings: appStore.appSettings,
-        context: buildChapterAssistantContext({
-          project: currentProject.value,
-          chapter: currentChapter.value,
-          chapterVolume: appStore.selectedChapterVolume,
-          relatedChapters: relatedChapters.value,
-          volumeChapterSummaries: volumeChapterSummaries.value,
-          novelOpenerSummary: novelOpenerSummary.value,
-          recentMessages: recentAssistantMessages.value,
-          worldviewEntries: appStore.worldviewEntries,
-          characters: appStore.characters,
-          organizations: appStore.organizations,
-          characterRelationships: appStore.characterRelationships,
-          organizationMemberships: appStore.organizationMemberships,
-          inspirationEntries: appStore.inspirationEntries,
-          outlineItems: appStore.outlineItems,
-          plotThreads: appStore.plotThreads,
-          selectedText: selectedExcerpt.value,
-          responseMode: responseMode.value,
-          responseLength: responseLength.value,
-          quickAction,
-          userPrompt: content,
-          chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
-          projectSkills: await loadEnabledProjectSkillsContext(currentProject.value, 'draft')
-        })
+        context: assistantContext
       }))
 
       const streamId = (result.result as { streamId?: string } | undefined)?.streamId
@@ -189,66 +588,6 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     }
   }
 
-  async function createOutlineDraft(promptText: string, quickAction: string): Promise<void> {
-    const content = promptText.trim()
-    if (!content || isResponding.value) return
-
-    appStore.pushUserMessage(`【${quickAction}】${content}`)
-    isResponding.value = true
-    await scrollToBottom()
-
-    try {
-      const result = await window.characterArc.generateAi(toIpcPayload({
-        task: 'outline-item',
-        settings: appStore.appSettings,
-        context: {
-          projectTitle: currentProject.value?.title,
-          projectGenre: currentProject.value?.genre,
-          writingStyleLabel: writingStyle.value.label,
-          writingStylePrompt: writingStyle.value.prompt,
-          chapterTitle: currentChapter.value?.title,
-          chapterSummary: currentChapter.value?.summary,
-          chapterWordTarget: currentChapter.value?.wordTarget,
-          chapterContent: getPlainTextFromEditorContent(currentChapter.value?.content ?? ''),
-          chapterVolumeTitle: appStore.selectedChapterVolume?.title,
-          chapterVolumeSummary: appStore.selectedChapterVolume?.summary,
-          outlineTitles: appStore.outlineItems.map((item) => item.title),
-          worldviewTitles: appStore.worldviewEntries.map((entry) => entry.title),
-          characters: appStore.characters.map((character) => ({
-            name: character.name,
-            role: character.role,
-            description: character.description
-          })),
-          currentVolumeOutlineItems: appStore.outlineItems
-            .filter((item) => item.volumeId === appStore.selectedChapterVolume?.id)
-            .slice(-4)
-            .map((item) => ({ title: item.title, conflict: item.conflict, summary: item.summary })),
-          userPrompt: content
-        }
-      }))
-
-      if (!result.success || !result.result) throw new Error(result.error ?? 'AI 未返回有效大纲草稿')
-
-      const item = result.result as { title?: string; wordTarget?: string; conflict?: string; summary?: string }
-      appStore.createOutlineItem({
-        volumeId: appStore.selectedChapterVolume?.id || currentChapter.value?.volumeId,
-        title: item.title,
-        wordTarget: item.wordTarget,
-        conflict: item.conflict,
-        summary: item.summary
-      })
-      appStore.pushAssistantMessage(
-        `已创建下一章大纲草稿：${item.title ?? '新剧情节点'}\n预估字数：${item.wordTarget ?? '预估 3000字'}\n核心冲突：${item.conflict ?? '新的冲突正在酝酿。'}\n剧情摘要：${item.summary ?? 'AI 未返回有效剧情摘要'}`
-      )
-      await scrollToBottom()
-      message.success('AI 已写入下一章大纲草稿')
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : 'AI 生成下一章大纲失败')
-    } finally {
-      isResponding.value = false
-    }
-  }
-
   function handleQuickAction(action: ChapterAssistantQuickAction): void {
     if (action.requiresSelection && !selectedExcerpt.value) {
       message.warning('请先在正文中选中要处理的段落')
@@ -257,11 +596,10 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
 
     responseMode.value = action.mode
     responseLength.value = action.length
-    if (action.task === 'outline-draft') {
-      void createOutlineDraft(action.prompt, action.label)
+    if (action.id === 'next-outline-draft') {
+      void createNextOutlineProposal(action.prompt, action.label)
       return
     }
-
     void sendPrompt(action.prompt, action.label)
   }
 
@@ -272,17 +610,53 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
       return
     }
 
+    const requiresProposal = mode === 'replace-selection'
+
     if (isAssistantWindow) {
-      void window.characterArc.publishAssistantCommand(toIpcPayload({ type: 'insert-into-chapter', content: insertion, mode }))
+      void window.characterArc.publishAssistantCommand(toIpcPayload({
+        type: 'insert-into-chapter',
+        kind: requiresProposal ? 'proposal' : 'direct-command',
+        target: 'chapter-content',
+        reason: requiresProposal ? '这会替换正文中的当前选区，需要你确认后再执行。' : '将生成内容插入到当前章节。',
+        preview: {
+          title: requiresProposal ? '替换正文选区' : mode === 'append' ? '追加到章节末尾' : '插入章节正文',
+          summary: requiresProposal ? '准备使用 AI 内容替换当前选中的正文片段。' : mode === 'append' ? '准备把 AI 内容追加到章节末尾。' : '准备把 AI 内容插入当前章节。',
+          after: insertion.slice(0, 220)
+        },
+        destructive: requiresProposal,
+        requiresConfirmation: requiresProposal,
+        content: insertion,
+        mode
+      }))
+      if (requiresProposal) {
+        message.success('已发送替换提议，请在确认卡片中决定是否执行')
+        return
+      }
       if (mode === 'append') {
         message.success('AI 内容已发送到主窗口并准备追加到正文末尾')
         return
       }
-      if (mode === 'replace-selection') {
-        message.success('AI 内容已发送到主窗口并准备替换当前选区')
-        return
-      }
       message.success('AI 内容已发送到主窗口，等待插入正文')
+      return
+    }
+
+    if (requiresProposal) {
+      appStore.handleAssistantCommand({
+        type: 'insert-into-chapter',
+        kind: 'proposal',
+        target: 'chapter-content',
+        reason: '这会替换正文中的当前选区，需要你确认后再执行。',
+        preview: {
+          title: '替换正文选区',
+          summary: '准备使用 AI 内容替换当前选中的正文片段。',
+          after: insertion.slice(0, 220)
+        },
+        destructive: true,
+        requiresConfirmation: true,
+        content: insertion,
+        mode
+      })
+      message.info('已生成替换提议，请先确认')
       return
     }
 
@@ -295,10 +669,6 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
       message.success('AI 内容已追加到正文末尾')
       return
     }
-    if (mode === 'replace-selection') {
-      message.success('AI 内容已尝试替换当前选区')
-      return
-    }
     message.success('AI 内容已插入正文')
   }
 
@@ -308,8 +678,31 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
       message.warning('当前没有可更新摘要的章节')
       return
     }
-    appStore.updateChapterSummary(nextSummary)
-    message.success('AI 内容已设为本章摘要')
+
+    const commandPayload = {
+      type: 'update-chapter-summary' as const,
+      kind: 'proposal' as const,
+      target: 'chapter-summary' as const,
+      reason: '这会覆盖当前章节摘要，建议确认后再写入。',
+      preview: {
+        title: '更新章节摘要',
+        summary: '准备使用 AI 生成内容覆盖当前章节摘要。',
+        before: appStore.selectedChapter.summary,
+        after: nextSummary.slice(0, 220)
+      },
+      destructive: true,
+      requiresConfirmation: true,
+      value: nextSummary
+    }
+
+    if (isAssistantWindow) {
+      void window.characterArc.publishAssistantCommand(toIpcPayload(commandPayload))
+      message.success('已发送摘要更新提议，请先确认')
+      return
+    }
+
+    appStore.handleAssistantCommand(commandPayload)
+    message.info('已生成摘要更新提议，请先确认')
   }
 
   function handleUseAsTitle(content: string): void {
@@ -317,14 +710,37 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
       .split('\n').map((line) => line.trim()).find(Boolean)
       ?.replace(/^[-*#\d.\s]+/, '')
       .replace(/^标题[:：]\s*/, '')
-      .replace(/[「」"'"]/g, '')
+      .replace(/[「」"'“”‘’]/g, '')
       .trim()
     if (!appStore.selectedChapter || !nextTitle) {
       message.warning('当前没有可更新标题的章节')
       return
     }
-    appStore.updateChapterTitle(nextTitle)
-    message.success('AI 内容已设为章节标题')
+
+    const commandPayload = {
+      type: 'update-chapter-title' as const,
+      kind: 'proposal' as const,
+      target: 'chapter-title' as const,
+      reason: '这会覆盖当前章节标题，建议确认后再写入。',
+      preview: {
+        title: '更新章节标题',
+        summary: '准备使用 AI 生成内容覆盖当前章节标题。',
+        before: appStore.selectedChapter.title,
+        after: nextTitle
+      },
+      destructive: true,
+      requiresConfirmation: true,
+      value: nextTitle
+    }
+
+    if (isAssistantWindow) {
+      void window.characterArc.publishAssistantCommand(toIpcPayload(commandPayload))
+      message.success('已发送标题更新提议，请先确认')
+      return
+    }
+
+    appStore.handleAssistantCommand(commandPayload)
+    message.info('已生成标题更新提议，请先确认')
   }
 
   function handleMoreAction(key: string, content: string): void {
@@ -360,6 +776,58 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     }
   }
 
+  async function handleApproveProposal(): Promise<void> {
+    if (!activeAgentProposal.value) {
+      return
+    }
+
+    if (isAssistantWindow) {
+      const result = await window.characterArc.approveAssistantProposal()
+      if (!result.success) {
+        message.error(result.error ?? '确认 proposal 失败')
+        return
+      }
+      message.success('已发送确认请求')
+      return
+    }
+
+    appStore.approveActiveAgentProposal()
+    appStore.clearActiveAgentProposal()
+    message.success('已执行提议动作')
+  }
+
+  async function handleRejectProposal(): Promise<void> {
+    if (!activeAgentProposal.value) {
+      return
+    }
+
+    if (isAssistantWindow) {
+      const result = await window.characterArc.rejectAssistantProposal()
+      if (!result.success) {
+        message.error(result.error ?? '拒绝 proposal 失败')
+        return
+      }
+      message.info('已发送取消请求')
+      return
+    }
+
+    appStore.rejectActiveAgentProposal()
+    message.info('已取消当前提议')
+  }
+
+  async function handleClearProposal(): Promise<void> {
+    if (isAssistantWindow) {
+      const result = await window.characterArc.clearAssistantProposal()
+      if (!result.success) {
+        message.error(result.error ?? '关闭 proposal 卡片失败')
+        return
+      }
+      return
+    }
+
+    appStore.clearActiveAgentProposal()
+  }
+
   function handleComposerKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -377,17 +845,19 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     }
 
     if (payload.type === 'done') {
-      const finalReply = humanizeText(payload.content ?? streamingReply.value)
-      if (finalReply) appStore.pushAssistantMessage(finalReply)
+      const finalReply = normalizeAssistantReply(resolveCompletedReplyContent(payload.content))
+      if (finalReply) {
+        void appendConversationMessage('assistant', finalReply)
+      }
       resetStreamingState()
       void scrollToBottom()
       return
     }
 
     if (payload.type === 'canceled') {
-      const partialReply = humanizeText(payload.content ?? streamingReply.value)
+      const partialReply = normalizeAssistantReply(resolveCompletedReplyContent(payload.content))
       if (partialReply) {
-        appStore.pushAssistantMessage(partialReply)
+        void appendConversationMessage('assistant', partialReply)
         message.info('已停止生成，并保留当前已生成内容')
       } else {
         message.info('已停止生成')
@@ -453,15 +923,19 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     latestAiRunKnowledge,
     latestAiRunStatusText,
     hasSelection,
-    knowledgeHitCount,
+    activeAgentProposal,
+    agentConfirmationState,
+    agentExecutionStep,
     renderMarkdown,
     sendPrompt,
-    createOutlineDraft,
     handleQuickAction,
     handleInsert,
     handleUseAsSummary,
     handleUseAsTitle,
     handleMoreAction,
+    handleApproveProposal,
+    handleRejectProposal,
+    handleClearProposal,
     handleRegenerate,
     handleStopResponse,
     handleComposerKeydown,

@@ -41,6 +41,112 @@ export interface WorkflowDocument {
   updatedAt: string
 }
 
+/** 助手写作动作类型 */
+export type AssistantCommandType =
+  | 'insert-into-chapter'
+  | 'update-chapter-title'
+  | 'update-chapter-summary'
+  | 'create-outline-item'
+  | 'append-workflow-document-entry'
+  | 'update-workflow-document'
+  | 'save-knowledge-document'
+
+/** 助手动作来源：直接执行命令 / 待确认 proposal */
+export type AssistantCommandKind = 'direct-command' | 'proposal'
+
+/** 助手动作目标 */
+export type AssistantCommandTarget =
+  | 'chapter-content'
+  | 'chapter-title'
+  | 'chapter-summary'
+  | 'outline-item'
+  | 'workflow-document'
+  | 'knowledge-document'
+
+/** Agent proposal 预览 */
+export interface AgentProposalPreview {
+  /** 预览标题 */
+  title: string
+  /** 简短摘要 */
+  summary: string
+  /** 可选的原内容摘要 */
+  before?: string
+  /** 可选的新内容摘要 */
+  after?: string
+}
+
+/** Agent proposal 的确认状态 */
+export interface AgentConfirmationState {
+  /** 是否需要确认 */
+  required: boolean
+  /** 确认时间 */
+  confirmedAt?: string
+  /** 拒绝时间 */
+  rejectedAt?: string
+}
+
+/** Agent proposal 当前阶段 */
+export type AgentExecutionStep = 'idle' | 'proposed' | 'applying'
+
+/** Agent 对用户意图的归类 */
+export type AgentIntentKind = 'chat' | 'command' | 'proposal'
+
+/** AI 返回的助理意图结果 */
+export interface AssistantIntentResult {
+  /** 本轮更适合普通聊天还是动作提议 */
+  intent: 'chat' | 'proposal'
+  /** 给用户的简短理由 */
+  reason: string
+}
+
+/** AI 返回的结构化动作提议结果 */
+export interface AssistantActionProposalResult {
+  /** 对应动作类型 */
+  commandType: AssistantCommandType
+  /** 目标对象 */
+  target: AssistantCommandTarget
+  /** 动作说明 */
+  reason: string
+  /** 预览标题 */
+  title: string
+  /** 预览摘要 */
+  summary: string
+  /** 原内容摘要 */
+  before?: string
+  /** 新内容摘要 */
+  after?: string
+  /** 是否属于破坏性写入 */
+  destructive: boolean
+  /** 是否需要确认 */
+  requiresConfirmation: boolean
+  /** 原始执行载荷 */
+  payload: Record<string, unknown>
+}
+
+/** 单次 Agent proposal */
+export interface AgentProposal {
+  /** proposal 唯一标识 */
+  id: string
+  /** 对应动作类型 */
+  commandType: AssistantCommandType
+  /** 目标对象 */
+  target: AssistantCommandTarget
+  /** 动作说明 */
+  reason: string
+  /** 预览数据 */
+  preview: AgentProposalPreview
+  /** 是否属于破坏性写入 */
+  destructive: boolean
+  /** 是否需要确认 */
+  requiresConfirmation: boolean
+  /** 当前状态 */
+  status: 'pending' | 'approved' | 'rejected' | 'applied'
+  /** 原始 payload 归档 */
+  payload: Record<string, unknown>
+  /** 创建时间 */
+  createdAt: string
+}
+
 /** 项目级 skill 条目 */
 export interface ProjectSkillItem {
   /** skill 唯一标识 */
@@ -358,7 +464,12 @@ export interface ChatMessage {
 }
 
 /** 项目知识文档来源类型 */
-export type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk'
+export type KnowledgeDocumentSourceType =
+  | 'reference-summary'
+  | 'reference-chunk'
+  | 'workflow-document'
+  | 'canon-fact'
+  | 'chapter-summary'
 
 /** 项目级知识文档 */
 export interface KnowledgeDocument {

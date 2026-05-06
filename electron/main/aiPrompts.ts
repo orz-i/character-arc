@@ -7,20 +7,56 @@ import {
   resolveChapterAssistantQuickActionInstruction
 } from './promptLibrary'
 
+function resolveKnowledgeSourceGroupLabel(sourceType: AiTaskKnowledgeContext['usedKnowledge'][number]['sourceType']): '项目记忆' | '参考资料' {
+  return sourceType === 'workflow-document' || sourceType === 'canon-fact' || sourceType === 'chapter-summary'
+    ? '项目记忆'
+    : '参考资料'
+}
+
+function resolveKnowledgeSourceTypeLabel(sourceType: AiTaskKnowledgeContext['usedKnowledge'][number]['sourceType']): string {
+  switch (sourceType) {
+    case 'canon-fact':
+      return '项目 canon'
+    case 'chapter-summary':
+      return '章节摘要'
+    case 'workflow-document':
+      return '流程文档'
+    case 'reference-summary':
+      return '参考总纲'
+    case 'reference-chunk':
+    default:
+      return '参考分块'
+  }
+}
+
 function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['usedKnowledge']): string {
   if (!knowledge?.length) {
     return ''
   }
 
-  return knowledge
-    .slice(0, 5)
-    .map((item, index) => [
-      `资料${index + 1}｜${item.title}`,
-      `来源：${item.sourceLabel}`,
-      item.keywords.length ? `关键词：${item.keywords.join('、')}` : '',
-      `片段：${item.snippet}`
-    ].filter(Boolean).join('\n'))
-    .join('\n\n')
+  const projectKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === '项目记忆')
+  const referenceKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === '参考资料')
+  const formatSection = (label: string, entries: AiTaskKnowledgeContext['usedKnowledge']): string => {
+    if (!entries.length) {
+      return ''
+    }
+
+    return [
+      `${label}：`,
+      ...entries.slice(0, 5).map((item, index) => [
+        `${label}${index + 1}｜${item.title}`,
+        `类型：${resolveKnowledgeSourceTypeLabel(item.sourceType)}`,
+        `来源：${item.sourceLabel}`,
+        item.keywords.length ? `关键词：${item.keywords.join('、')}` : '',
+        `片段：${item.snippet}`
+      ].filter(Boolean).join('\n'))
+    ].join('\n\n')
+  }
+
+  return [
+    formatSection('项目记忆', projectKnowledge),
+    formatSection('参考资料', referenceKnowledge)
+  ].filter(Boolean).join('\n\n')
 }
 
 /**
@@ -33,7 +69,7 @@ export function buildTaskPrompt(task: AiTaskPayload, knowledgeContext?: AiTaskKn
   const writingStyleInstruction = resolveWritingStyleInstruction(context)
   const projectSkills = formatProjectSkills(context.projectSkills)
   const retrievedKnowledge = formatRetrievedKnowledge(knowledgeContext?.usedKnowledge)
-  const retrievalBlock = retrievedKnowledge ? `\n\n检索到的参考知识：\n${retrievedKnowledge}` : ''
+  const retrievalBlock = retrievedKnowledge ? `\n\n检索到的项目记忆与参考资料：\n${retrievedKnowledge}` : ''
   const wrapPrompt = (prompt: PromptPair): PromptPair => {
     const capabilityPrompt = buildCapabilityPromptContext(task)
     return {
@@ -205,6 +241,116 @@ export function buildTaskPrompt(task: AiTaskPayload, knowledgeContext?: AiTaskKn
       system:
         '你是小说灵感生成助手。请只返回 JSON 对象，不要返回 Markdown，不要解释。字段必须包含 entries，entries 中每一项都必须包含 type、title、content、tags。',
       user: `请围绕当前小说项目生成一组可直接保存的灵感卡片。\n\n项目标题：${String(context.projectTitle ?? '')}\n项目题材：${String(context.projectGenre ?? '')}\n当前章节标题：${String(context.chapterTitle ?? '')}\n当前章节摘要：${String(context.chapterSummary ?? '')}\n当前章节正文：\n${String(context.chapterContent ?? '')}\n\n灵感焦点：${String(context.focusType ?? '场景火花')}\n已有灵感标题：${existingInspirationTitles}\n\n相关世界观：\n${worldviewEntries || '暂无'}\n\n相关角色：\n${characters || '暂无'}\n\n相关组织：\n${organizations || '暂无'}\n\n角色关系：\n${relationships || '暂无'}\n\n成员归属：\n${memberships || '暂无'}\n\n相关大纲：\n${outlineItems || '暂无'}\n\n要求：\n1. entries 返回 4 条灵感卡片，每条都必须紧贴"灵感焦点"\n2. type 必须从以下类型中选一个：标题灵感、开篇钩子、场景火花、剧情转折、设定补完、人物动机\n3. title 要短而明确，避免与已有灵感标题重复\n4. content 用中文写成 60 到 140 字的可执行灵感描述，强调可落地场景、冲突、情绪或推进方式\n5. 当关系、组织或阵营立场明显可用时，优先让灵感围绕这些张力展开\n6. tags 返回 2 到 4 个简短标签，方便后续筛选\n7. 不要空泛鸡汤，不要写成长篇大纲，要像作者工作台里的"灵感卡片"\n8. ${writingStyleInstruction}\n\n返回格式：{"entries":[{"type":"","title":"","content":"","tags":["",""]}]}`
+    })
+  }
+
+  // ── 小说助理意图判断任务 ──
+  if (task.task === 'assistant-intent') {
+    return wrapPrompt({
+      system:
+        '你是小说创作助手的意图路由器。请只返回 JSON 对象，不要返回 Markdown、解释或额外文本。字段必须包含 intent、reason。',
+      user: `请判断当前用户请求更适合：
+1. 普通聊天回答（chat）
+2. 发起一个可执行的写作动作提议（proposal）
+
+项目标题：${String(context.projectTitle ?? '')}
+项目题材：${String(context.projectGenre ?? '')}
+当前章节标题：${String(context.chapterTitle ?? '')}
+当前章节摘要：${String(context.chapterSummary ?? '')}
+当前选中文本：
+${String(context.selectedText ?? '') || '暂无'}
+快捷动作：${String(context.quickAction ?? '自由提问')}
+用户请求：${String(context.userPrompt ?? '')}
+
+判断规则：
+1. 如果用户是在询问、讨论、要建议、要分析、要说明、要思路，返回 chat
+2. 如果用户明确要求你改写、替换、设为标题、设为摘要、生成并创建大纲节点、更新流程文件、记录进度、沉淀设定到知识库，返回 proposal
+3. 如果请求明显包含“替换”“覆盖”“更新标题”“更新摘要”“创建下一章大纲”“追加到 task_plan/findings/progress”“写入知识库/canon”这类落地动作，优先返回 proposal
+4. 如果只是想看候选文案、候选标题、候选摘要、建议方案，而没有明确要求写入，返回 chat
+5. 只能返回 chat 或 proposal 二选一
+6. reason 用一句中文简要说明判断依据，20 到 60 字
+
+返回格式：{"intent":"chat","reason":""}`
+    })
+  }
+
+  // ── 小说助理动作提议任务 ──
+  if (task.task === 'assistant-action-proposal') {
+    return wrapPrompt({
+      system:
+        '你是小说创作助手的动作提议生成器。请只返回 JSON 对象，不要返回 Markdown、解释或额外文本。你只能从受控动作白名单中选择一个动作。字段必须包含 commandType、target、reason、title、summary、destructive、requiresConfirmation、payload。',
+      user: `请基于当前小说项目上下文，把用户请求转换成一个单步、可确认的写作动作提议。
+
+允许动作白名单：
+1. insert-into-chapter
+2. update-chapter-title
+3. update-chapter-summary
+4. create-outline-item
+5. append-workflow-document-entry
+6. update-workflow-document
+7. save-knowledge-document
+
+动作目标映射：
+- insert-into-chapter -> chapter-content
+- update-chapter-title -> chapter-title
+- update-chapter-summary -> chapter-summary
+- create-outline-item -> outline-item
+- append-workflow-document-entry -> workflow-document
+- update-workflow-document -> workflow-document
+- save-knowledge-document -> knowledge-document
+
+项目标题：${String(context.projectTitle ?? '')}
+项目题材：${String(context.projectGenre ?? '')}
+当前分卷：${String(context.chapterVolumeTitle ?? '')}
+当前分卷摘要：${String(context.chapterVolumeSummary ?? '')}
+当前章节标题：${String(context.chapterTitle ?? '')}
+当前章节摘要：${String(context.chapterSummary ?? '')}
+当前章节正文：
+${String(context.chapterContent ?? '')}
+
+当前选中文本：
+${String(context.selectedText ?? '') || '暂无'}
+
+当前流程文档：
+${Array.isArray(context.workflowDocuments) ? context.workflowDocuments.map((document) => `${String((document as Record<string, unknown>).key ?? '')} / ${String((document as Record<string, unknown>).title ?? '')}：${String((document as Record<string, unknown>).content ?? '')}`).join('\n\n') : '暂无'}
+
+当前项目知识摘要：
+${Array.isArray(context.knowledgeDocuments) ? context.knowledgeDocuments.map((document) => `${String((document as Record<string, unknown>).title ?? '')} / ${String((document as Record<string, unknown>).sourceType ?? '')}：${String((document as Record<string, unknown>).summary ?? '')}`).join('\n') : '暂无'}
+
+相关世界观：
+${Array.isArray(context.worldviewEntries) ? context.worldviewEntries.map((entry) => `${String((entry as Record<string, unknown>).title ?? '')}：${String((entry as Record<string, unknown>).content ?? '')}`).join('\n') : '暂无'}
+
+相关角色：
+${Array.isArray(context.characters) ? context.characters.map((character) => `${String((character as Record<string, unknown>).name ?? '')} / ${String((character as Record<string, unknown>).role ?? '')}：${String((character as Record<string, unknown>).description ?? '')}`).join('\n') : '暂无'}
+
+相关大纲：
+${Array.isArray(context.outlineItems) ? context.outlineItems.map((item) => `${String((item as Record<string, unknown>).title ?? '')}：${String((item as Record<string, unknown>).summary ?? '')}`).join('\n') : '暂无'}${retrievalBlock}
+
+快捷动作：${String(context.quickAction ?? '自由提问')}
+用户请求：${String(context.userPrompt ?? '')}
+
+生成规则：
+1. 一次只允许提议一个动作，不要组合多个写操作
+2. 如果是正文写入，commandType 只能是 insert-into-chapter，payload 必须包含 content 和 mode
+3. mode 只能是 cursor、append、replace-selection 三选一；如果用户明确说替换选区或覆盖某段，优先用 replace-selection
+4. 如果是标题更新，payload 必须包含 value，且内容应是简洁标题，不要多行
+5. 如果是摘要更新，payload 必须包含 value，且内容应是可直接保存的章节摘要
+6. 如果是创建大纲，payload 必须包含至少 title、summary，可附带 wordTarget、conflict、volumeId
+6.1 如果提供 volumeId，必须使用系统里的真实分卷 id，而不是“第一卷/第二卷/故事开端”这类展示文本；若不能确定真实 id，就不要返回 volumeId
+7. 如果是追加流程文档条目，commandType 只能是 append-workflow-document-entry，payload 必须包含 documentKey、entryTitle、content，可附带 volumeId
+8. 如果是覆盖流程文档，commandType 只能是 update-workflow-document，payload 必须包含 documentKey、content，可附带 volumeId
+9. 如果是沉淀项目知识，commandType 只能是 save-knowledge-document，target 必须是 knowledge-document；payload 必须至少包含 document，并在 document 内提供 title、content、summary、sourceType，可附带 sourceLabel、keywords、metadata
+10. 对会覆盖已有内容的动作，destructive 必须为 true，requiresConfirmation 必须为 true
+11. 对 create-outline-item，destructive 应为 false，requiresConfirmation 可为 false
+12. 对 append-workflow-document-entry，destructive 应为 false，requiresConfirmation 应为 true
+13. 对 update-workflow-document 和 save-knowledge-document，requiresConfirmation 必须为 true；如果会覆盖已有流程文档正文，destructive 必须为 true
+14. title / summary 是给确认卡片展示的短文案，要简洁明确
+15. before / after 可选；如果能从上下文里可靠给出，就返回；不能可靠给出可以省略
+16. payload 只能包含执行该动作真正需要的字段，不要塞解释文本
+17. 普通聊天、未确认猜测、风格参考摘录不得直接写入知识库；只有相对稳定的项目事实、设定、关系、伏笔结论才能用 save-knowledge-document
+18. 所有文本均用简体中文
+
+返回示例：{"commandType":"update-chapter-summary","target":"chapter-summary","reason":"这会覆盖当前章节摘要，建议确认后再写入。","title":"更新章节摘要","summary":"准备使用 AI 生成内容覆盖当前章节摘要。","before":"旧摘要","after":"新摘要","destructive":true,"requiresConfirmation":true,"payload":{"value":"新摘要"}}`
     })
   }
 

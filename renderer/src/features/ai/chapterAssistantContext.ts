@@ -5,12 +5,14 @@ import type {
   CharacterCard,
   CharacterRelationship,
   InspirationEntry,
+  KnowledgeDocument,
   OrganizationEntry,
   OrganizationMembership,
   OutlineItem,
   OutlineVolume,
   PlotThread,
   ProjectSummary,
+  WorkflowDocument,
   WorldviewEntry
 } from '@/types/app'
 
@@ -53,6 +55,8 @@ type ChapterAssistantContextInput = {
     description: string
     content: string
   }>
+  workflowDocuments?: WorkflowDocument[]                // 当前激活分卷的流程文件
+  knowledgeDocuments?: KnowledgeDocument[]              // 当前项目知识文档摘要
   selectedText: string                                  // 编辑器中用户选中的文本片段
   responseMode: 'freeform' | 'polish' | 'continue' | 'suggest' | 'reference'  // 响应模式
   responseLength: 'short' | 'medium' | 'long'          // 期望的响应长度
@@ -181,6 +185,19 @@ export function buildChapterAssistantContext(input: ChapterAssistantContextInput
     outlineItems: input.outlineItems.map((item) => ({
       title: item.title,
       summary: item.summary
+    })),
+    workflowDocuments: (input.workflowDocuments ?? []).map((document) => ({
+      key: document.key,
+      title: document.title,
+      content: document.content
+    })),
+    knowledgeDocuments: (input.knowledgeDocuments ?? []).slice(0, 8).map((document) => ({
+      id: document.id,
+      title: document.title,
+      sourceType: document.sourceType,
+      sourceLabel: document.sourceLabel,
+      summary: document.summary,
+      keywords: document.keywords
     })),
     projectSkills: input.projectSkills ?? [],
     selectedText: input.selectedText,

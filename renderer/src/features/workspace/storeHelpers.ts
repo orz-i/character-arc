@@ -190,7 +190,13 @@ function normalizeKnowledgeDocuments(documents?: KnowledgeDocument[] | null): Kn
     ? documents.map((document) => ({
         ...document,
         title: document.title?.trim() || '未命名知识文档',
-        sourceType: document.sourceType === 'reference-summary' ? 'reference-summary' : 'reference-chunk',
+        sourceType:
+          document.sourceType === 'reference-summary'
+          || document.sourceType === 'workflow-document'
+          || document.sourceType === 'canon-fact'
+          || document.sourceType === 'chapter-summary'
+            ? document.sourceType
+            : 'reference-chunk',
         sourceLabel: document.sourceLabel?.trim() || '',
         content: document.content?.trim() || '',
         summary: document.summary?.trim() || '',
@@ -222,7 +228,13 @@ function normalizeAiRuns(aiRuns?: AiRunRecord[] | null): AiRunRecord[] {
           ? run.usedKnowledge.map((item) => ({
               ...item,
               title: item.title?.trim() || '未命名知识片段',
-              sourceType: item.sourceType === 'reference-summary' ? 'reference-summary' : 'reference-chunk',
+              sourceType:
+                item.sourceType === 'reference-summary'
+                || item.sourceType === 'workflow-document'
+                || item.sourceType === 'canon-fact'
+                || item.sourceType === 'chapter-summary'
+                  ? item.sourceType
+                  : 'reference-chunk',
               sourceLabel: item.sourceLabel?.trim() || '',
               snippet: item.snippet?.trim() || '',
               keywords: Array.isArray(item.keywords)

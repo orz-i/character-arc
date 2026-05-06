@@ -42,25 +42,88 @@ declare global {
       chapterId: string
       text: string
     } | null
+    activeAgentProposal?: import('@/types/app').AgentProposal | null
+    agentConfirmationState?: import('@/types/app').AgentConfirmationState | null
+    agentExecutionStep?: import('@/types/app').AgentExecutionStep
+    agentIntentState?: import('@/types/app').AgentIntentKind
   }
 
   type CharacterArcAssistantCommand =
     | {
         type: 'insert-into-chapter'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
         content: string
         mode: import('@/types/app').ChapterInsertionMode
       }
     | {
         type: 'update-chapter-title'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
         value: string
       }
     | {
         type: 'update-chapter-summary'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
         value: string
       }
     | {
         type: 'create-outline-item'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
         payload: Partial<import('@/types/app').OutlineItem>
+      }
+    | {
+        type: 'append-workflow-document-entry'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
+        documentKey: import('@/types/app').WorkflowDocumentKey
+        entryTitle: string
+        content: string
+        volumeId?: string
+      }
+    | {
+        type: 'update-workflow-document'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
+        documentKey: import('@/types/app').WorkflowDocumentKey
+        content: string
+        volumeId?: string
+      }
+    | {
+        type: 'save-knowledge-document'
+        kind?: import('@/types/app').AssistantCommandKind
+        target?: import('@/types/app').AssistantCommandTarget
+        reason?: string
+        preview?: import('@/types/app').AgentProposalPreview
+        destructive?: boolean
+        requiresConfirmation?: boolean
+        document: Partial<import('@/types/app').KnowledgeDocument>
       }
 
   type CharacterArcAssistantPromptPayload = {
@@ -98,6 +161,11 @@ declare global {
   type CharacterArcAiRunEventPayload = {
     projectId: string
     meta: Omit<import('@/types/app').AiRunRecord, 'projectId'>
+  }
+
+  type CharacterArcAssistantMessagePayload = {
+    role: 'user' | 'assistant'
+    content: string
   }
 
   interface Window {
@@ -237,15 +305,35 @@ declare global {
         success: boolean
         error?: string
       }>
+      publishAssistantMessage: (payload: CharacterArcAssistantMessagePayload) => Promise<{
+        success: boolean
+        error?: string
+      }>
       publishAssistantCommand: (payload: CharacterArcAssistantCommand) => Promise<{
         success: boolean
         error?: string
       }>
+      approveAssistantProposal: () => Promise<{
+        success: boolean
+        error?: string
+      }>
+      rejectAssistantProposal: () => Promise<{
+        success: boolean
+        error?: string
+      }>
+      clearAssistantProposal: () => Promise<{
+        success: boolean
+        error?: string
+      }>
+      onAssistantProposalApprove: (callback: () => void) => () => void
+      onAssistantProposalReject: (callback: () => void) => () => void
+      onAssistantProposalClear: (callback: () => void) => () => void
       onAssistantWindowVisibility: (callback: (payload: CharacterArcAssistantVisibilityPayload) => void) => () => void
       onAssistantContext: (callback: (payload: CharacterArcAssistantContextPayload) => void) => () => void
       onAssistantPrompt: (callback: (payload: CharacterArcAssistantPromptPayload | null) => void) => () => void
       onWorkspaceSync: (callback: (payload: unknown) => void) => () => void
       onReferenceImportProgress: (callback: (payload: CharacterArcReferenceImportProgressPayload) => void) => () => void
+      onAssistantMessage: (callback: (payload: CharacterArcAssistantMessagePayload) => void) => () => void
       onAssistantCommand: (callback: (payload: CharacterArcAssistantCommand) => void) => () => void
     }
   }

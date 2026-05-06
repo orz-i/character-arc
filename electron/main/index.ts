@@ -19,7 +19,7 @@ import {
 } from './referenceAnalysis'
 import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './aiShared'
 
-type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk'
+type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk' | 'workflow-document' | 'canon-fact' | 'chapter-summary'
 
 type WorkspaceKnowledgeDocument = {
   id: string
@@ -90,6 +90,10 @@ type AssistantContextPayload = {
     chapterId: string
     text: string
   } | null
+  activeAgentProposal?: import('../../renderer/src/types/app').AgentProposal | null
+  agentConfirmationState?: import('../../renderer/src/types/app').AgentConfirmationState | null
+  agentExecutionStep?: import('../../renderer/src/types/app').AgentExecutionStep
+  agentIntentState?: import('../../renderer/src/types/app').AgentIntentKind
 }
 
 type ReferenceNovelImportRequest = {
@@ -135,6 +139,11 @@ function tokenizeKnowledgeText(value: string): string[] {
 function buildKnowledgeQuery(task: AiTaskPayload): string {
   return [
     String(task.context.userPrompt ?? ''),
+    String(task.context.quickAction ?? ''),
+    String(task.context.projectTitle ?? ''),
+    String(task.context.projectGenre ?? ''),
+    String(task.context.chapterVolumeTitle ?? ''),
+    String(task.context.chapterVolumeSummary ?? ''),
     String(task.context.chapterTitle ?? ''),
     String(task.context.chapterSummary ?? ''),
     String(task.context.selectedText ?? ''),
@@ -143,8 +152,30 @@ function buildKnowledgeQuery(task: AiTaskPayload): string {
   ].filter(Boolean).join('\n')
 }
 
+function isProjectKnowledgeSource(sourceType: KnowledgeDocumentSourceType): boolean {
+  return sourceType === 'workflow-document'
+    || sourceType === 'canon-fact'
+    || sourceType === 'chapter-summary'
+}
+
+function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType): number {
+  switch (sourceType) {
+    case 'canon-fact':
+      return 3.4
+    case 'chapter-summary':
+      return 2.8
+    case 'workflow-document':
+      return 2.4
+    case 'reference-summary':
+      return 1.4
+    case 'reference-chunk':
+    default:
+      return 1
+  }
+}
+
 function retrieveKnowledgeContext(task: AiTaskPayload): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
-  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft') {
+  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft' && task.task !== 'assistant-action-proposal') {
     return { usedKnowledge: [] }
   }
 
@@ -174,12 +205,13 @@ function retrieveKnowledgeContext(task: AiTaskPayload): { usedKnowledge: Workspa
       const keywords = Array.isArray(document.keywords)
         ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean)
         : []
+      const lowerKeywords = keywords.map((keyword) => keyword.toLowerCase())
       const haystack = `${title}\n${summary}\n${content}\n${sourceLabel}`.toLowerCase()
-      let score = document.sourceType === 'reference-summary' ? 1.5 : 1
+      let score = resolveKnowledgeSourceBaseScore(document.sourceType)
 
       for (const token of queryTokens) {
-        if (keywords.some((keyword) => keyword.toLowerCase() === token)) score += 4
-        else if (keywords.some((keyword) => keyword.toLowerCase().includes(token) || token.includes(keyword.toLowerCase()))) score += 2.5
+        if (lowerKeywords.some((keyword) => keyword === token)) score += 4
+        else if (lowerKeywords.some((keyword) => keyword.includes(token) || token.includes(keyword))) score += 2.5
         if (title.toLowerCase().includes(token)) score += 2
         if (sourceLabel.toLowerCase().includes(token)) score += 1.5
         if (summary.toLowerCase().includes(token)) score += 1.2
@@ -189,23 +221,48 @@ function retrieveKnowledgeContext(task: AiTaskPayload): { usedKnowledge: Workspa
       return {
         score,
         document,
-        keywords
+        keywords,
+        projectSource: isProjectKnowledgeSource(document.sourceType)
       }
     })
     .filter((entry) => entry.score > 2)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map(({ document, keywords }) => ({
-      documentId: document.id,
-      title: document.title,
-      sourceType: document.sourceType,
-      sourceLabel: document.sourceLabel,
-      snippet: (document.summary || document.content || '').trim().slice(0, 220),
-      keywords: keywords.slice(0, 8)
-    }))
+
+  const selectedIds = new Set<string>()
+  const selected = [
+    ...ranked.filter((entry) => entry.projectSource).slice(0, 3),
+    ...ranked.filter((entry) => !entry.projectSource).slice(0, 2)
+  ].filter((entry) => {
+    if (selectedIds.has(entry.document.id)) {
+      return false
+    }
+    selectedIds.add(entry.document.id)
+    return true
+  })
+
+  for (const entry of ranked) {
+    if (selected.length >= 5) {
+      break
+    }
+    if (selectedIds.has(entry.document.id)) {
+      continue
+    }
+    selected.push(entry)
+    selectedIds.add(entry.document.id)
+  }
 
   return {
-    usedKnowledge: ranked
+    usedKnowledge: selected
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(({ document, keywords }) => ({
+        documentId: document.id,
+        title: document.title,
+        sourceType: document.sourceType,
+        sourceLabel: document.sourceLabel,
+        snippet: (document.summary || document.content || '').trim().slice(0, 220),
+        keywords: keywords.slice(0, 8)
+      }))
   }
 }
 
@@ -3264,9 +3321,41 @@ ipcMain.handle('characterarc:workspace-sync-publish', (event, payload: unknown) 
   }
 })
 
+/** 助手窗口请求主窗口追加一条聊天消息 */
+ipcMain.handle('characterarc:assistant-message-publish', (_event, payload: unknown) => {
+  sendWindowEvent(mainWindow, 'characterarc:assistant-message', payload)
+  return {
+    success: true
+  }
+})
+
 /** 助手窗口向主窗口发送命令（如将 AI 结果插入正文） */
 ipcMain.handle('characterarc:assistant-command-publish', (_event, payload: unknown) => {
   sendWindowEvent(mainWindow, 'characterarc:assistant-command', payload)
+  return {
+    success: true
+  }
+})
+
+/** 助手窗口确认当前 proposal，由主窗口执行 */
+ipcMain.handle('characterarc:assistant-proposal-approve', () => {
+  sendWindowEvent(mainWindow, 'characterarc:assistant-proposal-approve', null)
+  return {
+    success: true
+  }
+})
+
+/** 助手窗口拒绝当前 proposal */
+ipcMain.handle('characterarc:assistant-proposal-reject', () => {
+  sendWindowEvent(mainWindow, 'characterarc:assistant-proposal-reject', null)
+  return {
+    success: true
+  }
+})
+
+/** 助手窗口关闭当前 proposal 卡片 */
+ipcMain.handle('characterarc:assistant-proposal-clear', () => {
+  sendWindowEvent(mainWindow, 'characterarc:assistant-proposal-clear', null)
   return {
     success: true
   }

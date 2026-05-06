@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import AssistantTopBar from './AssistantTopBar.vue'
 import AssistantInlineContextSections from './AssistantInlineContextSections.vue'
+import AssistantProposalCard from './AssistantProposalCard.vue'
 import AssistantConversationPane from './AssistantConversationPane.vue'
 import AssistantComposer from './AssistantComposer.vue'
 import { useAssistantSession } from '@/features/assistant/useAssistantSession'
@@ -16,6 +17,16 @@ const session = useAssistantSession(messagesViewport)
     <AssistantTopBar
       :project-title="session.currentProject.value?.title ?? '未命名项目'"
       :chapter-title="session.currentChapter.value?.title ?? '未命名章节'"
+    />
+
+    <AssistantProposalCard
+      v-if="session.activeAgentProposal.value"
+      :proposal="session.activeAgentProposal.value"
+      :confirmation-state="session.agentConfirmationState.value"
+      :execution-step="session.agentExecutionStep.value"
+      @approve="session.handleApproveProposal"
+      @reject="session.handleRejectProposal"
+      @clear="session.handleClearProposal"
     />
 
     <AssistantInlineContextSections
