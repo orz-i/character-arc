@@ -4,20 +4,17 @@ import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import {
-  generateAiTask,
-  streamAiTask,
-  testAiConnection,
-  type AiTaskPayload
-} from './ai'
 
-import { fetchModels, type FetchedModel } from './aiTransport'
+import type { AiTaskPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
+import { runAiTask } from './ai/runtime'
+import { registerAiIpcHandlers } from './ai/ipc'
+import { initRegistry as initSkillRegistry, refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
+import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import {
   extractReferenceNovelContext,
   type ReferenceNovelLocalContext,
   type ReferenceStyleMetric
 } from './referenceAnalysis'
-import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './aiShared'
 
 type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk' | 'workflow-document' | 'canon-fact' | 'chapter-summary'
 
@@ -74,8 +71,6 @@ const ASSISTANT_WINDOW_MIN_WIDTH = 460
 const ASSISTANT_WINDOW_MIN_HEIGHT = 620
 const WORKSPACE_DB = 'workspace.db'    // SQLite 数据库文件名
 const WORKSPACE_FILE = 'workspace.json' // 旧版 JSON 工作区文件名（迁移用）
-// 当前活跃的流式 AI 请求映射表，streamId → AbortController
-const activeAiStreams = new Map<string, AbortController>()
 let mainWindow: BrowserWindow | null = null
 let assistantWindow: BrowserWindow | null = null
 
@@ -126,144 +121,6 @@ let latestAssistantPrompt: { id: string; prompt: string; quickAction?: string } 
 
 function updateLatestWorkspaceSnapshot(payload: WorkspacePayload | null): void {
   latestWorkspaceSnapshot = payload
-}
-
-function tokenizeKnowledgeText(value: string): string[] {
-  return value
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_]+/u)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-}
-
-function buildKnowledgeQuery(task: AiTaskPayload): string {
-  return [
-    String(task.context.userPrompt ?? ''),
-    String(task.context.quickAction ?? ''),
-    String(task.context.projectTitle ?? ''),
-    String(task.context.projectGenre ?? ''),
-    String(task.context.chapterVolumeTitle ?? ''),
-    String(task.context.chapterVolumeSummary ?? ''),
-    String(task.context.chapterTitle ?? ''),
-    String(task.context.chapterSummary ?? ''),
-    String(task.context.selectedText ?? ''),
-    String(task.context.sceneFocus ?? ''),
-    String(task.context.chapterContent ?? '').slice(0, 1200)
-  ].filter(Boolean).join('\n')
-}
-
-function isProjectKnowledgeSource(sourceType: KnowledgeDocumentSourceType): boolean {
-  return sourceType === 'workflow-document'
-    || sourceType === 'canon-fact'
-    || sourceType === 'chapter-summary'
-}
-
-function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType): number {
-  switch (sourceType) {
-    case 'canon-fact':
-      return 3.4
-    case 'chapter-summary':
-      return 2.8
-    case 'workflow-document':
-      return 2.4
-    case 'reference-summary':
-      return 1.4
-    case 'reference-chunk':
-    default:
-      return 1
-  }
-}
-
-function retrieveKnowledgeContext(task: AiTaskPayload): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
-  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft' && task.task !== 'assistant-action-proposal') {
-    return { usedKnowledge: [] }
-  }
-
-  const projectId = String(task.context.projectId ?? '').trim()
-  if (!projectId || !latestWorkspaceSnapshot?.workspaces?.[projectId]) {
-    return { usedKnowledge: [] }
-  }
-
-  const workspace = latestWorkspaceSnapshot.workspaces[projectId]
-  const documents = Array.isArray(workspace.knowledgeDocuments) ? workspace.knowledgeDocuments : []
-  if (!documents.length) {
-    return { usedKnowledge: [] }
-  }
-
-  const queryText = buildKnowledgeQuery(task)
-  const queryTokens = Array.from(new Set(tokenizeKnowledgeText(queryText)))
-  if (!queryTokens.length) {
-    return { usedKnowledge: [] }
-  }
-
-  const ranked = documents
-    .map((document) => {
-      const title = String(document.title ?? '')
-      const summary = String(document.summary ?? '')
-      const content = String(document.content ?? '')
-      const sourceLabel = String(document.sourceLabel ?? '')
-      const keywords = Array.isArray(document.keywords)
-        ? document.keywords.map((keyword) => String(keyword).trim()).filter(Boolean)
-        : []
-      const lowerKeywords = keywords.map((keyword) => keyword.toLowerCase())
-      const haystack = `${title}\n${summary}\n${content}\n${sourceLabel}`.toLowerCase()
-      let score = resolveKnowledgeSourceBaseScore(document.sourceType)
-
-      for (const token of queryTokens) {
-        if (lowerKeywords.some((keyword) => keyword === token)) score += 4
-        else if (lowerKeywords.some((keyword) => keyword.includes(token) || token.includes(keyword))) score += 2.5
-        if (title.toLowerCase().includes(token)) score += 2
-        if (sourceLabel.toLowerCase().includes(token)) score += 1.5
-        if (summary.toLowerCase().includes(token)) score += 1.2
-        if (haystack.includes(token)) score += 0.6
-      }
-
-      return {
-        score,
-        document,
-        keywords,
-        projectSource: isProjectKnowledgeSource(document.sourceType)
-      }
-    })
-    .filter((entry) => entry.score > 2)
-    .sort((a, b) => b.score - a.score)
-
-  const selectedIds = new Set<string>()
-  const selected = [
-    ...ranked.filter((entry) => entry.projectSource).slice(0, 3),
-    ...ranked.filter((entry) => !entry.projectSource).slice(0, 2)
-  ].filter((entry) => {
-    if (selectedIds.has(entry.document.id)) {
-      return false
-    }
-    selectedIds.add(entry.document.id)
-    return true
-  })
-
-  for (const entry of ranked) {
-    if (selected.length >= 5) {
-      break
-    }
-    if (selectedIds.has(entry.document.id)) {
-      continue
-    }
-    selected.push(entry)
-    selectedIds.add(entry.document.id)
-  }
-
-  return {
-    usedKnowledge: selected
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(({ document, keywords }) => ({
-        documentId: document.id,
-        title: document.title,
-        sourceType: document.sourceType,
-        sourceLabel: document.sourceLabel,
-        snippet: (document.summary || document.content || '').trim().slice(0, 220),
-        keywords: keywords.slice(0, 8)
-      }))
-  }
 }
 
 function appendAiRunToLatestSnapshot(payload: WorkspaceAiRunEventPayload): void {
@@ -519,336 +376,7 @@ function getWorkspaceDbPath(): string {
   return join(getWorkspaceDirPath(), WORKSPACE_DB)
 }
 
-function getProjectSkillsDirPath(): string {
-  return join(process.cwd(), '.project-skills')
-}
-
-type ProjectSkillStageId = 'reference' | 'premise' | 'setting' | 'outline' | 'draft'
-
-type ProjectSkillScanEntry = {
-  id: string
-  name: string
-  version: string
-  path: string
-  description: string
-  category: 'market' | 'analysis' | 'writing' | 'polish' | 'cover' | 'tool'
-  compatibility: 'native' | 'partial' | 'external-only'
-  compatibilityNote: string
-  source: string
-  referencesCount: number
-  enabled: boolean
-  stageIds: ProjectSkillStageId[]
-}
-
-function stripYamlScalar(value: string): string {
-  const trimmed = value.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"'))
-    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1).trim()
-  }
-
-  return trimmed
-}
-
-function parseSkillFrontmatter(content: string): {
-  name: string
-  version: string
-  description: string
-  source: string
-} {
-  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  const frontmatter = frontmatterMatch?.[1] ?? ''
-  const lines = frontmatter.split(/\r?\n/)
-  let name = ''
-  let version = ''
-  let description = ''
-  let source = ''
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
-    const fieldMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/)
-    if (!fieldMatch) {
-      continue
-    }
-
-    const [, field, rawValue] = fieldMatch
-    const value = stripYamlScalar(rawValue)
-
-    if (field === 'description' && (value === '|' || value === '>')) {
-      const block: string[] = []
-      index += 1
-      while (index < lines.length) {
-        const blockLine = lines[index]
-        if (blockLine && !/^\s+/.test(blockLine)) {
-          index -= 1
-          break
-        }
-
-        const trimmed = blockLine.trim()
-        if (trimmed) {
-          block.push(trimmed)
-        }
-        index += 1
-      }
-
-      description = block.join(' ').trim()
-      continue
-    }
-
-    if (field === 'name') {
-      name = value
-      continue
-    }
-
-    if (field === 'version') {
-      version = value
-      continue
-    }
-
-    if (field === 'description') {
-      description = value
-    }
-  }
-
-  const sourceMatch = frontmatter.match(/^\s*source:\s*(.+)$/m)
-  if (sourceMatch?.[1]) {
-    source = stripYamlScalar(sourceMatch[1])
-  }
-
-  return {
-    name,
-    version,
-    description,
-    source
-  }
-}
-
-function inferProjectSkillMeta(skillId: string): Omit<ProjectSkillScanEntry, 'id' | 'name' | 'version' | 'path' | 'description' | 'source' | 'referencesCount'> {
-  switch (skillId) {
-    case 'story-long-scan':
-    case 'story-short-scan':
-      return {
-        category: 'market',
-        compatibility: 'native',
-        compatibilityNote: '适合当前项目的选题与参考阶段，可作为平台趋势与题材风向输入。',
-        enabled: true,
-        stageIds: ['reference']
-      }
-    case 'story-long-analyze':
-    case 'story-short-analyze':
-      return {
-        category: 'analysis',
-        compatibility: 'native',
-        compatibilityNote: '适合拆书、对标分析和参考作品提炼，可直接参与参考阶段流程文件生成。',
-        enabled: true,
-        stageIds: ['reference']
-      }
-    case 'story-long-write':
-    case 'story-short-write':
-      return {
-        category: 'writing',
-        compatibility: 'native',
-        compatibilityNote: '适合立项、设定、大纲和正文阶段，作为当前项目的核心写作规则来源。',
-        enabled: true,
-        stageIds: ['premise', 'setting', 'outline', 'draft']
-      }
-    case 'story-deslop':
-      return {
-        category: 'polish',
-        compatibility: 'native',
-        compatibilityNote: '适合正文润色与去 AI 味，仅建议在写作阶段启用。',
-        enabled: true,
-        stageIds: ['draft']
-      }
-    case 'story-cover':
-      return {
-        category: 'cover',
-        compatibility: 'external-only',
-        compatibilityNote: '当前项目还没有封面生成工作台，此 skill 会作为资料保留，但不会接入正文链路。',
-        enabled: false,
-        stageIds: []
-      }
-    case 'browser-cdp':
-      return {
-        category: 'tool',
-        compatibility: 'external-only',
-        compatibilityNote: '当前项目没有浏览器 CDP 执行能力，此 skill 会作为外部工具说明保留。',
-        enabled: false,
-        stageIds: []
-      }
-    default:
-      return {
-        category: 'writing',
-        compatibility: 'partial',
-        compatibilityNote: '已识别为通用 skill，可手动决定是否启用并绑定到对应阶段。',
-        enabled: false,
-        stageIds: []
-      }
-  }
-}
-
-async function countFilesInDir(root: string): Promise<number> {
-  const entries = await readdir(root, { withFileTypes: true })
-  let total = 0
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      total += await countFilesInDir(join(root, entry.name))
-      continue
-    }
-
-    total += 1
-  }
-
-  return total
-}
-
-async function buildProjectSkillScanEntry(root: string, entryName: string): Promise<ProjectSkillScanEntry | null> {
-  const skillDir = join(root, entryName)
-  const skillPath = join(skillDir, 'SKILL.md')
-
-  try {
-    const content = await readFile(skillPath, 'utf-8')
-    const frontmatter = parseSkillFrontmatter(content)
-    const compatibilityMeta = inferProjectSkillMeta(entryName)
-    const referencesDir = join(skillDir, 'references')
-    const referencesCount = existsSync(referencesDir) ? await countFilesInDir(referencesDir) : 0
-
-    return {
-      id: entryName,
-      name: frontmatter.name || entryName,
-      version: frontmatter.version || '',
-      path: `.project-skills/${entryName}`,
-      description: frontmatter.description || '',
-      category: compatibilityMeta.category,
-      compatibility: compatibilityMeta.compatibility,
-      compatibilityNote: compatibilityMeta.compatibilityNote,
-      source: frontmatter.source || '',
-      referencesCount,
-      enabled: compatibilityMeta.enabled,
-      stageIds: compatibilityMeta.stageIds
-    }
-  } catch {
-    return null
-  }
-}
-
-async function readProjectSkillsFromDisk(): Promise<Array<{
-  id: string
-  name: string
-  version: string
-  path: string
-  description: string
-  category: 'market' | 'analysis' | 'writing' | 'polish' | 'cover' | 'tool'
-  compatibility: 'native' | 'partial' | 'external-only'
-  compatibilityNote: string
-  source: string
-  referencesCount: number
-  enabled: boolean
-  stageIds: ProjectSkillStageId[]
-}>> {
-  const root = getProjectSkillsDirPath()
-  const entries = await readdir(root, { withFileTypes: true })
-  const skills: ProjectSkillScanEntry[] = []
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-
-    const skill = await buildProjectSkillScanEntry(root, entry.name)
-    if (skill) {
-      skills.push(skill)
-    }
-  }
-
-  return skills.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-}
-
-async function readProjectSkillContextsFromDisk(): Promise<Array<{
-  id: string
-  name: string
-  description: string
-  content: string
-}>> {
-  const root = getProjectSkillsDirPath()
-  const entries = await readdir(root, { withFileTypes: true })
-  const skills: Array<{
-    id: string
-    name: string
-    description: string
-    content: string
-  }> = []
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-
-    const skillPath = join(root, entry.name, 'SKILL.md')
-    try {
-      const content = await readFile(skillPath, 'utf-8')
-      const frontmatter = parseSkillFrontmatter(content)
-      skills.push({
-        id: entry.name,
-        name: frontmatter.name || entry.name,
-        description: frontmatter.description || '',
-        content
-      })
-    } catch {
-      // Ignore invalid skill directories.
-    }
-  }
-
-  return skills.sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
-}
-
-async function listSkillDirectories(root: string): Promise<string[]> {
-  if (existsSync(join(root, 'SKILL.md'))) {
-    return [root]
-  }
-
-  if (!existsSync(root)) {
-    return []
-  }
-
-  const entries = await readdir(root, { withFileTypes: true })
-  return entries
-    .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, 'SKILL.md')))
-    .map((entry) => join(root, entry.name))
-}
-
-async function resolveSkillPackageImportDirs(selectedPath: string): Promise<string[]> {
-  const nestedSkillsRoot = join(selectedPath, 'skills')
-  const nestedSkillDirs = await listSkillDirectories(nestedSkillsRoot)
-  if (nestedSkillDirs.length > 0) {
-    return nestedSkillDirs
-  }
-
-  return listSkillDirectories(selectedPath)
-}
-
-async function importProjectSkillsFromDirectory(selectedPath: string): Promise<string[]> {
-  const sourceDirs = await resolveSkillPackageImportDirs(selectedPath)
-  if (!sourceDirs.length) {
-    return []
-  }
-
-  const targetRoot = getProjectSkillsDirPath()
-  await mkdir(targetRoot, { recursive: true })
-  const importedNames: string[] = []
-
-  for (const sourceDir of sourceDirs) {
-    const targetDir = join(targetRoot, basename(sourceDir))
-    await cp(sourceDir, targetDir, { recursive: true, force: true })
-    importedNames.push(basename(sourceDir))
-  }
-
-  return importedNames.sort((left, right) => left.localeCompare(right, 'zh-CN'))
-}
-
+// 数据库连接单例，应用生命周期内只打开一次
 // 数据库连接单例，应用生命周期内只打开一次
 let workspaceDb: DatabaseSync | null = null
 
@@ -3107,7 +2635,7 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
       chunkResults.push({
         label: chunk.label,
         characterCount: chunk.characterCount,
-        result: (await generateAiTask({
+        result: (await runAiTask({
           task: 'reference-style-chunk',
           settings: request.settings,
           context: {
@@ -3134,7 +2662,7 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
       percent: 90,
       sourceTitle: resolvedTitle
     })
-    const analysis = (await generateAiTask({
+    const analysis = (await runAiTask({
       task: 'reference-style-analysis',
       settings: request.settings,
       context: {
@@ -3228,247 +2756,6 @@ ipcMain.handle('characterarc:import-reference-novel-analysis', async (_event, pa
   }
 })
 
-/** 执行非流式 AI 生成任务 */
-ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload) => {
-  const knowledgeContext = retrieveKnowledgeContext(payload)
-
-  try {
-    const result = await generateAiTask(payload, knowledgeContext)
-    if (result.meta.projectId) {
-      emitAiRunEvent({
-        projectId: result.meta.projectId,
-        meta: {
-          id: randomUUID(),
-          chapterId: result.meta.chapterId,
-          task: result.meta.task,
-          provider: result.meta.provider,
-          model: result.meta.model,
-          status: result.meta.status,
-          startedAt: result.meta.startedAt,
-          finishedAt: result.meta.finishedAt,
-          durationMs: result.meta.durationMs,
-          usedKnowledge: result.meta.usedKnowledge,
-          repairTriggered: result.meta.repairTriggered,
-          error: result.meta.error,
-          responsePreview: result.meta.responsePreview
-        }
-      })
-    }
-
-    return {
-      success: true,
-      result
-    }
-  } catch (error) {
-    const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
-      ? (error as { aiRunMeta?: Omit<WorkspaceAiRunRecord, 'projectId'> & { projectId: string } }).aiRunMeta
-      : undefined
-
-    if (aiRunMeta?.projectId) {
-      emitAiRunEvent({
-        projectId: aiRunMeta.projectId,
-        meta: {
-          id: randomUUID(),
-          chapterId: aiRunMeta.chapterId,
-          task: aiRunMeta.task,
-          provider: aiRunMeta.provider,
-          model: aiRunMeta.model,
-          status: aiRunMeta.status,
-          startedAt: aiRunMeta.startedAt,
-          finishedAt: aiRunMeta.finishedAt,
-          durationMs: aiRunMeta.durationMs,
-          usedKnowledge: aiRunMeta.usedKnowledge,
-          repairTriggered: aiRunMeta.repairTriggered,
-          error: aiRunMeta.error,
-          responsePreview: aiRunMeta.responsePreview
-        }
-      })
-    }
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'AI 调用失败'
-    }
-  }
-})
-
-
-/** 启动流式 AI 任务，通过 SSE 事件实时推送增量文本到渲染进程 */
-ipcMain.handle('characterarc:ai-stream-start', async (event, payload: AiTaskPayload) => {
-  try {
-    const streamId = `stream-${randomUUID()}`
-    const controller = new AbortController()
-    const knowledgeContext = retrieveKnowledgeContext(payload)
-    activeAiStreams.set(streamId, controller)
-
-    let streamedContent = ''
-    void (async () => {
-      try {
-        const result = await streamAiTask(
-          payload,
-          {
-            onTextDelta: (delta) => {
-              streamedContent += delta
-              if (!event.sender.isDestroyed()) {
-                event.sender.send('characterarc:ai-stream-event', {
-                  streamId,
-                  type: 'chunk',
-                  delta
-                })
-              }
-            }
-          },
-          controller.signal,
-          knowledgeContext
-        )
-
-        if (result.meta.projectId) {
-          emitAiRunEvent({
-            projectId: result.meta.projectId,
-            meta: {
-              id: randomUUID(),
-              chapterId: result.meta.chapterId,
-              task: result.meta.task,
-              provider: result.meta.provider,
-              model: result.meta.model,
-              status: result.meta.status,
-              startedAt: result.meta.startedAt,
-              finishedAt: result.meta.finishedAt,
-              durationMs: result.meta.durationMs,
-              usedKnowledge: result.meta.usedKnowledge,
-              repairTriggered: result.meta.repairTriggered,
-              error: result.meta.error,
-              responsePreview: result.meta.responsePreview
-            }
-          })
-        }
-
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('characterarc:ai-stream-event', {
-            streamId,
-            type: 'done',
-            content: (result.result as { content?: string }).content ?? ''
-          })
-        }
-      } catch (error) {
-        const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
-          ? (error as { aiRunMeta?: Omit<WorkspaceAiRunRecord, 'projectId'> & { projectId: string } }).aiRunMeta
-          : undefined
-
-        if (aiRunMeta?.projectId) {
-          emitAiRunEvent({
-            projectId: aiRunMeta.projectId,
-            meta: {
-              id: randomUUID(),
-              chapterId: aiRunMeta.chapterId,
-              task: aiRunMeta.task,
-              provider: aiRunMeta.provider,
-              model: aiRunMeta.model,
-              status: aiRunMeta.status,
-              startedAt: aiRunMeta.startedAt,
-              finishedAt: aiRunMeta.finishedAt,
-              durationMs: aiRunMeta.durationMs,
-              usedKnowledge: aiRunMeta.usedKnowledge,
-              repairTriggered: aiRunMeta.repairTriggered,
-              error: aiRunMeta.error,
-              responsePreview: aiRunMeta.responsePreview
-            }
-          })
-        }
-
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('characterarc:ai-stream-event', controller.signal.aborted
-            ? {
-                streamId,
-                type: 'canceled',
-                content: streamedContent
-              }
-            : {
-                streamId,
-                type: 'error',
-                error: error instanceof Error ? error.message : 'AI 流式调用失败'
-              }
-          )
-        }
-      } finally {
-        activeAiStreams.delete(streamId)
-      }
-    })()
-
-    return {
-      success: true,
-      result: {
-        streamId
-      }
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'AI 流式调用启动失败'
-    }
-  }
-})
-
-/** 停止指定 streamId 的流式 AI 任务 */
-ipcMain.handle('characterarc:ai-stream-stop', async (_event, streamId: unknown) => {
-  const key = typeof streamId === 'string' ? streamId : ''
-  const controller = activeAiStreams.get(key)
-  if (!controller) {
-    return {
-      success: false,
-      error: '当前没有可停止的生成任务'
-    }
-  }
-
-  controller.abort()
-  return {
-    success: true
-  }
-})
-
-/** 测试 AI 连接：发送探测请求验证鉴权和网络 */
-ipcMain.handle('characterarc:ai-test-connection', async (_event, settings: unknown) => {
-  try {
-    const result = await testAiConnection(settings as {
-      provider: string
-      model: string
-      apiKey: string
-      baseUrl: string
-    })
-
-    return {
-      success: true,
-      result
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'AI 连接测试失败'
-    }
-  }
-})
-
-/** 获取 AI 供应商的可用模型列表 */
-ipcMain.handle('characterarc:ai-fetch-models', async (_event, settings: unknown) => {
-  try {
-    const result = await fetchModels(settings as {
-      provider: string
-      model: string
-      apiKey: string
-      baseUrl: string
-    })
-
-    return {
-      success: true,
-      result
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '获取模型列表失败'
-    }
-  }
-})
 
 /** 打开/创建 AI 助手窗口 */
 ipcMain.handle('characterarc:assistant-window-open', async () => {
@@ -3606,77 +2893,6 @@ ipcMain.handle('characterarc:assistant-proposal-clear', () => {
   }
 })
 
-ipcMain.handle('characterarc:project-skills-scan', async () => {
-  try {
-    const skills = await readProjectSkillsFromDisk()
-    return {
-      success: true,
-      skills
-    }
-  } catch {
-    return {
-      success: true,
-      skills: []
-    }
-  }
-})
-
-ipcMain.handle('characterarc:project-skills-import', async () => {
-  try {
-    const dialogOptions: Electron.OpenDialogOptions = {
-      title: '选择要导入的 Skill 包目录',
-      properties: ['openDirectory']
-    }
-    const ownerWindow = mainWindow ?? BrowserWindow.getFocusedWindow()
-    const result = ownerWindow
-      ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-      : await dialog.showOpenDialog(dialogOptions)
-
-    if (result.canceled || !result.filePaths[0]) {
-      return {
-        success: true,
-        canceled: true,
-        importedSkillIds: []
-      }
-    }
-
-    const importedSkillIds = await importProjectSkillsFromDirectory(result.filePaths[0])
-    if (!importedSkillIds.length) {
-      return {
-        success: false,
-        canceled: false,
-        error: '所选目录中没有识别到可导入的 SKILL.md。请选择 skill 包根目录、skills 目录，或单个 skill 目录。'
-      }
-    }
-
-    return {
-      success: true,
-      canceled: false,
-      importedSkillIds
-    }
-  } catch (error) {
-    return {
-      success: false,
-      canceled: false,
-      error: error instanceof Error ? error.message : '项目技能导入失败'
-    }
-  }
-})
-
-ipcMain.handle('characterarc:project-skills-context', async () => {
-  try {
-    const skills = await readProjectSkillContextsFromDisk()
-    return {
-      success: true,
-      skills
-    }
-  } catch {
-    return {
-      success: true,
-      skills: []
-    }
-  }
-})
 
 /** 从 SQLite 加载完整工作区快照，返回给渲染进程初始化 Store */
 ipcMain.handle('characterarc:load-workspace', async () => {
@@ -3772,9 +2988,88 @@ ipcMain.handle('characterarc:save-workspace', async (_event, payload: unknown) =
   }
 })
 
+// ── Skills IPC handlers ──
+
+ipcMain.handle('characterarc:project-skills-scan', async () => {
+  try {
+    await refreshSkillRegistry()
+    return { success: true, skills: skillScanEntries() }
+  } catch {
+    return { success: true, skills: [] }
+  }
+})
+
+ipcMain.handle('characterarc:project-skills-import', async () => {
+  try {
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: '选择要导入的 Skill 包目录',
+      properties: ['openDirectory']
+    }
+    const ownerWindow = mainWindow ?? BrowserWindow.getFocusedWindow()
+    const result = ownerWindow
+      ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: true, canceled: true, importedSkillIds: [] }
+    }
+
+    const selectedPath = result.filePaths[0]
+    const skillsRoot = getSkillsDirPath()
+    await mkdir(skillsRoot, { recursive: true })
+
+    const { readdir: readdirAsync } = await import('node:fs/promises')
+    const { existsSync: existsSyncCheck } = await import('node:fs')
+    const { join: joinPath, basename: basenamePath } = await import('node:path')
+
+    const findSkillDirs = async (root: string): Promise<string[]> => {
+      if (existsSyncCheck(joinPath(root, 'SKILL.md'))) return [root]
+      if (!existsSyncCheck(root)) return []
+      const nestedRoot = joinPath(root, 'skills')
+      const searchRoot = existsSyncCheck(nestedRoot) ? nestedRoot : root
+      const entries = await readdirAsync(searchRoot, { withFileTypes: true })
+      return entries
+        .filter((e) => e.isDirectory() && existsSyncCheck(joinPath(searchRoot, e.name, 'SKILL.md')))
+        .map((e) => joinPath(searchRoot, e.name))
+    }
+
+    const sourceDirs = await findSkillDirs(selectedPath)
+    if (!sourceDirs.length) {
+      return { success: false, canceled: false, error: '所选目录中没有识别到可导入的 SKILL.md。' }
+    }
+
+    const importedSkillIds: string[] = []
+    for (const sourceDir of sourceDirs) {
+      const targetDir = joinPath(skillsRoot, basenamePath(sourceDir))
+      await cp(sourceDir, targetDir, { recursive: true, force: true })
+      importedSkillIds.push(basenamePath(sourceDir))
+    }
+
+    await refreshSkillRegistry()
+    return { success: true, canceled: false, importedSkillIds: importedSkillIds.sort((a, b) => a.localeCompare(b, 'zh-CN')) }
+  } catch (error) {
+    return { success: false, canceled: false, error: error instanceof Error ? error.message : '项目技能导入失败' }
+  }
+})
+
+ipcMain.handle('characterarc:project-skills-context', async () => {
+  try {
+    return { success: true, skills: skillContextEntries() }
+  } catch {
+    return { success: true, skills: [] }
+  }
+})
+
+// ── AI IPC registration ──
+registerAiIpcHandlers({
+  getLatestWorkspaceSnapshot: () => latestWorkspaceSnapshot,
+  emitAiRunEvent: emitAiRunEvent as (payload: { projectId: string; meta: Record<string, unknown> }) => void
+})
+
 // ── 应用生命周期 ──
 // macOS 上关闭所有窗口后点击 dock 图标时重新创建主窗口
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await initSkillRegistry().catch(() => {})
   createMainWindow()
 
   app.on('activate', () => {

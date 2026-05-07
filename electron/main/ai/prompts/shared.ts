@@ -1,0 +1,74 @@
+import type { AiTaskKnowledgeContext } from '../shared-types'
+import type { SkillSelection } from '../skills/types'
+
+export function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['usedKnowledge']): string {
+  if (!knowledge?.length) return ''
+
+  const projectKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === '项目记忆')
+  const referenceKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === '参考资料')
+
+  return [
+    formatSection('项目记忆', projectKnowledge),
+    formatSection('参考资料', referenceKnowledge)
+  ].filter(Boolean).join('\n\n')
+}
+
+function resolveKnowledgeSourceGroupLabel(sourceType: string): '项目记忆' | '参考资料' {
+  return sourceType === 'workflow-document' || sourceType === 'canon-fact' || sourceType === 'chapter-summary'
+    ? '项目记忆'
+    : '参考资料'
+}
+
+function resolveKnowledgeSourceTypeLabel(sourceType: string): string {
+  switch (sourceType) {
+    case 'canon-fact': return '项目 canon'
+    case 'chapter-summary': return '章节摘要'
+    case 'workflow-document': return '流程文档'
+    case 'reference-summary': return '参考总纲'
+    case 'reference-chunk':
+    default: return '参考分块'
+  }
+}
+
+function formatSection(label: string, entries: AiTaskKnowledgeContext['usedKnowledge']): string {
+  if (!entries.length) return ''
+  return [
+    `${label}：`,
+    ...entries.slice(0, 5).map((item, index) => [
+      `${label}${index + 1}｜${item.title}`,
+      `类型：${resolveKnowledgeSourceTypeLabel(item.sourceType)}`,
+      `来源：${item.sourceLabel}`,
+      item.keywords.length ? `关键词：${item.keywords.join('、')}` : '',
+      `片段：${item.snippet}`
+    ].filter(Boolean).join('\n'))
+  ].join('\n\n')
+}
+
+export function formatMountedSkills(skills: SkillSelection[]): string {
+  if (!skills.length) return ''
+
+  return skills
+    .slice(0, 4)
+    .map((skill, index) => {
+      const content = skill.content.trim().slice(0, 1200)
+      const refs = skill.referenceContents
+        .map((ref) => `  [参考: ${ref.file}]\n  ${ref.content.slice(0, 800)}`)
+        .join('\n\n')
+
+      return [
+        `Skill ${index + 1}：${skill.name}`,
+        `内容摘录：\n${content}`,
+        refs ? `\n相关参考资料：\n${refs}` : ''
+      ].filter(Boolean).join('\n')
+    })
+    .join('\n\n')
+}
+
+export function resolveWritingStyleInstruction(context: Record<string, unknown>): string {
+  const label = String(context.writingStyleLabel ?? '').trim()
+  const prompt = String(context.writingStylePrompt ?? '').trim()
+  if (!label && !prompt) return '若当前项目未指定写作风格，则使用最贴合作品题材的自然表达。'
+  if (label && prompt) return `当前项目默认写作风格为"${label}"。请在输出中遵循以下风格要求：${prompt}`
+  if (label) return `当前项目默认写作风格为"${label}"，请让输出保持这一风格的一致性。`
+  return `请在输出中遵循以下写作风格要求：${prompt}`
+}
