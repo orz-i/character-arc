@@ -8,8 +8,12 @@ export function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['use
   const referenceKnowledge = knowledge.filter((item) => resolveKnowledgeSourceGroupLabel(item.sourceType) === '参考资料')
 
   return [
-    formatSection('项目记忆', projectKnowledge),
-    formatSection('参考资料', referenceKnowledge)
+    formatSection('项目记忆', projectKnowledge, '以下是当前项目自身的设定/流程文档/章节摘要，写作时必须保持与之一致，不能矛盾。'),
+    formatSection(
+      '参考资料',
+      referenceKnowledge,
+      '以下是从同题材对标作品提炼的拆书结果（风格规则、句式特征、桥段范本）。写作时请**模仿其文笔、节奏、对白处理与桥段功能**，但**不要照搬专有名词**（人名、地名、势力名等都用本项目的设定）。'
+    )
   ].filter(Boolean).join('\n\n')
 }
 
@@ -24,22 +28,25 @@ function resolveKnowledgeSourceTypeLabel(sourceType: string): string {
     case 'canon-fact': return '项目 canon'
     case 'chapter-summary': return '章节摘要'
     case 'workflow-document': return '流程文档'
-    case 'reference-summary': return '参考总纲'
+    case 'reference-summary': return '拆书总纲'
     case 'reference-chunk':
-    default: return '参考分块'
+    default: return '拆书分块/原文'
   }
 }
 
-function formatSection(label: string, entries: AiTaskKnowledgeContext['usedKnowledge']): string {
+function formatSection(label: string, entries: AiTaskKnowledgeContext['usedKnowledge'], usageHint: string): string {
   if (!entries.length) return ''
   return [
-    `${label}：`,
+    `${label}（${entries.length} 条）：`,
+    `用法说明：${usageHint}`,
+    '',
     ...entries.slice(0, 5).map((item, index) => [
-      `${label}${index + 1}｜${item.title}`,
-      `类型：${resolveKnowledgeSourceTypeLabel(item.sourceType)}`,
-      `来源：${item.sourceLabel}`,
-      item.keywords.length ? `关键词：${item.keywords.join('、')}` : '',
-      `片段：${item.snippet}`
+      `【${label} ${index + 1}】${item.title}`,
+      `· 类型：${resolveKnowledgeSourceTypeLabel(item.sourceType)}`,
+      `· 来源：${item.sourceLabel}`,
+      item.keywords.length ? `· 关键词：${item.keywords.join('、')}` : '',
+      '内容：',
+      item.snippet
     ].filter(Boolean).join('\n'))
   ].join('\n\n')
 }

@@ -195,6 +195,84 @@ function focusReferenceAsset(asset: ReferenceAssetLibrary): void {
   keyword.value = asset.fileName || asset.title
   sourceFilter.value = 'reference'
 }
+
+const deepAnalyzingAssetId = ref<string | null>(null)
+
+const SOURCE_TEXT_CHAR_CAP = 30_000
+
+function buildDeepAnalyzeSourceText(asset: ReferenceAssetLibrary): string {
+  const chunks = appStore.knowledgeDocuments
+    .filter((doc) => doc.sourceType === 'reference-chunk' && asset.relatedDocumentIds.includes(doc.id))
+    .map((doc) => ({
+      label: String(doc.metadata?.chunkLabel ?? doc.title).trim() || doc.title,
+      order: Number(doc.metadata?.chunkOrder ?? Number.MAX_SAFE_INTEGER),
+      text: doc.content
+    }))
+    .sort((a, b) => a.order - b.order)
+
+  if (!chunks.length) {
+    return asset.primaryDocument?.document.content ?? ''
+  }
+
+  let acc = ''
+  for (const chunk of chunks) {
+    const piece = `\n\n【${chunk.label}】\n${chunk.text}`
+    if (acc.length + piece.length > SOURCE_TEXT_CHAR_CAP) {
+      acc += `\n\n[...剩余 ${chunks.length - chunks.indexOf(chunk)} 段已超出本次分析上限，本次只对前段拆解。]`
+      break
+    }
+    acc += piece
+  }
+  return acc.trim()
+}
+
+async function handleAiDeepAnalyze(asset: ReferenceAssetLibrary): Promise<void> {
+  const project = appStore.currentProject
+  if (!project) {
+    message.warning('请先选择一个项目再使用 AI 深度拆书。')
+    return
+  }
+  if (deepAnalyzingAssetId.value) {
+    message.info('上一次深度拆书还在进行中，请稍候。')
+    return
+  }
+
+  const sourceText = buildDeepAnalyzeSourceText(asset)
+  if (!sourceText.trim()) {
+    message.error('找不到该参考作品的原文片段，无法进行深度拆书。')
+    return
+  }
+
+  deepAnalyzingAssetId.value = asset.id
+  const loading = message.loading(`AI 正在深度拆解《${asset.title}》，可能需要 1-3 分钟…`, { duration: 0 })
+  try {
+    const response = await window.characterArc.generateAi(JSON.parse(JSON.stringify({
+      task: 'reference-deep-analyze',
+      settings: appStore.appSettings,
+      context: {
+        projectId: project.id,
+        projectTitle: project.title,
+        projectGenre: project.genre,
+        referenceTitle: asset.title,
+        referenceFileName: asset.fileName,
+        referenceGenre: asset.topKeywords.slice(0, 3).join('、'),
+        sourceText
+      }
+    })))
+
+    if (!response.success) {
+      throw new Error(response.error ?? 'AI 深度拆书失败')
+    }
+    // 实际产出的 knowledge 文档由 ai-run-event → handleAiRunEvent 自动合并到 store。
+    // 这里只给个用户可见的成功消息。
+    message.success(`已完成《${asset.title}》深度拆书，新增的知识文档稍后会出现在列表中。`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'AI 深度拆书失败')
+  } finally {
+    loading.destroy()
+    deepAnalyzingAssetId.value = null
+  }
+}
 </script>
 
 <template>
@@ -334,6 +412,18 @@ function focusReferenceAsset(asset: ReferenceAssetLibrary): void {
               </n-button>
               <n-button tertiary size="small" @click="focusReferenceAsset(asset)">
                 筛到此资产
+              </n-button>
+              <n-button
+                type="primary"
+                size="small"
+                :loading="deepAnalyzingAssetId === asset.id"
+                :disabled="Boolean(deepAnalyzingAssetId) && deepAnalyzingAssetId !== asset.id"
+                @click="handleAiDeepAnalyze(asset)"
+              >
+                <template #icon>
+                  <Sparkles :size="14" />
+                </template>
+                AI 深度拆书
               </n-button>
             </div>
           </n-card>

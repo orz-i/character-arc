@@ -32,6 +32,7 @@ const TASK_DEFAULT_CAPABILITIES: Record<AiTaskName, PromptCapabilityId[]> = {
   'outline-chain': ['settings', 'outline', 'chapters', 'worldview', 'characters', 'relations', 'writing-style', 'project-skills'],
   'reference-style-chunk': ['settings', 'analysis', 'writing-style', 'outline', 'import-export'],
   'reference-style-analysis': ['settings', 'analysis', 'writing-style', 'outline', 'import-export'],
+  'reference-deep-analyze': ['settings', 'analysis', 'writing-style', 'project-skills', 'import-export'],
   'workflow-documents': ['settings', 'workflow', 'import-export'],
   'assistant-intent': ['settings', 'chapters', 'analysis', 'versioning'],
   'assistant-action-proposal': ['settings', 'chapters', 'worldview', 'characters', 'relations', 'outline', 'inspiration', 'writing-style', 'project-skills', 'versioning'],

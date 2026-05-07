@@ -23,6 +23,82 @@ const isGeneratingSettingInsights = ref(false)
 const isImportingReferenceNovel = ref(false)
 const referenceImportProgress = ref<CharacterArcReferenceImportProgressPayload | null>(null)
 const premiseDraft = ref('')
+const deepAnalyzingReferenceId = ref<string | null>(null)
+
+const REFERENCE_DEEP_ANALYZE_CHAR_CAP = 30_000
+
+function buildDeepAnalyzeSourceText(referenceTitle: string): string {
+  const docs = appStore.knowledgeDocuments
+    .filter((doc) => doc.sourceType === 'reference-chunk' && String(doc.metadata?.sourceTitle ?? '').trim() === referenceTitle)
+    .map((doc) => ({
+      label: String(doc.metadata?.chunkLabel ?? doc.title).trim() || doc.title,
+      order: Number(doc.metadata?.chunkOrder ?? Number.MAX_SAFE_INTEGER),
+      text: doc.content
+    }))
+    .sort((a, b) => a.order - b.order)
+
+  if (!docs.length) {
+    // 退而求其次：拿 reference-summary 的 content
+    const summary = appStore.knowledgeDocuments
+      .find((doc) => doc.sourceType === 'reference-summary' && String(doc.metadata?.sourceTitle ?? '').trim() === referenceTitle)
+    return summary?.content ?? ''
+  }
+
+  let acc = ''
+  for (let index = 0; index < docs.length; index += 1) {
+    const piece = `\n\n【${docs[index].label}】\n${docs[index].text}`
+    if (acc.length + piece.length > REFERENCE_DEEP_ANALYZE_CHAR_CAP) {
+      acc += `\n\n[...剩余 ${docs.length - index} 段超出本次分析上限，本次只拆前段。]`
+      break
+    }
+    acc += piece
+  }
+  return acc.trim()
+}
+
+async function handleDeepAnalyzeReference(work: { id: string; title: string; fileName?: string }): Promise<void> {
+  if (!currentProject.value) {
+    message.warning('请先选择一个项目再使用 AI 深度拆书。')
+    return
+  }
+  if (deepAnalyzingReferenceId.value) {
+    message.info('上一次深度拆书还在进行中，请稍候。')
+    return
+  }
+
+  const sourceText = buildDeepAnalyzeSourceText(work.title)
+  if (!sourceText.trim()) {
+    message.error('找不到该参考作品的原文片段，请先在导入流程里完成基础拆书。')
+    return
+  }
+
+  deepAnalyzingReferenceId.value = work.id
+  const loading = message.loading(`AI 正在深度拆解《${work.title}》，可能需要 1-3 分钟…`, { duration: 0 })
+  try {
+    const response = await window.characterArc.generateAi(toIpcPayload({
+      task: 'reference-deep-analyze',
+      settings: appStore.appSettings,
+      context: {
+        projectId: currentProject.value.id,
+        projectTitle: currentProject.value.title,
+        projectGenre: currentProject.value.genre,
+        referenceTitle: work.title,
+        referenceFileName: work.fileName ?? '',
+        sourceText
+      }
+    }))
+
+    if (!response.success) {
+      throw new Error(response.error ?? 'AI 深度拆书失败')
+    }
+    message.success(`已完成《${work.title}》深度拆书，新增的知识文档已自动加入知识中心。`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'AI 深度拆书失败')
+  } finally {
+    loading.destroy()
+    deepAnalyzingReferenceId.value = null
+  }
+}
 const settingDraft = ref('')
 
 const currentProject = computed(() => appStore.currentProject)
@@ -966,6 +1042,20 @@ function resolveStageStatusLabel(status: string): string {
               <ul v-if="work.analysis?.styleRules?.length" class="reference-work-rules">
                 <li v-for="rule in work.analysis.styleRules.slice(0, 3)" :key="`${work.id}-${rule}`">{{ rule }}</li>
               </ul>
+              <div class="reference-work-actions">
+                <n-button
+                  type="primary"
+                  size="small"
+                  :loading="deepAnalyzingReferenceId === work.id"
+                  :disabled="Boolean(deepAnalyzingReferenceId) && deepAnalyzingReferenceId !== work.id"
+                  @click="handleDeepAnalyzeReference(work)"
+                >
+                  <template #icon>
+                    <Sparkles :size="14" />
+                  </template>
+                  AI 深度拆书
+                </n-button>
+              </div>
             </article>
           </div>
         </div>
@@ -1644,6 +1734,12 @@ function resolveStageStatusLabel(status: string): string {
 
 .reference-work-rules li + li {
   margin-top: 4px;
+}
+
+.reference-work-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .workflow-doc-shell-head {

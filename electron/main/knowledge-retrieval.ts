@@ -64,11 +64,44 @@ function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType
   }
 }
 
+// 这些 task 在生成时需要参考既有项目记忆 + 拆书结果。其它任务（如 worldview-entry / character-card /
+// chapter-summarize / assistant-intent / 拆书任务自身）不需要外部检索。
+const KNOWLEDGE_RETRIEVAL_TASKS: ReadonlySet<string> = new Set([
+  'chapter-assistant',
+  'chapter-first-draft',
+  'assistant-action-proposal',
+  'outline-batch',
+  'outline-chain',
+  'outline-item',
+  'inspiration-pack',
+  'chapter-analysis',
+  'chapter-scene-plan',
+  'project-bootstrap'
+])
+
+function buildKnowledgeSnippet(document: WorkspaceKnowledgeDocument): string {
+  const sourceType = document.sourceType
+  // 拆书总纲：document.content 是结构化报告（含风格总述/句式/对白/节奏/情绪/视角/styleRules/avoidRules/
+  // plotOutline/reusableStylePrompt），整段进 prompt 才能让 AI "模仿"。
+  if (sourceType === 'reference-summary') {
+    const text = (document.content || document.summary || '').trim()
+    return text.length > 2400 ? `${text.slice(0, 2400)}…` : text
+  }
+  // 拆书分块：content 是参考小说原文（用作 in-context 仿写范本）。
+  if (sourceType === 'reference-chunk') {
+    const text = (document.content || document.summary || '').trim()
+    return text.length > 1400 ? `${text.slice(0, 1400)}…` : text
+  }
+  // 项目记忆类（流程文档/canon/章节摘要）短而精，220 字够用。
+  const text = (document.summary || document.content || '').trim()
+  return text.length > 320 ? `${text.slice(0, 320)}…` : text
+}
+
 export function retrieveKnowledgeContext(
   task: AiTaskPayload,
   latestWorkspaceSnapshot: { workspaces?: Record<string, { knowledgeDocuments?: WorkspaceKnowledgeDocument[] }> } | null
 ): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
-  if (task.task !== 'chapter-assistant' && task.task !== 'chapter-first-draft' && task.task !== 'assistant-action-proposal') {
+  if (!KNOWLEDGE_RETRIEVAL_TASKS.has(task.task)) {
     return { usedKnowledge: [] }
   }
 
@@ -136,7 +169,7 @@ export function retrieveKnowledgeContext(
         title: document.title,
         sourceType: document.sourceType,
         sourceLabel: document.sourceLabel,
-        snippet: (document.summary || document.content || '').trim().slice(0, 220),
+        snippet: buildKnowledgeSnippet(document),
         keywords: keywords.slice(0, 8)
       }))
   }

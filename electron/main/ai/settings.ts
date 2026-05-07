@@ -1,4 +1,4 @@
-import type { AiTaskPayload, AppSettings, ProviderName } from './shared-types'
+import type { AiTaskName, AiTaskPayload, AppSettings, ProviderName } from './shared-types'
 
 export function resolveProviderDefaults(provider: ProviderName): { baseUrl: string; model: string } {
   switch (provider) {
@@ -98,3 +98,15 @@ export function resolveMaxTokens(task?: AiTaskPayload): number | undefined {
       return undefined
   }
 }
+
+/**
+ * 走 agent loop（progressive skill disclosure + tool calling）的 task 白名单。
+ * 不在表里的 task 走原有单次调用链路，行为零变更。
+ *
+ * 渐进式上线策略：先放 outline-batch 做灰度（JSON 输出，验证容易；不影响章节流式 UX）。
+ * 验证 OK 后逐步扩到 outline-chain / project-bootstrap / chapter-first-draft 等。
+ */
+export const AGENT_TASK_WHITELIST: ReadonlySet<AiTaskName> = new Set([
+  'outline-batch',
+  'reference-deep-analyze'
+])

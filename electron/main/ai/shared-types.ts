@@ -31,6 +31,7 @@ export type AiTaskName =
   | 'outline-chain'
   | 'reference-style-chunk'
   | 'reference-style-analysis'
+  | 'reference-deep-analyze'
   | 'workflow-documents'
   | 'assistant-intent'
   | 'assistant-action-proposal'
@@ -67,6 +68,34 @@ export type AiRunMeta = {
   repairTriggered: boolean
   error: string
   responsePreview: string
+  /** 该次调用走的是 agent loop 时，记录每次工具调用的轨迹。普通单次调用为 undefined。 */
+  toolCalls?: ToolCallTrace[]
+  /** 走 agent loop 时，loop 实际跑了几轮（首轮 + 工具循环）。 */
+  agentIterations?: number
+  /** 走 agent loop 时，agent 通过 knowledge_save_document 工具产生的待入库知识文档。 */
+  producedKnowledgeDocuments?: AiKnowledgeDocumentDraft[]
+}
+
+export type ToolCallTrace = {
+  tool: string
+  args: Record<string, unknown>
+  durationMs: number
+  status: 'ok' | 'error'
+  error?: string
+}
+
+/**
+ * agent 通过 knowledge_save_document 工具落库的知识文档草稿。
+ * 不带 id / projectId / 时间戳——renderer 落地时补全。
+ */
+export type AiKnowledgeDocumentDraft = {
+  title: string
+  sourceType: 'reference-summary' | 'reference-chunk' | 'workflow-document' | 'canon-fact' | 'chapter-summary'
+  sourceLabel: string
+  content: string
+  summary?: string
+  keywords?: string[]
+  metadata?: Record<string, unknown>
 }
 
 export type AiTaskKnowledgeContext = {
@@ -247,3 +276,6 @@ export type AiStreamHandlers = {
 }
 
 export const AI_REQUEST_TIMEOUT_MS = 180_000
+
+/** Agent loop 单次任务最多允许的工具循环轮数。超过即抛错，避免死循环吃 token。 */
+export const AGENT_MAX_TOOL_ITERATIONS = 8

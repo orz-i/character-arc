@@ -475,6 +475,32 @@ export const useAppStore = defineStore('app', () => {
     }
 
     appendAiRun(payload.projectId, payload.meta)
+
+    // agent loop 通过 knowledge_save_document 工具落库的文档：随 ai-run-event 一起回灌
+    const produced = (payload.meta as { producedKnowledgeDocuments?: Array<Partial<KnowledgeDocument>> }).producedKnowledgeDocuments
+    if (Array.isArray(produced) && produced.length > 0) {
+      const now = new Date().toISOString()
+      const documents = produced
+        .filter((draft): draft is Partial<KnowledgeDocument> & { title: string; sourceType: KnowledgeDocument['sourceType']; content: string } =>
+          Boolean(draft && typeof draft.title === 'string' && draft.title.trim() && typeof draft.content === 'string' && draft.content.trim() && typeof draft.sourceType === 'string')
+        )
+        .map<KnowledgeDocument>((draft) => ({
+          id: String(draft.id ?? '').trim() || uniqueId('knowledge'),
+          projectId: payload.projectId,
+          title: String(draft.title).trim(),
+          sourceType: draft.sourceType,
+          sourceLabel: String(draft.sourceLabel ?? '').trim(),
+          content: String(draft.content),
+          summary: String(draft.summary ?? '').trim() || String(draft.content).slice(0, 220),
+          keywords: normalizeKnowledgeKeywords(draft.keywords),
+          metadata: draft.metadata && typeof draft.metadata === 'object' ? draft.metadata as Record<string, unknown> : {},
+          createdAt: String(draft.createdAt ?? '').trim() || now,
+          updatedAt: String(draft.updatedAt ?? '').trim() || now
+        }))
+      if (documents.length > 0) {
+        mergeKnowledgeDocuments(payload.projectId, documents)
+      }
+    }
   }
 
   function handleAssistantMessage(payload: CharacterArcAssistantMessagePayload): void {

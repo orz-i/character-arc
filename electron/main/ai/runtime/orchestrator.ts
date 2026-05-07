@@ -6,22 +6,30 @@ import type {
   AppSettings,
   AiStreamHandlers
 } from '../shared-types'
-import { normalizeSettings, validateSettings, resolveMaxTokens } from '../settings'
+import { normalizeSettings, validateSettings, resolveMaxTokens, AGENT_TASK_WHITELIST } from '../settings'
 import { getTaskHandler } from '../tasks'
 import { getAllSkills, pickSkillsFor, refreshRegistry } from '../skills'
-import { requestAiText, requestAiTextStream } from '../transport'
+import { requestAiText, requestAiTextStream, providerSupportsTools } from '../transport'
 import type { StructuredOutputOptions } from '../transport'
 import { buildPromptInput } from './context-builder'
 import { probeStructuredOutputMode } from './capability-probe'
 import { buildRunMeta, buildResponsePreview } from './run-meta'
 import { logPrompt, logResponse, logSelection } from './logging'
 import { buildRepairPrompt } from '../prompts/repair'
+import { runAgentTask } from '../agent'
 
 export async function runAiTask(
   task: AiTaskPayload,
   knowledgeContext?: AiTaskKnowledgeContext
 ): Promise<AiTaskResponse> {
-  const settings = normalizeSettings(task.settings)
+  // 灰度分流：白名单内 + provider 支持 tool_use → 走 agent loop（progressive skill disclosure）。
+  // 任意一个不满足 → 走原单次调用路径。renderer 完全无感。
+  const settingsForRouting = normalizeSettings(task.settings)
+  if (AGENT_TASK_WHITELIST.has(task.task) && providerSupportsTools(settingsForRouting)) {
+    return runAgentTask(task, knowledgeContext)
+  }
+
+  const settings = settingsForRouting
   validateSettings(settings)
   const startedAt = new Date().toISOString()
   const projectId = String(task.context.projectId ?? '').trim()
