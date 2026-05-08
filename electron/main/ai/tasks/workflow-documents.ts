@@ -24,14 +24,14 @@ const handler: TaskHandler = {
     const parsed = extractJsonObject(raw) as Partial<WorkflowDocumentsResult>
     const n = (value: unknown, fallback: string) => String(value ?? '').trim() || fallback
     return {
-      task_plan: n(parsed.task_plan, '# 任务计划\n\n- 待补充。'),
-      findings: n(parsed.findings, '# 发现记录\n\n- 待补充。'),
-      progress: n(parsed.progress, '# 进度记录\n\n- 待补充。'),
-      current_status: n(parsed.current_status, '# 当前状态卡\n\n- 待补充。'),
-      novel_setting: n(parsed.novel_setting, '# 小说设定\n\n- 待补充。'),
-      character_relationships: n(parsed.character_relationships, '# 人物关系盘\n\n- 待补充。'),
-      pending_hooks: n(parsed.pending_hooks, '# 待回收钩子\n\n- 待补充。'),
-      resource_ledger: n(parsed.resource_ledger, '# 资源账本\n\n- 待补充。')
+      task_plan: n(parsed.task_plan, '# 创作计划\n\n- 待补充。'),
+      findings: n(parsed.findings, '# 灵感与发现\n\n- 待补充。'),
+      progress: n(parsed.progress, '# 写作进度\n\n- 待补充。'),
+      current_status: n(parsed.current_status, '# 项目概况\n\n- 待补充。'),
+      novel_setting: n(parsed.novel_setting, '# 世界与设定\n\n- 待补充。'),
+      character_relationships: n(parsed.character_relationships, '# 人物关系\n\n- 待补充。'),
+      pending_hooks: n(parsed.pending_hooks, '# 伏笔悬念\n\n- 待补充。'),
+      resource_ledger: n(parsed.resource_ledger, '# 素材清单\n\n- 待补充。')
     } as WorkflowDocumentsResult
   },
   validate(result: AiTaskResult): boolean {

@@ -46,14 +46,14 @@ const allDocumentKeys: WorkflowDocumentKey[] = [
 ]
 
 const documentTitleMap: Record<WorkflowDocumentKey, string> = {
-  task_plan: '任务计划',
-  findings: '发现记录',
-  progress: '进度记录',
-  current_status: '当前状态卡',
-  novel_setting: '小说设定',
-  character_relationships: '人物关系盘',
-  pending_hooks: '待回收钩子',
-  resource_ledger: '资源账本'
+  task_plan: '创作计划',
+  findings: '灵感与发现',
+  progress: '写作进度',
+  current_status: '项目概况',
+  novel_setting: '世界与设定',
+  character_relationships: '人物关系',
+  pending_hooks: '伏笔悬念',
+  resource_ledger: '素材清单'
 }
 
 const currentProject = computed(() => appStore.currentProject)
@@ -181,8 +181,45 @@ function buildGenerationContext() {
   }
 }
 
+const hasReferenceInput = computed(() =>
+  selectedReferenceWorkIds.value.length > 0 || referenceWorks.value.length > 0
+)
+
+const canGenerate = computed(() =>
+  Boolean(currentProject.value?.id) && !isGenerating.value
+    && (hasReferenceInput.value || userPrompt.value.trim())
+)
+
+const dataSources = computed(() => {
+  const items: string[] = []
+  const refCount = selectedReferenceWorkIds.value.length
+  if (refCount > 0) items.push(`${refCount} 部参考书`)
+  const wv = appStore.worldviewEntries.length
+  if (wv > 0) items.push(`${wv} 条世界观`)
+  const ch = appStore.characters.length
+  if (ch > 0) items.push(`${ch} 个角色`)
+  const rel = appStore.characterRelationships.length
+  if (rel > 0) items.push(`${rel} 组关系`)
+  const org = appStore.organizations.length
+  if (org > 0) items.push(`${org} 个组织势力`)
+  const ol = appStore.outlineItems.length
+  if (ol > 0) items.push(`${ol} 条大纲`)
+  const chs = appStore.chapters.length
+  if (chs > 0) items.push(`${chs} 个章节`)
+  if (userPrompt.value.trim()) items.push('你的补充说明')
+
+  console.log(items)
+
+  return items
+})
+
 async function generateAllDocuments(): Promise<void> {
   if (!currentProject.value || isGenerating.value) return
+
+  if (!hasReferenceInput.value && !userPrompt.value.trim()) {
+    message.warning('没有参考书时，请先填写补充说明，告诉 AI 你想写什么样的小说')
+    return
+  }
 
   isGenerating.value = true
   try {
@@ -287,7 +324,8 @@ watch(
 
       <div class="workflow-prompt-section">
         <strong>补充说明</strong>
-        <span class="workflow-hint">可选，帮助 AI 更准确地生成流程文件</span>
+        <span v-if="hasReferenceInput" class="workflow-hint">可选，帮助 AI 更准确地生成流程文件</span>
+        <span v-else class="workflow-hint workflow-hint-required">没有参考书时必填，请描述你想写的小说类型、题材、风格等</span>
         <n-input
           v-model:value="userPrompt"
           type="textarea"
@@ -306,6 +344,14 @@ watch(
         />
       </div>
 
+      <div class="workflow-datasource-summary">
+        <template v-if="dataSources.length > 0">
+          <span class="workflow-datasource-label">AI 将参考：</span>
+          <n-tag v-for="item in dataSources" :key="item" size="small" :bordered="false" round>{{ item }}</n-tag>
+        </template>
+        <span v-else class="workflow-datasource-empty">当前项目暂无可用资料，请先填写补充说明或导入参考书</span>
+      </div>
+
       <div class="workflow-generate-row">
         <n-button
           type="primary"
@@ -313,7 +359,7 @@ watch(
           round
           strong
           :loading="isGenerating"
-          :disabled="isGenerating || !currentProject?.id"
+          :disabled="!canGenerate"
           @click="generateAllDocuments"
         >
           <template #icon>
@@ -485,6 +531,11 @@ watch(
   margin: 0;
 }
 
+.workflow-hint-required {
+  color: var(--arc-primary);
+  font-weight: 500;
+}
+
 .workflow-reference-list {
   display: flex;
   flex-wrap: wrap;
@@ -501,6 +552,27 @@ watch(
   display: flex;
   justify-content: center;
   padding-top: 4px;
+}
+
+.workflow-datasource-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--arc-bg-body);
+  font-size: 12px;
+}
+
+.workflow-datasource-label {
+  color: var(--arc-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.workflow-datasource-empty {
+  color: var(--arc-text-hint);
 }
 
 .workflow-documents-header {

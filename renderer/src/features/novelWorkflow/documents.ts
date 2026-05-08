@@ -8,43 +8,43 @@ const workflowDocumentDefinitions: Array<{
 }> = [
   {
     key: 'task_plan',
-    title: 'task_plan.md',
-    defaultContent: '# 任务计划\n\n- 待 AI 生成本项目的任务计划骨架。\n'
+    title: '创作计划',
+    defaultContent: '# 创作计划\n\n- 待 AI 生成本项目的创作计划。\n'
   },
   {
     key: 'findings',
-    title: 'findings.md',
-    defaultContent: '# 发现记录\n\n- 待 AI 生成本项目的关键发现与事实记录。\n'
+    title: '灵感与发现',
+    defaultContent: '# 灵感与发现\n\n- 待 AI 生成本项目的关键发现与灵感记录。\n'
   },
   {
     key: 'progress',
-    title: 'progress.md',
-    defaultContent: '# 进度记录\n\n- 待 AI 生成本项目的阶段进度骨架。\n'
+    title: '写作进度',
+    defaultContent: '# 写作进度\n\n- 待 AI 生成本项目的写作进度。\n'
   },
   {
     key: 'current_status',
-    title: 'current_status.md',
-    defaultContent: '# 当前状态卡\n\n- 待 AI 生成本项目的当前状态卡。\n'
+    title: '项目概况',
+    defaultContent: '# 项目概况\n\n- 待 AI 生成本项目的整体概况。\n'
   },
   {
     key: 'novel_setting',
-    title: 'novel_setting.md',
-    defaultContent: '# 小说设定\n\n- 待 AI 生成本项目的设定总表。\n'
+    title: '世界与设定',
+    defaultContent: '# 世界与设定\n\n- 待 AI 生成本项目的世界观与核心设定。\n'
   },
   {
     key: 'character_relationships',
-    title: 'character_relationships.md',
-    defaultContent: '# 人物关系盘\n\n- 待 AI 生成本项目的人物关系盘。\n'
+    title: '人物关系',
+    defaultContent: '# 人物关系\n\n- 待 AI 生成本项目的人物关系。\n'
   },
   {
     key: 'pending_hooks',
-    title: 'pending_hooks.md',
-    defaultContent: '# 待回收钩子\n\n- 待 AI 生成本项目的伏笔与钩子记录。\n'
+    title: '伏笔悬念',
+    defaultContent: '# 伏笔悬念\n\n- 待 AI 生成本项目的伏笔与悬念记录。\n'
   },
   {
     key: 'resource_ledger',
-    title: 'resource_ledger.md',
-    defaultContent: '# 资源账本\n\n- 待 AI 生成本项目的资源账本骨架。\n'
+    title: '素材清单',
+    defaultContent: '# 素材清单\n\n- 待 AI 生成本项目的素材清单。\n'
   }
 ]
 
