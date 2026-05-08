@@ -79,6 +79,7 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
             <button type="button" class="claude-assistant-command-trigger">
               <span class="claude-assistant-command-trigger__prefix">/</span>
               <span>命令</span>
+              <span class="claude-assistant-command-trigger__hint">快捷动作</span>
             </button>
           </template>
           <div class="claude-assistant-command-popover">

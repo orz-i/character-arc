@@ -34,6 +34,10 @@ const groupedQuickActions = computed(() =>
     .filter((group) => group.items.length > 0)
 )
 
+const totalQuickActionCount = computed(() =>
+  groupedQuickActions.value.reduce((count, group) => count + group.items.length, 0)
+)
+
 const expandedKnowledgeIds = ref<string[]>([])
 const KNOWLEDGE_SNIPPET_PREVIEW_LENGTH = 140
 
@@ -64,6 +68,32 @@ function toggleKnowledgeSnippet(key: string): void {
 
   expandedKnowledgeIds.value = [...expandedKnowledgeIds.value, key]
 }
+
+function resolveActionModeLabel(mode: ChapterAssistantQuickAction['mode']): string {
+  switch (mode) {
+    case 'polish':
+      return '润色'
+    case 'continue':
+      return '续写'
+    case 'suggest':
+      return '建议'
+    case 'reference':
+      return '设定'
+    default:
+      return '自由'
+  }
+}
+
+function resolveActionLengthLabel(length: ChapterAssistantQuickAction['length']): string {
+  switch (length) {
+    case 'short':
+      return '短'
+    case 'long':
+      return '长'
+    default:
+      return '中'
+  }
+}
 </script>
 
 <template>
@@ -72,6 +102,7 @@ function toggleKnowledgeSnippet(key: string): void {
       <div class="claude-assistant-context__section claude-assistant-context__section--commands">
         <div class="claude-assistant-context__head claude-assistant-context__head--commands">
           <strong>命令菜单</strong>
+          <span>{{ totalQuickActionCount }} 条快捷命令</span>
         </div>
 
         <div class="claude-assistant-command-groups">
@@ -92,12 +123,24 @@ function toggleKnowledgeSnippet(key: string): void {
                 @click="emit('quickAction', action)"
               >
                 <span class="claude-assistant-command-item__prefix">/</span>
-                <component :is="action.icon" :size="13" class="claude-assistant-command-item__icon" />
-                <span class="claude-assistant-command-item__body">
-                  <strong>{{ action.label }}</strong>
-                  <span>{{ action.requiresSelection ? '需要选区' : '直接执行' }}</span>
+                <span class="claude-assistant-command-item__icon-wrap">
+                  <component :is="action.icon" :size="13" class="claude-assistant-command-item__icon" />
                 </span>
-                <span class="claude-assistant-command-item__meta">{{ group.label }}</span>
+                <span class="claude-assistant-command-item__body">
+                  <span class="claude-assistant-command-item__title-row">
+                    <strong>{{ action.label }}</strong>
+                    <span
+                      class="claude-assistant-command-item__requirement"
+                      :class="{ 'is-selection': action.requiresSelection }"
+                    >
+                      {{ action.requiresSelection ? '需要选区' : '直接执行' }}
+                    </span>
+                  </span>
+                  <span>
+                    {{ resolveActionModeLabel(action.mode) }} · {{ resolveActionLengthLabel(action.length) }}
+                    {{ action.requiresSelection ? ' · 选中文本后执行' : ' · 可直接触发' }}
+                  </span>
+                </span>
               </button>
             </div>
           </section>
