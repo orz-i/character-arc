@@ -801,6 +801,7 @@ const progressCurrentStep = computed(() => {
 <style scoped>
 .knowledge-screen {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
   gap: 16px;
@@ -852,23 +853,39 @@ const progressCurrentStep = computed(() => {
 
 .knowledge-asset-stack {
   display: flex;
+  width: 100%;
   flex-direction: column;
   gap: 12px;
 }
 
+.knowledge-asset-stack :deep(.n-card),
+.knowledge-asset-stack :deep(.n-card__content),
+.knowledge-asset-stack :deep(.n-card-header),
+.knowledge-asset-stack :deep(.n-card-header__main),
+.knowledge-asset-stack :deep(.n-card-header__extra) {
+  min-width: 0;
+}
+
 .asset-header {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
 
 .asset-header strong {
   color: var(--arc-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-header span {
   color: var(--arc-text-secondary);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-summary {
@@ -901,12 +918,22 @@ const progressCurrentStep = computed(() => {
 .asset-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
 }
 
 .asset-docs-collapse {
+  min-width: 0;
   border-top: 1px solid var(--arc-border);
   padding-top: 6px;
+}
+
+.asset-docs-collapse :deep(.n-collapse-item__header-main),
+.asset-docs-collapse :deep(.n-collapse-item__content-inner),
+.asset-docs-collapse :deep(.n-list),
+.asset-docs-collapse :deep(.n-list-item),
+.asset-docs-collapse :deep(.n-list-item__main) {
+  min-width: 0;
 }
 
 .doc-item {
@@ -914,18 +941,25 @@ const progressCurrentStep = computed(() => {
   flex-direction: column;
   gap: 4px;
   width: 100%;
+  min-width: 0;
 }
 
 .doc-item-top {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
 .doc-item-top strong {
+  flex: 1;
+  min-width: 0;
   color: var(--arc-text-primary);
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-item p {
@@ -933,15 +967,20 @@ const progressCurrentStep = computed(() => {
   color: var(--arc-text-secondary);
   font-size: 12px;
   line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .doc-item span {
   color: var(--arc-text-hint);
   font-size: 11px;
+  min-width: 0;
 }
 
 .knowledge-section-head {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -993,6 +1032,7 @@ const progressCurrentStep = computed(() => {
 
 .detail-header {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 4px;
 }
@@ -1000,11 +1040,13 @@ const progressCurrentStep = computed(() => {
 .detail-header strong {
   color: var(--arc-text-primary);
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .detail-header span {
   color: var(--arc-text-secondary);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .detail-body {

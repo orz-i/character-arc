@@ -58,6 +58,7 @@ function backToProjectCenter(): void {
 
 .deconstruction-header {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
@@ -105,12 +106,14 @@ function backToProjectCenter(): void {
 
 .deconstruction-header-actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
 }
 
 .deconstruction-main {
   display: flex;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   flex: 1;
@@ -121,6 +124,7 @@ function backToProjectCenter(): void {
 .deconstruction-body {
   display: flex;
   flex: 1;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: auto;
