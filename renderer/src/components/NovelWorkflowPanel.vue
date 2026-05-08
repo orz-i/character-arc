@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { marked } from 'marked'
 import {
+  Eye,
   FileText,
+  Pencil,
   Save,
   Sparkles
 } from 'lucide-vue-next'
@@ -31,6 +34,11 @@ const userPrompt = ref('')
 const isGenerating = ref(false)
 const editingDocumentKey = ref<WorkflowDocumentKey | null>(null)
 const editingContent = ref('')
+const isEditMode = ref(false)
+
+function renderMarkdown(content: string): string {
+  return marked.parse(content, { async: false }) as string
+}
 
 const allDocumentKeys: WorkflowDocumentKey[] = [
   'task_plan', 'findings', 'progress', 'current_status',
@@ -85,11 +93,6 @@ function isDefaultContent(content: string): boolean {
   return content.startsWith('# ') && content.includes('待 AI 生成')
 }
 
-function contentPreview(content: string): string {
-  const stripped = content.replace(/^#.*\n+/gm, '').replace(/^- /gm, '').trim()
-  return stripped.slice(0, 120) || '暂无内容'
-}
-
 function updateReferenceSelection(ids: Array<string | number>): void {
   if (!currentProject.value?.id) return
   appStore.updateProject(currentProject.value.id, {
@@ -102,6 +105,7 @@ function openEditModal(key: WorkflowDocumentKey): void {
   if (!doc) return
   editingDocumentKey.value = key
   editingContent.value = doc.content
+  isEditMode.value = false
 }
 
 function saveEditingDocument(): void {
@@ -187,7 +191,7 @@ async function generateAllDocuments(): Promise<void> {
       settings: appStore.appSettings,
       context: {
         ...buildGenerationContext(),
-        projectSkills: await loadEnabledProjectSkillsContext(currentProject.value, 'reference'),
+        projectSkills: await loadEnabledProjectSkillsContext(currentProject.value),
         userPrompt: userPrompt.value.trim()
           || '请生成全部流程文件，整合项目现有资料与参考书。'
       }
@@ -358,7 +362,7 @@ watch(
             已生成
           </n-tag>
         </template>
-        <p class="doc-card-preview">{{ contentPreview(doc.content) }}</p>
+        <div class="doc-card-preview workflow-md" v-html="renderMarkdown(doc.content)" />
         <template #footer>
           <span class="doc-card-time">更新于 {{ new Date(doc.updatedAt).toLocaleString('zh-CN') }}</span>
         </template>
@@ -369,11 +373,26 @@ watch(
       v-model:show="showEditModal"
       preset="card"
       :title="editingDocumentKey ? documentTitleMap[editingDocumentKey] : ''"
-      style="width: 680px; max-width: 90vw;"
+      style="width: 720px; max-width: 90vw;"
       :mask-closable="true"
     >
+      <template #header-extra>
+        <n-button
+          size="small"
+          quaternary
+          @click="isEditMode = !isEditMode"
+        >
+          <template #icon>
+            <Pencil v-if="!isEditMode" :size="14" />
+            <Eye v-else :size="14" />
+          </template>
+          {{ isEditMode ? '预览' : '编辑' }}
+        </n-button>
+      </template>
       <n-scrollbar style="max-height: 60vh;">
+        <div v-if="!isEditMode" class="workflow-md modal-preview" v-html="renderMarkdown(editingContent)" />
         <n-input
+          v-else
           v-model:value="editingContent"
           type="textarea"
           :autosize="{ minRows: 16, maxRows: 32 }"
@@ -526,11 +545,69 @@ watch(
   color: var(--arc-text-secondary);
   font-size: 13px;
   line-height: 1.7;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
+  max-height: 4.2em;
   overflow: hidden;
+}
+
+.workflow-md :deep(:is(h1, h2, h3, h4)) {
+  margin: 0 0 6px;
+  color: var(--arc-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.workflow-md :deep(p) {
+  margin: 0 0 6px;
+  color: var(--arc-text-secondary);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.workflow-md :deep(:is(ul, ol)) {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  color: var(--arc-text-secondary);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.workflow-md :deep(li + li) {
+  margin-top: 2px;
+}
+
+.workflow-md :deep(code) {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--arc-bg-mix);
+  font-size: 12px;
+}
+
+.workflow-md :deep(blockquote) {
+  margin: 0 0 6px;
+  padding-left: 12px;
+  border-left: 3px solid var(--arc-border);
+  color: var(--arc-text-hint);
+  font-size: 13px;
+}
+
+.workflow-md :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--arc-border);
+  margin: 10px 0;
+}
+
+.modal-preview {
+  padding: 4px 0;
+}
+
+.modal-preview :deep(:is(h1, h2, h3, h4)) {
+  font-size: 16px;
+  margin: 8px 0;
+}
+
+.modal-preview :deep(:is(p, ul, ol)) {
+  font-size: 14px;
 }
 
 .doc-card-time {
