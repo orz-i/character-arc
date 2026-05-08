@@ -168,8 +168,8 @@ export const useAppStore = defineStore('app', () => {
   let workspaceSyncTimer: number | null = null
   /** 下次计划持久化的时间戳 */
   const scheduledPersistAt = ref<number | null>(null)
-  /** 当前视图：项目列表 / 新建向导 / 工作台 / 章节写作 */
-  const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio' | 'deconstruction-library'>('projects')
+  /** 当前视图：项目列表 / 新建向导 / 工作台 / 章节写作 / 独立能力页 */
+  const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio' | 'deconstruction-library' | 'skills'>('projects')
   /** 工作台中当前激活的面板 */
   const activePanel = ref<PanelName>('workflow')
   /** 上一次在工作台中查看的面板（非 chapters），用于从章节写作返回时恢复 */
@@ -1293,6 +1293,21 @@ export const useAppStore = defineStore('app', () => {
     pendingChapterInsertion.value = null
     currentView.value = 'deconstruction-library'
     syncSelectedChapter(targetProject.id)
+    schedulePersist('fast')
+  }
+
+  /** 打开 Skills 独立页面 */
+  function openSkillsPage(projectId?: string): void {
+    const resolvedProjectId = String(projectId ?? selectedProjectId.value ?? '').trim()
+    const targetProject = projects.value.find((item) => item.id === resolvedProjectId) ?? projects.value[0]
+
+    if (targetProject) {
+      ensureProjectWorkspace(targetProject.id)
+      selectedProjectId.value = targetProject.id
+      syncSelectedChapter(targetProject.id)
+    }
+
+    currentView.value = 'skills'
     schedulePersist('fast')
   }
 
@@ -2763,6 +2778,7 @@ export const useAppStore = defineStore('app', () => {
     openChapterStudio,
     openDeconstructionLibrary,
     openProject,
+    openSkillsPage,
     openWizard,
     outlineItems,
     organizationMemberships,

@@ -54,6 +54,13 @@ function openDeconstructionLibrary(): void {
   appStore.openDeconstructionLibrary(targetProject.id)
 }
 
+function openSkillsPage(): void {
+  const targetProject = appStore.projects.find((project) => project.id === appStore.selectedProjectId)
+    ?? appStore.projects[0]
+
+  appStore.openSkillsPage(targetProject?.id)
+}
+
 function openProjectEditor(project?: ProjectSummary): void {
   editingProject.value = project ?? null
   editorVisible.value = true
@@ -146,6 +153,7 @@ function requestDeleteProject(projectId: string): void {
       <HomepageHero
         @create="appStore.openWizard()"
         @open-deconstruction="openDeconstructionLibrary"
+        @open-skills="openSkillsPage"
         @open-settings="settingsVisible = true"
       />
 
