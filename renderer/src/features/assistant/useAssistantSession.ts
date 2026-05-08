@@ -187,11 +187,24 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     return marked.parse(content, { async: false }) as string
   }
 
-  async function scrollToBottom(): Promise<void> {
+  function isNearBottom(): boolean {
+    if (!messagesViewport?.value) return true
+    const el = messagesViewport.value
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
+  let userScrolledUp = false
+
+  function handleViewportScroll(): void {
+    userScrolledUp = !isNearBottom()
+  }
+
+  async function scrollToBottom(force = false): Promise<void> {
     await nextTick()
-    if (messagesViewport?.value) {
-      messagesViewport.value.scrollTop = messagesViewport.value.scrollHeight
-    }
+    if (!messagesViewport?.value) return
+    if (!force && userScrolledUp) return
+    userScrolledUp = false
+    messagesViewport.value.scrollTop = messagesViewport.value.scrollHeight
   }
 
   function resetStreamingState(): void {
@@ -368,7 +381,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     isResponding.value = true
     isStopping.value = false
     streamingReply.value = ''
-    await scrollToBottom()
+    await scrollToBottom(true)
 
     try {
       const projectSkills = await loadEnabledProjectSkillsContext(currentProject.value, 'draft')
@@ -447,7 +460,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
           outlinePayload.summary ? `剧情摘要：\n${outlinePayload.summary}` : ''
         ].filter(Boolean).join('\n\n')
       )
-      await scrollToBottom()
+      await scrollToBottom(true)
       message.success('已生成下一章大纲提议')
     } catch (error) {
       resetStreamingState()
@@ -470,7 +483,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     isResponding.value = true
     isStopping.value = false
     streamingReply.value = ''
-    await scrollToBottom()
+    await scrollToBottom(true)
 
     try {
       const projectSkills = await loadEnabledProjectSkillsContext(currentProject.value, 'draft')
@@ -542,7 +555,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
           revisedContent
         ].filter(Boolean).join('\n\n')
       )
-      await scrollToBottom()
+      await scrollToBottom(true)
       message.success(`已生成${action.label}提议`)
     } catch (error) {
       resetStreamingState()
@@ -591,7 +604,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     isResponding.value = true
     isStopping.value = false
     streamingReply.value = ''
-    await scrollToBottom()
+    await scrollToBottom(true)
 
     try {
       const intentResponse = await window.characterArc.generateAi(toIpcPayload({
@@ -720,7 +733,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
 
         await appendConversationMessage('assistant', buildProposalAssistantReply(intentResult.reason, proposal))
         resetStreamingState()
-        await scrollToBottom()
+        await scrollToBottom(true)
         message.success('已生成写作动作提议，请确认后执行')
         return
       }
@@ -1006,7 +1019,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
         void appendConversationMessage('assistant', finalReply)
       }
       resetStreamingState()
-      void scrollToBottom()
+      void scrollToBottom(true)
       return
     }
 
@@ -1019,7 +1032,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
         message.info('已停止生成')
       }
       resetStreamingState()
-      void scrollToBottom()
+      void scrollToBottom(true)
       return
     }
 
@@ -1097,6 +1110,7 @@ export function useAssistantSession(messagesViewport?: Ref<HTMLElement | null>) 
     handleRegenerate,
     handleStopResponse,
     handleComposerKeydown,
+    handleViewportScroll,
     scrollToBottom,
     resetStreamingState
   }

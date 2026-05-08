@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NPopover } from 'naive-ui'
+import { NButton, NButtonGroup, NPopover, NSelect } from 'naive-ui'
 import type { ChapterAssistantQuickAction } from '@/features/ai/chapterAssistantOptions'
 import { SendHorizonal, Square } from 'lucide-vue-next'
 import AssistantInlineContextSections from './AssistantInlineContextSections.vue'
@@ -32,6 +32,14 @@ const emit = defineEmits<{
 
 const commandMenuOpen = ref(false)
 
+const responseModeOptions = [
+  { label: '自由写作', value: 'freeform' },
+  { label: '润色', value: 'polish' },
+  { label: '续写', value: 'continue' },
+  { label: '建议', value: 'suggest' },
+  { label: '参考', value: 'reference' }
+]
+
 function handleQuickAction(action: ChapterAssistantQuickAction) {
   commandMenuOpen.value = false
   emit('quickAction', action)
@@ -53,6 +61,33 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
         placeholder="输入消息，或先选一段文字再发起命令。"
         @keydown="(event) => emit('keydown', event)"
       />
+
+      <div class="claude-assistant-composer__toolbar">
+        <n-select
+          v-model:value="responseMode"
+          :options="responseModeOptions"
+          size="tiny"
+          style="width: 100px;"
+          :disabled="props.isResponding"
+        />
+        <n-button-group size="tiny">
+          <n-button
+            :type="responseLength === 'short' ? 'primary' : 'default'"
+            :disabled="props.isResponding"
+            @click="responseLength = 'short'"
+          >短</n-button>
+          <n-button
+            :type="responseLength === 'medium' ? 'primary' : 'default'"
+            :disabled="props.isResponding"
+            @click="responseLength = 'medium'"
+          >中</n-button>
+          <n-button
+            :type="responseLength === 'long' ? 'primary' : 'default'"
+            :disabled="props.isResponding"
+            @click="responseLength = 'long'"
+          >长</n-button>
+        </n-button-group>
+      </div>
 
       <div class="claude-assistant-composer__footer">
         <div class="claude-assistant-composer__menu-area">

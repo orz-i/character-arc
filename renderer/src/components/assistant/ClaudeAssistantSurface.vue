@@ -41,7 +41,7 @@ const session = useAssistantSession(messagesViewport)
       @quick-action="session.handleQuickAction"
     />
 
-    <div ref="messagesViewport" class="claude-assistant-surface__body">
+    <div ref="messagesViewport" class="claude-assistant-surface__body" @scroll="session.handleViewportScroll">
       <AssistantConversationPane
         :messages="session.appStore.messages"
         :is-responding="session.isResponding.value"
