@@ -169,7 +169,7 @@ export const useAppStore = defineStore('app', () => {
   /** 下次计划持久化的时间戳 */
   const scheduledPersistAt = ref<number | null>(null)
   /** 当前视图：项目列表 / 新建向导 / 工作台 / 章节写作 */
-  const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio'>('projects')
+  const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio' | 'deconstruction-library'>('projects')
   /** 工作台中当前激活的面板 */
   const activePanel = ref<PanelName>('workflow')
   /** 上一次在工作台中查看的面板（非 chapters），用于从章节写作返回时恢复 */
@@ -1280,6 +1280,22 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('fast')
   }
 
+  /** 打开拆书知识库独立页面 */
+  function openDeconstructionLibrary(projectId?: string): void {
+    const resolvedProjectId = String(projectId ?? selectedProjectId.value ?? '').trim()
+    const targetProject = projects.value.find((item) => item.id === resolvedProjectId) ?? projects.value[0]
+    if (!targetProject) {
+      return
+    }
+
+    ensureProjectWorkspace(targetProject.id)
+    selectedProjectId.value = targetProject.id
+    pendingChapterInsertion.value = null
+    currentView.value = 'deconstruction-library'
+    syncSelectedChapter(targetProject.id)
+    schedulePersist('fast')
+  }
+
   /** 返回项目列表页 */
   function backToProjects(): void {
     currentView.value = 'projects'
@@ -2050,6 +2066,11 @@ export const useAppStore = defineStore('app', () => {
       return
     }
 
+    if (panel === 'deconstruction') {
+      openDeconstructionLibrary()
+      return
+    }
+
     lastWorkbenchPanel.value = panel
     activePanel.value = panel
     currentView.value = 'workbench'
@@ -2740,6 +2761,7 @@ export const useAppStore = defineStore('app', () => {
     moveOutlineItem,
     openAiAssistant,
     openChapterStudio,
+    openDeconstructionLibrary,
     openProject,
     openWizard,
     outlineItems,

@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   BookMarked,
-  BookCopy,
   BookOpenText,
   ChevronLeft,
   FileText,
@@ -27,7 +26,6 @@ import WorldviewPanel from '@/components/WorldviewPanel.vue'
 import CharactersPanel from '@/components/CharactersPanel.vue'
 import RelationsPanel from '@/components/RelationsPanel.vue'
 import InspirationPanel from '@/components/InspirationPanel.vue'
-import KnowledgeCenterPanel from '@/components/KnowledgeCenterPanel.vue'
 import OutlinePanel from '@/components/OutlinePanel.vue'
 import PlotThreadsPanel from '@/components/PlotThreadsPanel.vue'
 import ProjectSkillsPanel from '@/components/ProjectSkillsPanel.vue'
@@ -47,7 +45,7 @@ const panelSearch = reactive<Record<string, string>>({
   workflow: '',
   skills: '',
   overview: '',
-  knowledge: '',
+  deconstruction: '',
   world: '',
   characters: '',
   relations: '',
@@ -66,7 +64,6 @@ const sidebarItems = [
   { id: 'workflow', label: '小说流程', description: '维护固定流程文件并驱动写作阶段', icon: BookOpenText, color: '#3b82f6' },
   { id: 'skills', label: 'Skills', description: '管理内置 skills 与项目扩展 skills', icon: Wrench, color: '#f97316' },
   { id: 'overview', label: '作品概览', description: '掌握项目进度与全局信息', icon: LayoutDashboard, color: '#8b5cf6' },
-  { id: 'knowledge', label: '知识中心', description: '整理项目事实、拆书摘录与冲突项', icon: BookCopy, color: '#0f766e' },
   { id: 'world', label: '世界观设定', description: '沉淀世界规则、地点与设定条目', icon: Globe2, color: '#06b6d4' },
   { id: 'characters', label: '角色图鉴', description: '维护人物卡、关系与成长线索', icon: Users, color: '#ec4899' },
   { id: 'relations', label: '关系组织', description: '维护势力结构、人物关系与成员归属', icon: Network, color: '#6b7280' },
@@ -75,6 +72,10 @@ const sidebarItems = [
   { id: 'threads', label: '剧情线索', description: '追踪未收尾伏笔与活跃剧情线', icon: BookMarked, color: '#6366f1' },
   { id: 'chapters', label: '章节创作', description: '进入正文草稿与章节推进流程', icon: FileText, color: '#3b82f6' }
 ] as const
+
+const hiddenPanelLabels: Partial<Record<PanelName, string>> = {
+  deconstruction: '拆书知识库'
+}
 
 // 去除首尾空格后的搜索关键词
 const normalizedSearch = computed(() => searchKeyword.value.trim())
@@ -91,7 +92,9 @@ const activeViewLabel = computed(() => {
     return '项目设置'
   }
 
-  return sidebarItems.find((item) => item.id === appStore.activePanel)?.label ?? '项目工作台'
+  return sidebarItems.find((item) => item.id === appStore.activePanel)?.label
+    ?? hiddenPanelLabels[appStore.activePanel]
+    ?? '项目工作台'
 })
 
 // 项目元信息（题材 + 长短篇 + 字数展示），用于侧边栏项目标题下方显示
@@ -310,7 +313,6 @@ watch(searchKeyword, (value) => {
           <NovelWorkflowPanel v-else-if="appStore.activePanel === 'workflow'" key="workflow" />
           <ProjectSkillsPanel v-else-if="appStore.activePanel === 'skills'" key="skills" />
           <OverviewPanel v-else-if="appStore.activePanel === 'overview'" key="overview" :search-query="normalizedSearch" />
-          <KnowledgeCenterPanel v-else-if="appStore.activePanel === 'knowledge'" key="knowledge" />
           <WorldviewPanel v-else-if="appStore.activePanel === 'world'" key="world" :search-query="normalizedSearch" />
           <CharactersPanel v-else-if="appStore.activePanel === 'characters'" key="characters" :search-query="normalizedSearch" />
           <RelationsPanel v-else-if="appStore.activePanel === 'relations'" key="relations" :search-query="normalizedSearch" />

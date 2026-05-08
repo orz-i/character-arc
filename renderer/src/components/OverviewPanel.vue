@@ -91,7 +91,7 @@ const overviewCards = computed(() => [
       ? `${knowledgeState.value.stats.duplicateDocuments} 重复 / ${knowledgeState.value.stats.conflictGroups} 冲突待处理`
       : `${knowledgeState.value.stats.projectDocuments} 项目 / ${knowledgeState.value.stats.referenceDocuments} 参考`,
     icon: BookOpen,
-    target: 'knowledge' as PanelName
+    target: 'deconstruction' as PanelName
   }
 ])
 
@@ -170,6 +170,11 @@ const recentChapter = computed(() => appStore.selectedChapter ?? appStore.chapte
 
 // 导航到指定面板
 function goToPanel(panel: PanelName): void {
+  if (panel === 'deconstruction') {
+    appStore.openDeconstructionLibrary()
+    return
+  }
+
   appStore.setPanel(panel)
 }
 
@@ -194,7 +199,7 @@ function openEntry(type: string, title: string): void {
   }
 
   if (type === '知识') {
-    appStore.setPanel('knowledge')
+    appStore.openDeconstructionLibrary()
     return
   }
 

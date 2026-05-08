@@ -7,6 +7,7 @@ import ProjectCenter from '@/pages/ProjectCenter.vue'
 import ProjectWizardPage from '@/pages/ProjectWizardPage.vue'
 import WorkbenchPage from '@/pages/WorkbenchPage.vue'
 import ChapterStudioPage from '@/pages/ChapterStudioPage.vue'
+import DeconstructionLibraryPage from '@/pages/DeconstructionLibraryPage.vue'
 import AssistantWindowPage from '@/pages/AssistantWindowPage.vue'
 import { isAssistantWindow } from '@/utils/windowKind'
 
@@ -133,6 +134,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleGlobalKeydown)
               <ProjectCenter v-else-if="appStore.currentView === 'projects'" key="projects" />
               <ProjectWizardPage v-else-if="appStore.currentView === 'wizard'" key="wizard" />
               <ChapterStudioPage v-else-if="appStore.currentView === 'chapter-studio'" key="chapter-studio" />
+              <DeconstructionLibraryPage v-else-if="appStore.currentView === 'deconstruction-library'" key="deconstruction-library" />
               <WorkbenchPage v-else key="workbench" />
             </Transition>
           </div>

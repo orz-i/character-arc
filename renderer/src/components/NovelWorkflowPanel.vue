@@ -91,7 +91,7 @@ async function handleDeepAnalyzeReference(work: { id: string; title: string; fil
     if (!response.success) {
       throw new Error(response.error ?? 'AI 深度拆书失败')
     }
-    message.success(`已完成《${work.title}》深度拆书，新增的知识文档已自动加入知识中心。`)
+    message.success(`已完成《${work.title}》深度拆书，新增的知识文档已自动加入拆书知识库。`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : 'AI 深度拆书失败')
   } finally {
@@ -214,6 +214,10 @@ function saveDocument(): void {
 
 function openReferenceFindings(): void {
   setDocument('findings')
+}
+
+function openDeconstructionLibrary(): void {
+  appStore.openDeconstructionLibrary()
 }
 
 function resolveReferenceImportPhaseLabel(phase?: CharacterArcReferenceImportProgressPayload['phase']): string {
@@ -553,7 +557,7 @@ async function runReferenceSkillAction(actionKey: 'long-scan' | 'short-scan' | '
     const payload = result.result as Record<string, string>
     setReferenceProgress({
       phase: 'saving',
-      message: `正在把${resolveReferenceSkillActionLabel(actionKey)}结论写回流程文件与知识中心...`,
+      message: `正在把${resolveReferenceSkillActionLabel(actionKey)}结论写回流程文件与拆书知识库...`,
       current: 3,
       total: 3,
       percent: 88
@@ -922,6 +926,7 @@ function resolveStageStatusLabel(status: string): string {
             <div class="reference-analysis-copy">
               <span class="reference-analysis-kicker">Reference Lab</span>
               <strong>选题与参考</strong>
+              <p>拆书能力已经迁移到独立的“拆书知识库”。这里保留阶段状态与流程文档，实际的导入、拆书、复盘和资产管理都集中到知识库里完成。</p>
               <div class="reference-analysis-stats">
                 <div class="reference-analysis-stat">
                   <span>已分析参考</span>
@@ -939,90 +944,29 @@ function resolveStageStatusLabel(status: string): string {
             </div>
             <div class="reference-analysis-command">
               <div class="reference-analysis-phase-wrap">
-                <span class="reference-analysis-phase">{{ resolveReferenceImportPhaseLabel(referenceImportProgress?.phase) }}</span>
-                <small>拆书和参考提炼共用这一套状态区。</small>
+                <span class="reference-analysis-phase">{{ referenceWorks.length > 0 ? '资产已归档' : '待归档参考作品' }}</span>
+                <small>{{ referenceWorks.length > 0 ? '继续拆书、深挖和扫榜，请进入拆书知识库。' : '先进入拆书知识库导入参考作品，再把结论回写到流程文件。' }}</small>
               </div>
               <div class="reference-analysis-actions">
-                <n-button round strong secondary :disabled="isReferenceOperationActive" @click="importReferenceNovelAnalysis">
-                  {{ isImportingReferenceNovel ? '拆书中...' : '导入小说并拆书' }}
+                <n-button round strong secondary @click="openDeconstructionLibrary">
+                  打开拆书知识库
                 </n-button>
-                <n-button type="primary" round strong :disabled="isReferenceOperationActive" @click="generateReferenceInsights">
-                  {{ isGeneratingReferenceInsights ? '提炼中...' : 'AI提炼参考阶段' }}
+                <n-button type="primary" round strong @click="openReferenceFindings">
+                  查看阶段 findings
                 </n-button>
               </div>
-            </div>
-          </div>
-          <div class="reference-progress-card" :class="{ active: Boolean(referenceImportProgress) }">
-              <div class="reference-progress-meta">
-                <div>
-                  <span class="reference-progress-label">当前任务</span>
-                  <strong>{{ referenceImportProgress?.sourceTitle ? `正在处理《${referenceImportProgress.sourceTitle}》` : '等待开始拆书分析' }}</strong>
-                </div>
-                <span>{{ referenceImportProgress?.percent ?? 0 }}%</span>
-              </div>
-              <div class="reference-progress-track">
-                <div class="reference-progress-fill" :style="{ width: `${referenceImportProgress?.percent ?? 0}%` }" />
-              </div>
-              <p>{{ referenceImportProgress?.message || '导入后会依次完成：读取正文、切分分块、逐块分析、汇总模板、回填项目。' }}</p>
-              <small v-if="referenceImportProgress && referenceImportProgress.total > 1">
-                当前进度：{{ referenceImportProgress.current }} / {{ referenceImportProgress.total }}
-              </small>
-              <div class="reference-progress-steps">
-                <span :class="{ active: ['extracting', 'chunking', 'chunk-analysis', 'aggregating', 'saving', 'done'].includes(referenceImportProgress?.phase ?? '') }">读取/切分</span>
-                <span :class="{ active: ['chunk-analysis', 'aggregating', 'saving', 'done'].includes(referenceImportProgress?.phase ?? '') }">逐块分析</span>
-                <span :class="{ active: ['aggregating', 'saving', 'done'].includes(referenceImportProgress?.phase ?? '') }">汇总结论</span>
-                <span :class="{ active: ['saving', 'done'].includes(referenceImportProgress?.phase ?? '') }">回填项目</span>
-              </div>
-            </div>
-          <div class="reference-skill-playbook">
-            <div class="reference-skill-playbook-head">
-              <div>
-                <span>Skill Playbook</span>
-                <strong>把 `oh-story-claudecode` 的扫榜 / 拆文能力接入当前流程</strong>
-              </div>
-              <small>这些动作会优先读取你启用的内置 skills 与项目扩展 skills 中 reference 阶段的规则，然后把结论写回 findings、task_plan 等流程文件。</small>
-            </div>
-            <div class="reference-skill-grid">
-              <article class="reference-skill-card">
-                <strong>长篇扫榜</strong>
-                <p>适合起点、番茄、晋江等长篇项目，提炼题材风口、读者偏好和开篇卖点。</p>
-                <n-button size="small" secondary :disabled="isReferenceOperationActive" @click="runReferenceSkillAction('long-scan')">
-                  {{ activeReferenceSkillActionKey === 'long-scan' ? '执行中...' : '运行长篇扫榜' }}
-                </n-button>
-              </article>
-              <article class="reference-skill-card">
-                <strong>短篇扫榜</strong>
-                <p>适合盐言、番茄短篇等赛道，聚焦情绪方向、反转模式和短开头钩子。</p>
-                <n-button size="small" secondary :disabled="isReferenceOperationActive" @click="runReferenceSkillAction('short-scan')">
-                  {{ activeReferenceSkillActionKey === 'short-scan' ? '执行中...' : '运行短篇扫榜' }}
-                </n-button>
-              </article>
-              <article class="reference-skill-card">
-                <strong>长篇拆文整理</strong>
-                <p>基于已拆过的参考作品，整理黄金三章、节奏、人设骨架和爽点组织方式。</p>
-                <n-button size="small" secondary :disabled="isReferenceOperationActive" @click="runReferenceSkillAction('long-analyze')">
-                  {{ activeReferenceSkillActionKey === 'long-analyze' ? '执行中...' : '整理长篇拆文' }}
-                </n-button>
-              </article>
-              <article class="reference-skill-card">
-                <strong>短篇拆文整理</strong>
-                <p>基于已拆过的参考作品，提炼情绪曲线、反转布置、钩子设计和收束方式。</p>
-                <n-button size="small" secondary :disabled="isReferenceOperationActive" @click="runReferenceSkillAction('short-analyze')">
-                  {{ activeReferenceSkillActionKey === 'short-analyze' ? '执行中...' : '整理短篇拆文' }}
-                </n-button>
-              </article>
             </div>
           </div>
           <div v-if="latestAnalyzedReference?.analysis" class="reference-analysis-footnote">
             最近一次完成拆书：<strong>{{ latestAnalyzedReference.title }}</strong>
-            <span>已提炼 {{ latestAnalyzedReference.analysis.styleRules.length }} 条风格规则，并回填到项目风格约束。</span>
+            <span>已沉淀 {{ latestAnalyzedReference.analysis.styleRules.length }} 条风格规则；后续深挖与复盘请在拆书知识库继续操作。</span>
           </div>
           <div v-if="referenceWorks.length > 0" class="reference-assets-head">
             <div>
               <span>已沉淀资产</span>
               <strong>参考作品档案</strong>
             </div>
-            <small>你已经拆过的作品会留在这里，方便回看和继续提炼。</small>
+            <small>这里只展示流程侧的资产概况；完整资产视图、分块文档和深度拆书入口都在拆书知识库。</small>
           </div>
           <div v-if="referenceWorks.length > 0" class="reference-work-list">
             <article v-for="work in referenceWorks" :key="work.id" class="reference-work-card">
@@ -1043,17 +987,8 @@ function resolveStageStatusLabel(status: string): string {
                 <li v-for="rule in work.analysis.styleRules.slice(0, 3)" :key="`${work.id}-${rule}`">{{ rule }}</li>
               </ul>
               <div class="reference-work-actions">
-                <n-button
-                  type="primary"
-                  size="small"
-                  :loading="deepAnalyzingReferenceId === work.id"
-                  :disabled="Boolean(deepAnalyzingReferenceId) && deepAnalyzingReferenceId !== work.id"
-                  @click="handleDeepAnalyzeReference(work)"
-                >
-                  <template #icon>
-                    <Sparkles :size="14" />
-                  </template>
-                  AI 深度拆书
+                <n-button type="primary" size="small" @click="openDeconstructionLibrary">
+                  去知识库继续处理
                 </n-button>
               </div>
             </article>

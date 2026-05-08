@@ -43,6 +43,17 @@ function openProject(projectId: string): void {
   appStore.openProject(projectId)
 }
 
+function openDeconstructionLibrary(): void {
+  const targetProject = appStore.projects.find((project) => project.id === appStore.selectedProjectId)
+    ?? appStore.projects[0]
+  if (!targetProject) {
+    message.warning('请先创建一个项目，再进入拆书知识库。')
+    return
+  }
+
+  appStore.openDeconstructionLibrary(targetProject.id)
+}
+
 function openProjectEditor(project?: ProjectSummary): void {
   editingProject.value = project ?? null
   editorVisible.value = true
@@ -134,6 +145,7 @@ function requestDeleteProject(projectId: string): void {
     <div class="project-shell">
       <HomepageHero
         @create="appStore.openWizard()"
+        @open-deconstruction="openDeconstructionLibrary"
         @open-settings="settingsVisible = true"
       />
 

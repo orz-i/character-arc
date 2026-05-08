@@ -175,9 +175,9 @@ const resultGroups = computed<ResultGroup[]>(() => {
       items: worldviewItems
     },
     {
-      id: 'knowledge',
-      label: '知识中心',
-      panel: 'knowledge' as PanelName,
+      id: 'deconstruction',
+      label: '拆书知识库',
+      panel: 'deconstruction' as PanelName,
       icon: BookOpenText,
       accent: 'rgba(20, 184, 166, 0.14)',
       items: knowledgeItems

@@ -52,10 +52,17 @@ export async function runAiTask(
     const requestStartedAt = Date.now()
     let rawText = await requestAiText(settings, prompt, maxTokens, structured)
     logResponse('REQUEST', settings, task.task, rawText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
-    let result = handler.normalize(rawText)
+    let result: AiTaskResult
+    let normalizeFailed = false
+    try {
+      result = handler.normalize(rawText)
+    } catch {
+      result = {} as AiTaskResult
+      normalizeFailed = true
+    }
     let repairTriggered = false
 
-    if (handler.outputType === 'json' && !handler.validate(result)) {
+    if (handler.outputType === 'json' && (normalizeFailed || !handler.validate(result))) {
       const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText)
       logPrompt('REPAIR', settings, repairPromptPair, task.task, usedSkillIds)
       const repairStartedAt = Date.now()

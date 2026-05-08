@@ -69,7 +69,7 @@
 
 ## 未做 / 待办
 
-### PR5（收尾打磨，~0.5 天）
+### PR5（收尾打磨）
 
 - [ ] **白名单扩容**：把 `AGENT_TASK_WHITELIST` 加入 `outline-chain` / `inspiration-pack` / `chapter-analysis` / `outline-item` / `project-bootstrap` 等
 - [ ] **`heuristics.ts` 解锁外部工具型 skill**：`browser-cdp` / `story-cover` 当前 `compatibility='external-only'` 默认禁用；agent 有了 `skill_run_script` 后这两个 skill 应可正常工作（前提是相关 env 已配置）。需要按 `metadata.openclaw.requires.env` 动态判断

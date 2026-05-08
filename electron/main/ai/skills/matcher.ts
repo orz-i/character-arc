@@ -63,14 +63,15 @@ function computeScore(
     const haystack = [
       String(context.userPrompt ?? ''),
       String(context.chapterTitle ?? ''),
-      String(context.quickAction ?? ''),
-      skill.description
+      String(context.quickAction ?? '')
     ].join(' ').toLowerCase()
 
-    for (const trigger of manifest.triggers) {
-      if (haystack.includes(trigger.toLowerCase())) {
-        score += 3
-        break
+    if (haystack) {
+      for (const trigger of manifest.triggers) {
+        if (haystack.includes(trigger.toLowerCase())) {
+          score += 3
+          break
+        }
       }
     }
   }

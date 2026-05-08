@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Plus, Settings2 } from 'lucide-vue-next'
+import { LibraryBig, Plus, Settings2 } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 
 const emit = defineEmits<{
   (e: 'create'): void
+  (e: 'openDeconstruction'): void
   (e: 'openSettings'): void
 }>()
 </script>
@@ -16,6 +17,10 @@ const emit = defineEmits<{
     </div>
 
     <div class="hero-actions arc-no-drag">
+      <n-button size="large" class="hero-btn arc-no-drag" @click="emit('openDeconstruction')">
+        <template #icon><LibraryBig :size="18" /></template>
+        拆书知识库
+      </n-button>
       <n-button size="large" class="hero-btn arc-no-drag" @click="emit('openSettings')">
         <template #icon><Settings2 :size="18" /></template>
         设置

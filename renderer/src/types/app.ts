@@ -2,7 +2,7 @@
 export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 
 /** 工作台面板名称 */
-export type PanelName = 'workflow' | 'skills' | 'overview' | 'knowledge' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'threads' | 'chapters' | 'settings'
+export type PanelName = 'workflow' | 'skills' | 'overview' | 'deconstruction' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'threads' | 'chapters' | 'settings'
 
 /** 小说流程阶段标识 */
 export type NovelWorkflowStageId = 'reference' | 'premise' | 'setting' | 'outline' | 'draft'

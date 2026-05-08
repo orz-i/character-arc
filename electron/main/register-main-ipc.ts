@@ -285,6 +285,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
             task: 'reference-style-chunk',
             settings: request.settings,
             context: {
+              projectId: request.projectId ?? '',
               projectTitle: request.projectTitle ?? '',
               projectGenre: request.projectGenre ?? '',
               projectPlatform: request.projectPlatform ?? '',
@@ -312,6 +313,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         task: 'reference-style-analysis',
         settings: request.settings,
         context: {
+          projectId: request.projectId ?? '',
           projectTitle: request.projectTitle ?? '',
           projectGenre: request.projectGenre ?? '',
           projectPlatform: request.projectPlatform ?? '',
