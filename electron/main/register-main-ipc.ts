@@ -8,7 +8,7 @@ import type { AiTaskPayload, ReferenceStyleAnalysisResult, ReferenceStyleChunkRe
 import { runAiTask } from './ai/runtime'
 import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
-import { extractReferenceNovelContext, type ReferenceNovelLocalContext, type ReferenceStyleMetric } from './referenceAnalysis'
+import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
 import type { AssistantPromptPayload, WindowManager } from './window-manager'
 
 type ReferenceNovelImportRequest = {
@@ -59,12 +59,6 @@ type RegisterMainIpcHandlersDeps = {
     importedAt: string
   ) => unknown[]
   buildImportedReferenceStylePrompt: (title: string, analysis: ReferenceStyleAnalysisResult) => string
-  buildImportedReferenceFindingsMarkdown: (
-    title: string,
-    analysis: ReferenceStyleAnalysisResult,
-    metrics: ReferenceStyleMetric[],
-    keywords: string[]
-  ) => string
   formatReferenceChunkSummaries: (
     chunkResults: Array<{ label: string; characterCount: number; result: ReferenceStyleChunkResult }>
   ) => string
@@ -344,7 +338,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         : []
       deps.emitReferenceImportProgress(window, {
         phase: 'saving',
-        message: '正在整理结果并回填到项目风格规则与流程文件...',
+        message: '正在整理结果并归档到拆书知识库...',
         current: 1,
         total: 1,
         percent: 96,
@@ -382,7 +376,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       }
       deps.emitReferenceImportProgress(window, {
         phase: 'done',
-        message: `《${resolvedTitle}》拆书完成，结果已回填到项目风格规则、参考档案和 findings。`,
+        message: `《${resolvedTitle}》拆书完成，结果已归档到拆书知识库。`,
         current: 1,
         total: 1,
         percent: 100,
@@ -395,12 +389,6 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         result: {
           referenceWork,
           suggestedWritingStylePrompt: deps.buildImportedReferenceStylePrompt(resolvedTitle, analysis),
-          findingsMarkdown: deps.buildImportedReferenceFindingsMarkdown(
-            resolvedTitle,
-            analysis,
-            localContext.metrics,
-            localContext.topKeywords
-          ),
           knowledgeDocuments
         }
       }

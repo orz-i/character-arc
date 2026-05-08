@@ -151,7 +151,6 @@ declare global {
   type CharacterArcReferenceImportResult = {
     referenceWork: import('@/types/app').ReferenceWorkItem
     suggestedWritingStylePrompt: string
-    findingsMarkdown: string
     knowledgeDocuments: import('@/types/app').KnowledgeDocument[]
   }
 

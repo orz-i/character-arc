@@ -235,18 +235,10 @@ async function importReferenceNovelAnalysis(): Promise<void> {
       )
     })
     appStore.mergeKnowledgeDocuments(project.id, result.result.knowledgeDocuments)
-    if (appStore.activeWorkflowVolume?.id) {
-      appStore.appendWorkflowDocumentEntry(
-        appStore.activeWorkflowVolume.id,
-        'findings',
-        `${result.result.referenceWork.title} 拆书结果`,
-        result.result.findingsMarkdown
-      )
-    }
 
     setReferenceProgress({
       phase: 'done',
-      message: `《${result.result.referenceWork.title}》已加入拆书知识库，风格模板、参考档案和 findings 已同步更新。`,
+      message: `《${result.result.referenceWork.title}》已加入拆书知识库，相关拆书资产已完成归档。`,
       current: 1,
       total: 1,
       percent: 100,

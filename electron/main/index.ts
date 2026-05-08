@@ -3,10 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { ReferenceStyleAnalysisResult, ReferenceStyleChunkResult } from './ai/shared-types'
 import { registerAiIpcHandlers } from './ai/ipc'
-import {
-  type ReferenceNovelLocalContext,
-  type ReferenceStyleMetric
-} from './referenceAnalysis'
+import { type ReferenceNovelLocalContext } from './referenceAnalysis'
 import { registerMainIpcHandlers } from './register-main-ipc'
 import { initRegistry as initSkillRegistry } from './ai/skills'
 import { createWindowManager, type AssistantPromptPayload } from './window-manager'
@@ -188,29 +185,6 @@ function buildImportedReferenceStylePrompt(title: string, analysis: ReferenceSty
     `以下规则来自参考作品《${title}》的拆书结果，已做去具体化处理，只借鉴文笔和结构骨架，不复用专有设定：`,
     analysis.reusableStylePrompt,
     `补充校准：句式 ${analysis.sentenceStyle}；对白 ${analysis.dialogueRatio}；节奏 ${analysis.pacingControl}；情绪 ${analysis.emotionExpression}；视角 ${analysis.narrativePerspective}。`
-  ].join('\n')
-}
-
-function buildImportedReferenceFindingsMarkdown(title: string, analysis: ReferenceStyleAnalysisResult, metrics: ReferenceStyleMetric[], keywords: string[]): string {
-  const metricLines = metrics.map((metric) => `- ${metric.label}：${metric.value}`).join('\n')
-  const styleRuleLines = analysis.styleRules.map((rule) => `- ${rule}`).join('\n')
-  const avoidRuleLines = analysis.avoidRules.map((rule) => `- ${rule}`).join('\n')
-  return [
-    `- 参考作品：${title}`,
-    `- 风格总述：${analysis.overview}`,
-    ...(keywords.length ? [`- 关键词：${keywords.join('、')}`] : []),
-    '',
-    '### 局部统计',
-    metricLines,
-    '',
-    '### 可复用风格规则',
-    styleRuleLines,
-    '',
-    '### 去具体化剧情骨架',
-    analysis.plotOutline,
-    '',
-    '### 避免照搬',
-    avoidRuleLines
   ].join('\n')
 }
 
@@ -579,7 +553,6 @@ registerMainIpcHandlers({
   emitReferenceImportProgress,
   buildImportedReferenceKnowledgeDocuments,
   buildImportedReferenceStylePrompt,
-  buildImportedReferenceFindingsMarkdown,
   formatReferenceChunkSummaries
 })
 

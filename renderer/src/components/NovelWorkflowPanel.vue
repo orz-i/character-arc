@@ -231,7 +231,7 @@ function resolveReferenceImportPhaseLabel(phase?: CharacterArcReferenceImportPro
     case 'aggregating':
       return '汇总结论'
     case 'saving':
-      return '回填项目'
+      return '归档知识库'
     case 'done':
       return '已完成'
     default:
@@ -373,25 +373,15 @@ async function importReferenceNovelAnalysis(): Promise<void> {
 
     appStore.mergeKnowledgeDocuments(currentProject.value.id, result.result.knowledgeDocuments)
 
-    if (activeWorkflowVolume.value?.id) {
-      appStore.appendWorkflowDocumentEntry(
-        activeWorkflowVolume.value.id,
-        'findings',
-        `${result.result.referenceWork.title} 拆书结果`,
-        result.result.findingsMarkdown
-      )
-      syncDraftContentFromActiveDocument()
-    }
-
     setReferenceProgress({
       phase: 'done',
-      message: `《${result.result.referenceWork.title}》拆书完成，风格模板、参考档案和 findings 已更新。`,
+      message: `《${result.result.referenceWork.title}》拆书完成，相关拆书资产已归档到知识库。`,
       current: 1,
       total: 1,
       percent: 100,
       sourceTitle: result.result.referenceWork.title
     })
-    message.success(`已完成《${result.result.referenceWork.title}》拆书并回填风格规则`)
+    message.success(`已完成《${result.result.referenceWork.title}》拆书并归档到知识库`)
   } catch (error) {
     setReferenceProgress({
       phase: 'done',
@@ -947,7 +937,7 @@ function resolveStageStatusLabel(status: string): string {
             <div class="reference-analysis-command">
               <div class="reference-analysis-phase-wrap">
                 <span class="reference-analysis-phase">{{ referenceWorks.length > 0 ? '资产已归档' : '待归档参考作品' }}</span>
-                <small>{{ referenceWorks.length > 0 ? '继续拆书、深挖和扫榜，请进入拆书知识库。' : '先进入拆书知识库导入参考作品，再把结论回写到流程文件。' }}</small>
+                <small>{{ referenceWorks.length > 0 ? '继续拆书、深挖和扫榜，请进入拆书知识库。' : '先进入拆书知识库导入参考作品并完成归档。' }}</small>
               </div>
               <div class="reference-analysis-actions">
                 <n-button round strong secondary @click="openDeconstructionLibrary">
