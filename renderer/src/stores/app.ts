@@ -83,6 +83,7 @@ interface ProjectWorkspacePayload {
     projectSkills?: ProjectSummary['projectSkills']
     targetPlatform?: string
     referenceWorks?: ProjectSummary['referenceWorks']
+    selectedReferenceWorkIds?: ProjectSummary['selectedReferenceWorkIds']
   }
   worldviewEntries?: WorldviewEntry[]
   characters?: CharacterCard[]
@@ -993,7 +994,8 @@ export const useAppStore = defineStore('app', () => {
       novelWorkflowStages: payload.project?.novelWorkflowStages ?? createDefaultNovelWorkflowStages(),
       projectSkills: payload.project?.projectSkills ?? [],
       targetPlatform: payload.project?.targetPlatform?.trim() || '',
-      referenceWorks: payload.project?.referenceWorks ?? []
+      referenceWorks: payload.project?.referenceWorks ?? [],
+      selectedReferenceWorkIds: payload.project?.selectedReferenceWorkIds ?? []
     }
 
     projects.value = [normalizeProjectSummary(project), ...projects.value]
@@ -1348,7 +1350,8 @@ export const useAppStore = defineStore('app', () => {
       novelWorkflowStages: payload.project.novelWorkflowStages ?? createDefaultNovelWorkflowStages(),
       projectSkills: payload.project.projectSkills ?? [],
       targetPlatform: payload.project.targetPlatform?.trim() || '',
-      referenceWorks: payload.project.referenceWorks ?? []
+      referenceWorks: payload.project.referenceWorks ?? [],
+      selectedReferenceWorkIds: payload.project.selectedReferenceWorkIds ?? []
     }))
 
     // A new project gets its own isolated workspace instead of reusing the previous project's draft state.
@@ -1432,7 +1435,10 @@ export const useAppStore = defineStore('app', () => {
               payload.novelWorkflowStages !== undefined ? payload.novelWorkflowStages : project.novelWorkflowStages,
             projectSkills: payload.projectSkills !== undefined ? payload.projectSkills : project.projectSkills,
             targetPlatform: payload.targetPlatform !== undefined ? payload.targetPlatform.trim() : project.targetPlatform,
-            referenceWorks: payload.referenceWorks !== undefined ? payload.referenceWorks : project.referenceWorks
+            referenceWorks: payload.referenceWorks !== undefined ? payload.referenceWorks : project.referenceWorks,
+            selectedReferenceWorkIds: payload.selectedReferenceWorkIds !== undefined
+              ? payload.selectedReferenceWorkIds
+              : project.selectedReferenceWorkIds
           }
         : project
     )

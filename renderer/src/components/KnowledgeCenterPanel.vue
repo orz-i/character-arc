@@ -5,6 +5,7 @@ import {
   NAlert,
   NButton,
   NCard,
+  NCheckbox,
   NCollapse,
   NCollapseItem,
   NDescriptions,
@@ -51,6 +52,7 @@ const referenceAssets = computed(() =>
   buildReferenceAssetLibraries(appStore.currentProject?.referenceWorks ?? [], allState.value.documents)
 )
 const currentProject = computed(() => appStore.currentProject)
+const selectedReferenceWorkIds = computed(() => currentProject.value?.selectedReferenceWorkIds ?? [])
 const detailVisible = computed({
   get: () => Boolean(selectedDocument.value),
   set: (value: boolean) => {
@@ -606,6 +608,25 @@ const groupedAssets = computed(() => {
   })
 })
 
+function isReferenceSelected(asset: ReferenceAssetLibrary): boolean {
+  return selectedReferenceWorkIds.value.includes(asset.id)
+}
+
+function toggleReferenceSelection(asset: ReferenceAssetLibrary, checked: boolean): void {
+  const project = currentProject.value
+  if (!project?.id) {
+    return
+  }
+
+  const nextIds = checked
+    ? Array.from(new Set([...selectedReferenceWorkIds.value, asset.id]))
+    : selectedReferenceWorkIds.value.filter((id) => id !== asset.id)
+
+  appStore.updateProject(project.id, {
+    selectedReferenceWorkIds: nextIds
+  })
+}
+
 function resolveAssetDocuments(asset: ReferenceAssetLibrary): KnowledgeDocumentView[] {
   return allState.value.documents
     .filter((item) => asset.relatedDocumentIds.includes(item.document.id))
@@ -681,6 +702,14 @@ const progressCurrentStep = computed(() => {
       <n-card v-for="asset in groupedAssets" :key="asset.id" size="small">
         <template #header>
           <div class="asset-header">
+            <div class="asset-header-top">
+              <n-checkbox
+                :checked="isReferenceSelected(asset)"
+                @update:checked="(checked: boolean) => toggleReferenceSelection(asset, checked)"
+              >
+                用于流程生成
+              </n-checkbox>
+            </div>
             <strong>{{ asset.title }}</strong>
             <span>{{ asset.source }}<template v-if="asset.fileName"> &middot; {{ asset.fileName }}</template></span>
           </div>
@@ -890,6 +919,13 @@ const progressCurrentStep = computed(() => {
   min-width: 0;
   flex-direction: column;
   gap: 2px;
+}
+
+.asset-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .asset-header strong {

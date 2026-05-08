@@ -94,7 +94,10 @@ export function normalizeProjectSummary(project: ProjectSummary): ProjectSummary
     novelWorkflowStages: normalizeNovelWorkflowStages(project.novelWorkflowStages),
     projectSkills: normalizeProjectSkills(project.projectSkills),
     targetPlatform: project.targetPlatform?.trim() || '',
-    referenceWorks: normalizeReferenceWorks(project.referenceWorks)
+    referenceWorks: normalizeReferenceWorks(project.referenceWorks),
+    selectedReferenceWorkIds: Array.isArray(project.selectedReferenceWorkIds)
+      ? project.selectedReferenceWorkIds.map((id) => String(id).trim()).filter(Boolean)
+      : []
   }
 }
 

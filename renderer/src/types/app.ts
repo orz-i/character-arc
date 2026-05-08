@@ -305,6 +305,8 @@ export interface ProjectSummary {
   targetPlatform: string
   /** 项目参考作品 */
   referenceWorks: ReferenceWorkItem[]
+  /** 本次用于生成流程文件的参考作品 ID 列表，可为空 */
+  selectedReferenceWorkIds: string[]
 }
 
 /** 世界观设定条目 */
