@@ -327,13 +327,12 @@ export function buildRelationsCytoscapeElements(graph: FilteredRelationsGraph): 
         description: node.description,
         accent: node.accent,
         searchText: node.searchText,
+        avatarLabel: resolveAvatarLabel(node.label),
+        accentTextColor: resolveReadableTextColor(node.accent),
         degree: degreeMap.get(node.id) ?? 0,
         size: resolveNodeSize(degreeMap.get(node.id) ?? 0),
         glowSize: resolveNodeGlowSize(degreeMap.get(node.id) ?? 0),
-        borderColor: resolveBorderColor(node.accent),
-        textBackground: resolveNodeTextBackground(node.accent),
-        textBorderColor: resolveNodeTextBorderColor(node.accent),
-        avatarImage: buildNodeAvatarDataUrl(node.label, node.accent)
+        borderColor: resolveBorderColor(node.accent)
       },
       classes: [node.kind, graph.matchedNodeIds.has(node.id) ? 'matched' : ''].filter(Boolean).join(' ')
     })),
@@ -432,45 +431,12 @@ function resolveBorderColor(accent: string): string {
   return accent
 }
 
-function resolveNodeTextBackground(accent: string): string {
-  if (accent.startsWith('#')) {
-    return `${accent}14`
-  }
-  if (accent.startsWith('rgb')) {
-    return accent.replace('rgb(', 'rgba(').replace(')', ', 0.08)')
-  }
-  return 'rgba(255, 255, 255, 0.96)'
-}
-
-function resolveNodeTextBorderColor(accent: string): string {
-  if (accent.startsWith('#')) {
-    return `${accent}38`
-  }
-  if (accent.startsWith('rgb')) {
-    return accent.replace('rgb(', 'rgba(').replace(')', ', 0.22)')
-  }
-  return 'rgba(148, 163, 184, 0.42)'
-}
-
-function buildNodeAvatarDataUrl(label: string, accent: string): string {
-  const avatarLabel = resolveAvatarLabel(label)
-  const textColor = resolveReadableTextColor(accent)
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">',
-    '<rect width="100" height="100" rx="50" fill="transparent" />',
-    `<text x="50" y="54" text-anchor="middle" dominant-baseline="middle" fill="${textColor}" font-size="42" font-weight="700" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">${escapeXml(avatarLabel)}</text>`,
-    '</svg>'
-  ].join('')
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
-function resolveAvatarLabel(label: string): string {
+export function resolveAvatarLabel(label: string): string {
   const normalized = label.trim()
   return Array.from(normalized)[0] ?? '?'
 }
 
-function resolveReadableTextColor(accent: string): string {
+export function resolveReadableTextColor(accent: string): string {
   const rgb = parseColorToRgb(accent)
   if (!rgb) {
     return '#ffffff'
@@ -510,15 +476,6 @@ function parseColorToRgb(color: string): [number, number, number] | null {
   }
 
   return [red, green, blue]
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;')
 }
 
 function buildDegreeMap(graph: Pick<RelationsGraphData, 'nodes' | 'edges'>): Map<string, number> {

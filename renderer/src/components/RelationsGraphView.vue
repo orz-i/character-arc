@@ -11,6 +11,8 @@ import {
   buildRelationsGraphFocusState,
   buildRelationsGraphHotspots,
   filterRelationsGraph,
+  resolveAvatarLabel,
+  resolveReadableTextColor,
   type RelationsGraphData,
   type RelationsGraphEdge,
   type RelationsGraphFocusMode,
@@ -37,6 +39,7 @@ const selectedOrganizationId = ref<string | null>(null)
 const organizationSubgraphOnly = ref(true)
 const selectedNodeId = ref<string | null>(null)
 const focusMode = ref<RelationsGraphFocusMode>('overview')
+const nodeLabelPositions = ref<Array<{ id: string; label: string; left: number; top: number; active: boolean; accent: string }>>([])
 
 let cy: cytoscape.Core | null = null
 let lastTappedNodeId: string | null = null
@@ -253,6 +256,24 @@ function selectNode(nodeId: string): void {
   focusMode.value = selectedOrganizationId.value ? 'camp' : 'chain'
 }
 
+function resolveGraphNodeLabelStyle(node: RelationsGraphNode): Record<string, string> {
+  return {
+    '--node-accent': node.accent
+  }
+}
+
+function resolveGraphNodeLabelPositionStyle(label: {
+  left: number
+  top: number
+  accent: string
+}): Record<string, string> {
+  return {
+    left: `${label.left}px`,
+    top: `${label.top}px`,
+    '--node-accent': label.accent
+  }
+}
+
 function setFocusMode(mode: RelationsGraphFocusMode): void {
   focusMode.value = mode
 }
@@ -322,7 +343,12 @@ function renderGraph(): void {
     lastTappedAt = now
   })
 
+  cy.on('render pan zoom resize layoutstop dragfree position bounds', () => {
+    syncNodeLabels()
+  })
+
   applyFocusClasses(false)
+  syncNodeLabels()
 }
 
 function refreshGraphFocus(): void {
@@ -332,10 +358,12 @@ function refreshGraphFocus(): void {
 
   if (isOrganizationCampFocus.value) {
     cy.layout(resolveLayout()).run()
+    syncNodeLabels()
     return
   }
 
   applyFocusClasses(true)
+  syncNodeLabels()
 }
 
 function applyFocusClasses(centerSelection: boolean): void {
@@ -401,6 +429,8 @@ function applyFocusClasses(centerSelection: boolean): void {
   } else {
     cy.fit(cy.elements(), 60)
   }
+
+  syncNodeLabels()
 }
 
 function resolveLayout(): cytoscape.LayoutOptions {
@@ -468,42 +498,26 @@ function buildStylesheet(): StylesheetJson {
     {
       selector: 'node',
       style: {
-        label: 'data(label)',
+        label: '',
         color: '#0f172a',
-        'font-size': '15',
+        'font-size': '14',
         'font-weight': '700',
-        'text-wrap': 'wrap',
-        'text-max-width': '180',
-        'text-valign': 'bottom',
-        'text-halign': 'center',
-        'text-margin-y': '20',
-        'text-background-color': '#ffffff',
-        'text-background-opacity': '0.98',
-        'text-background-padding': '8',
-        'text-background-shape': 'round-rectangle',
-        'text-border-width': '1',
-        'text-border-color': 'rgba(15, 23, 42, 0.12)',
-        'text-border-opacity': '1',
-        'text-outline-width': '0',
-        'text-justification': 'center'
+        'text-outline-width': '0'
       }
     },
     {
       selector: 'node.character',
       style: {
+        label: 'data(avatarLabel)',
         shape: 'ellipse',
         width: 'data(size)',
         height: 'data(size)',
         'background-color': 'data(accent)',
-        'background-image': 'data(avatarImage)',
-        'background-image-opacity': '1',
-        'background-fit': 'cover',
-        'background-clip': 'none',
-        'background-width': '72%',
-        'background-height': '72%',
-        'background-position-x': '50%',
-        'background-position-y': '50%',
-        'background-image-containment': 'over',
+        color: 'data(accentTextColor)',
+        'font-size': '24',
+        'font-weight': '800',
+        'text-valign': 'center',
+        'text-halign': 'center',
         'border-width': '2.5',
         'border-color': 'data(borderColor)',
         'shadow-blur': '22',
@@ -521,6 +535,18 @@ function buildStylesheet(): StylesheetJson {
         'underlay-color': 'rgba(59,130,246,0.18)',
         'underlay-opacity': '1',
         'underlay-padding': '10'
+      }
+    },
+    {
+      selector: 'node.organization',
+      style: {
+        label: '',
+        shape: 'round-rectangle',
+        width: '74',
+        height: '74',
+        'background-color': 'data(accent)',
+        'border-width': '2.5',
+        'border-color': 'data(borderColor)'
       }
     },
     {
@@ -610,6 +636,34 @@ function buildStylesheet(): StylesheetJson {
   ]
 
   return stylesheet as unknown as StylesheetJson
+}
+
+function syncNodeLabels(): void {
+  if (!cy) {
+    nodeLabelPositions.value = []
+    return
+  }
+
+  nodeLabelPositions.value = displayGraph.value.nodes
+    .map((graphNode) => {
+      const cyNode = cy?.getElementById(graphNode.id)
+      if (!cyNode || cyNode.empty()) {
+        return null
+      }
+
+      const renderedPosition = cyNode.renderedPosition()
+      const nodeWidth = Number(cyNode.width()) || Number(cyNode.data('size')) || 58
+
+      return {
+        id: graphNode.id,
+        label: graphNode.label,
+        left: renderedPosition.x,
+        top: renderedPosition.y + nodeWidth / 2 + 14,
+        active: selectedNode.value?.id === graphNode.id,
+        accent: graphNode.accent
+      }
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
 }
 </script>
 
@@ -723,7 +777,22 @@ function buildStylesheet(): StylesheetJson {
 
     <div v-if="displayGraph.nodes.length > 0" class="graph-body">
       <div class="graph-stage">
-        <div ref="containerRef" class="graph-canvas"></div>
+        <div class="graph-canvas-shell">
+          <div ref="containerRef" class="graph-canvas"></div>
+          <div class="graph-node-label-layer" aria-hidden="true">
+            <button
+              v-for="label in nodeLabelPositions"
+              :key="`label-${label.id}`"
+              class="graph-node-label"
+              :class="{ active: label.active }"
+              :style="resolveGraphNodeLabelPositionStyle(label)"
+              type="button"
+              @click="selectNode(label.id)"
+            >
+              {{ label.label }}
+            </button>
+          </div>
+        </div>
 
         <div class="graph-legend">
           <div class="legend-item">
@@ -749,8 +818,11 @@ function buildStylesheet(): StylesheetJson {
           </div>
 
           <div class="profile-hero">
-            <div class="profile-avatar" :style="{ background: selectedNode.accent }">
-              <span>{{ selectedNode.label.slice(0, 1) }}</span>
+            <div
+              class="profile-avatar"
+              :style="{ background: selectedNode.accent, color: resolveReadableTextColor(selectedNode.accent) }"
+            >
+              <span>{{ resolveAvatarLabel(selectedNode.label) }}</span>
             </div>
             <div class="profile-copy">
               <h4>{{ selectedNode.label }}</h4>
@@ -1231,12 +1303,57 @@ function buildStylesheet(): StylesheetJson {
   background: var(--arc-bg-surface);
 }
 
+.graph-canvas-shell {
+  position: relative;
+}
+
 .graph-canvas {
   width: 100%;
   height: 660px;
   border-radius: 10px;
   background: var(--arc-bg-body);
   box-shadow: inset 0 0 0 1px var(--arc-border);
+}
+
+.graph-node-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.graph-node-label {
+  position: absolute;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 10px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    color 0.16s ease;
+}
+
+.graph-node-label:hover {
+  transform: translateX(-50%) translateY(-1px);
+  border-color: color-mix(in srgb, var(--node-accent) 26%, rgba(15, 23, 42, 0.08));
+  color: var(--node-accent);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+
+.graph-node-label.active {
+  border-color: color-mix(in srgb, var(--node-accent) 28%, rgba(15, 23, 42, 0.08));
+  color: var(--node-accent);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
 }
 
 .graph-legend {
@@ -1284,7 +1401,7 @@ function buildStylesheet(): StylesheetJson {
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: var(--arc-bg-surface);
+  background: color-mix(in srgb, var(--arc-bg-surface) 84%, white);
 }
 
 .detail-card-top {
@@ -1306,8 +1423,8 @@ function buildStylesheet(): StylesheetJson {
 .detail-action {
   border: 1px solid var(--arc-border);
   border-radius: 999px;
-  background: var(--arc-bg-surface);
-  color: var(--arc-text-secondary);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--arc-text-primary);
   font-size: 12px;
   font-weight: 700;
   padding: 8px 12px;
@@ -1366,13 +1483,13 @@ function buildStylesheet(): StylesheetJson {
 
 .detail-subtitle {
   margin: -10px 0 0;
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 74%, var(--arc-text-secondary));
   font-size: 13px;
 }
 
 .detail-description {
   margin: 0;
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 78%, var(--arc-text-secondary));
   font-size: 13px;
   line-height: 1.75;
 }
@@ -1428,11 +1545,12 @@ function buildStylesheet(): StylesheetJson {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: var(--arc-bg-weak);
-  color: var(--arc-text-secondary);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--arc-text-primary);
   font-size: 11px;
   font-weight: 700;
   padding: 6px 10px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
 .dossier-grid {
@@ -1442,14 +1560,14 @@ function buildStylesheet(): StylesheetJson {
 }
 
 .dossier-card {
-  border: 1px solid var(--arc-border);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 8px;
-  background: var(--arc-bg-surface);
+  background: rgba(255, 255, 255, 0.96);
   padding: 14px;
 }
 
 .dossier-card.primary {
-  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-surface));
+  background: color-mix(in srgb, var(--arc-primary) 7%, white);
 }
 
 .dossier-label {
@@ -1470,7 +1588,7 @@ function buildStylesheet(): StylesheetJson {
 }
 
 .dossier-card small {
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 72%, var(--arc-text-secondary));
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1484,7 +1602,7 @@ function buildStylesheet(): StylesheetJson {
 .camp-summary-card {
   border: 1px solid color-mix(in srgb, var(--arc-primary) 28%, var(--arc-border));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--arc-primary) 6%, var(--arc-bg-surface));
+  background: color-mix(in srgb, var(--arc-primary) 7%, white);
   padding: 14px;
 }
 
@@ -1496,14 +1614,14 @@ function buildStylesheet(): StylesheetJson {
 }
 
 .camp-summary-card span {
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 74%, var(--arc-text-secondary));
   font-size: 12px;
 }
 
 .signature-card {
   border: 1px solid color-mix(in srgb, var(--arc-primary) 28%, var(--arc-border));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--arc-primary) 4%, var(--arc-bg-surface));
+  background: color-mix(in srgb, var(--arc-primary) 5%, white);
   padding: 14px;
 }
 
@@ -1536,7 +1654,7 @@ function buildStylesheet(): StylesheetJson {
 
 .signature-card p {
   margin: 10px 0 0;
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 76%, var(--arc-text-secondary));
   font-size: 12px;
   line-height: 1.75;
 }
@@ -1545,11 +1663,12 @@ function buildStylesheet(): StylesheetJson {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: var(--arc-bg-weak);
-  color: var(--arc-text-secondary);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--arc-text-primary);
   font-size: 12px;
   font-weight: 700;
   padding: 8px 12px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
 .detail-connection-block {
@@ -1581,9 +1700,9 @@ function buildStylesheet(): StylesheetJson {
 }
 
 .connection-card {
-  border: 1px solid var(--arc-border);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 8px;
-  background: var(--arc-bg-surface);
+  background: rgba(255, 255, 255, 0.98);
   padding: 12px 13px;
   transition:
     transform 0.16s ease,
@@ -1623,7 +1742,7 @@ function buildStylesheet(): StylesheetJson {
 
 .connection-card p {
   margin: 10px 0 0;
-  color: var(--arc-text-secondary);
+  color: color-mix(in srgb, var(--arc-text-primary) 76%, var(--arc-text-secondary));
   font-size: 12px;
   line-height: 1.7;
 }
