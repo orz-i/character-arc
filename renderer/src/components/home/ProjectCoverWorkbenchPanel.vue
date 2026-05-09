@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { BookOpen, ImagePlus, LoaderCircle, Sparkles, Upload, X } from 'lucide-vue-next'
+import { Copy, History, ImagePlus, LoaderCircle, Sparkles, Upload, Wand2, X } from 'lucide-vue-next'
 import { NAlert, NButton, NForm, NFormItem, NInput, NTag, useMessage } from 'naive-ui'
 import {
   buildCoverPromptWorkbenchResult,
@@ -10,7 +10,7 @@ import {
 import { resolveCoverStyle } from '@/features/cover/display'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
-import type { ProjectSummary } from '@/types/app'
+import type { CoverGenerationHistoryItem, ProjectSummary } from '@/types/app'
 
 const props = defineProps<{
   project: ProjectSummary | null
@@ -34,18 +34,6 @@ const generatedPromptFingerprint = ref('')
 const isGeneratingImage = ref(false)
 const revisedPrompt = ref('')
 
-const referenceTitles = computed(() => props.project?.referenceWorks.map((work) => work.title).filter(Boolean) ?? [])
-const workbenchReferenceLabel = computed(() => {
-  if (!referenceTitles.value.length) {
-    return '暂无拆书资产，本次将按通用商业网文封面逻辑生成。'
-  }
-
-  const previews = referenceTitles.value.slice(0, 3).join('、')
-  const suffix = referenceTitles.value.length > 3 ? ` 等 ${referenceTitles.value.length} 部作品` : ''
-  return `本次会参考：${previews}${suffix}`
-})
-
-const coverPreviewStyle = computed(() => resolveCoverStyle(props.project?.cover))
 const resolvedImageConfig = computed(() => ({
   model: appStore.appSettings.imageModel.trim() || appStore.appSettings.model.trim(),
   baseUrl: appStore.appSettings.imageBaseUrl.trim() || appStore.appSettings.baseUrl.trim(),
@@ -59,6 +47,8 @@ const imageConfigSummary = computed(() => {
 
   return `当前将使用 ${config.model} · ${config.baseUrl}`
 })
+
+const coverHistory = computed(() => props.project?.coverHistory ?? [])
 
 const isPromptStale = computed(() => {
   const input = createWorkbenchInput()
@@ -104,10 +94,26 @@ function buildWorkbenchFingerprint(input: CoverPromptWorkbenchInput): string {
     genre: input.project.genre,
     targetPlatform: input.project.targetPlatform,
     novelLength: input.project.novelLength,
-    referenceTitles: input.project.referenceWorks.map((work) => work.title),
+    referenceTitles: [],
     authorName: input.authorName.trim(),
     extraNotes: input.extraNotes.trim()
   })
+}
+
+function buildHistoryItem(input: CoverPromptWorkbenchInput, result: CoverPromptWorkbenchResult, cover: string): CoverGenerationHistoryItem {
+  return {
+    id: `cover-history-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    cover,
+    promptTitle: result.title,
+    prompt: result.prompt,
+    summary: result.summary,
+    keywords: result.keywords,
+    genre: input.project.genre,
+    targetPlatform: input.project.targetPlatform,
+    authorName: input.authorName.trim(),
+    extraNotes: input.extraNotes.trim()
+  }
 }
 
 function ensureProjectReady(): CoverPromptWorkbenchInput | null {
@@ -116,8 +122,8 @@ function ensureProjectReady(): CoverPromptWorkbenchInput | null {
     return null
   }
 
-  if (!input.project.title.trim() || !input.project.genre.trim()) {
-    message.warning('请先在编辑项目信息里填写标题和题材分类，再生成封面。')
+  if (!input.project.title.trim()) {
+    message.warning('请先在编辑项目信息里填写作品标题，再生成封面。')
     return null
   }
 
@@ -148,6 +154,37 @@ function saveCoverPrompt(): void {
   }
 
   emit('save-cover-prompt', input)
+}
+
+function reuseHistoryItem(item: CoverGenerationHistoryItem): void {
+  workbench.authorName = item.authorName
+  workbench.extraNotes = item.extraNotes
+  generatedPrompt.value = {
+    title: item.promptTitle,
+    summary: item.summary,
+    prompt: item.prompt,
+    keywords: item.keywords
+  }
+  generatedPromptFingerprint.value = JSON.stringify({
+    projectTitle: props.project?.title ?? '',
+    genre: props.project?.genre ?? '',
+    targetPlatform: props.project?.targetPlatform ?? '',
+    novelLength: props.project?.novelLength ?? 'long',
+    referenceTitles: [],
+    authorName: item.authorName.trim(),
+    extraNotes: item.extraNotes.trim()
+  })
+  revisedPrompt.value = ''
+  message.success('已复用这条封面历史的提示词与参数。')
+}
+
+async function copyPrompt(prompt: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(prompt)
+    message.success('提示词已复制。')
+  } catch {
+    message.warning('复制失败，请手动复制。')
+  }
 }
 
 async function pickLocalCover(): Promise<void> {
@@ -185,6 +222,11 @@ async function generateCoverImage(): Promise<void> {
     return
   }
 
+  const input = ensureProjectReady()
+  if (!input) {
+    return
+  }
+
   const promptResult = (!generatedPrompt.value || isPromptStale.value)
     ? generateCoverPrompt()
     : generatedPrompt.value
@@ -207,6 +249,13 @@ async function generateCoverImage(): Promise<void> {
       projectId: props.project.id,
       cover: result.result.dataUrl
     })
+
+    appStore.updateProject(props.project.id, {
+      coverHistory: [
+        buildHistoryItem(input, promptResult, result.result.dataUrl),
+        ...coverHistory.value
+      ].slice(0, 24)
+    })
     message.success('AI 封面已生成。')
   } catch (error) {
     message.error(error instanceof Error ? error.message : '图片生成失败')
@@ -218,20 +267,21 @@ async function generateCoverImage(): Promise<void> {
 
 <template>
   <div class="cover-workbench-panel">
-    <div class="cover-workbench-body">
-      <section class="prompt-section">
-        <div class="section-head">
-          <div>
-            <strong>封面提示词工作台</strong>
-            <p>把项目题材、平台和拆书资产翻译成可直接给画图模型或设计师使用的封面提示词。</p>
+    <section class="workbench-card">
+      <div class="workbench-head">
+        <span class="cover-kicker">Image Studio</span>
+        <strong>封面生图工作台</strong>
+        <p>围绕封面出图本身调整方向、限制条件和生成策略，得到可直接送进生图模型的提示词。</p>
+      </div>
+
+      <div class="workbench-grid">
+        <div class="editor-card">
+          <div class="card-head">
+            <span class="cover-kicker">Inputs</span>
+            <strong>输入与操作</strong>
+            <p>补充署名、审美方向和禁忌元素，然后生成提示词或直接出图。</p>
           </div>
-        </div>
 
-        <n-alert type="info" :show-icon="false" class="reference-alert">
-          {{ workbenchReferenceLabel }}
-        </n-alert>
-
-        <div class="editor-block">
           <n-form label-placement="top">
             <div class="form-grid">
               <n-form-item label="作者署名">
@@ -241,17 +291,17 @@ async function generateCoverImage(): Promise<void> {
                 <n-input
                   v-model:value="workbench.extraNotes"
                   type="textarea"
-                  :autosize="{ minRows: 5, maxRows: 8 }"
+                  :autosize="{ minRows: 10, maxRows: 12 }"
                   placeholder="例如：偏电影海报感、避免 Q 版、不要过曝、强调主角神情"
                 />
               </n-form-item>
             </div>
           </n-form>
 
-          <div class="toolbar">
+          <div class="action-row">
             <n-button type="primary" round strong @click="generateCoverPrompt">
               <template #icon>
-                <ImagePlus :size="16" />
+                <Wand2 :size="16" />
               </template>
               生成提示词
             </n-button>
@@ -259,11 +309,28 @@ async function generateCoverImage(): Promise<void> {
               保存到知识库
             </n-button>
           </div>
+
+          <div class="status-card">
+            <div class="card-head">
+              <span class="cover-kicker">Config</span>
+              <strong>图片接口状态</strong>
+            </div>
+            <n-alert :type="resolvedImageConfig.model ? 'info' : 'warning'" :show-icon="false">
+              {{ imageConfigSummary }}
+            </n-alert>
+            <div class="hint-block">
+              图片生成默认读取主页设置中的图片 API 配置；如果留空，会自动回退到文本模型配置。
+            </div>
+            <n-alert v-if="revisedPrompt" type="success" :show-icon="false">
+              模型重写提示词：{{ revisedPrompt }}
+            </n-alert>
+          </div>
         </div>
 
-        <div class="result-block">
+        <div class="result-card">
           <div class="result-head">
             <div>
+              <span class="cover-kicker">Output</span>
               <strong>{{ generatedPrompt?.title || '提示词预览区' }}</strong>
               <p>{{ generatedPrompt?.summary || '生成后会在这里展示完整提示词、状态和关键词。' }}</p>
             </div>
@@ -277,7 +344,7 @@ async function generateCoverImage(): Promise<void> {
               :value="generatedPrompt.prompt"
               type="textarea"
               readonly
-              :autosize="{ minRows: 14, maxRows: 20 }"
+              :autosize="{ minRows: 26, maxRows: 30 }"
             />
 
             <div class="keyword-list">
@@ -290,149 +357,276 @@ async function generateCoverImage(): Promise<void> {
               <Sparkles :size="20" />
             </div>
             <strong>先生成一版封面提示词</strong>
-            <p>建议先补充画风方向，再点击上方的“生成提示词”，这样后续 AI 出图会更稳。</p>
+            <p>建议先补充画风方向，再点击左侧的“生成提示词”，这样后续 AI 出图会更稳。</p>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
+
+    <section class="history-card">
+      <div class="history-head">
+        <div>
+          <span class="cover-kicker">History</span>
+          <strong>历史生成记录</strong>
+          <p>瀑布流展示最近生成过的封面记录，可一键复用当时的提示词和输入参数。</p>
+        </div>
+        <n-tag round :bordered="false" type="default">
+          {{ coverHistory.length }} 条
+        </n-tag>
+      </div>
+
+      <div v-if="coverHistory.length" class="history-masonry">
+        <article v-for="item in coverHistory" :key="item.id" class="history-card-item">
+          <div class="history-cover" :style="resolveCoverStyle(item.cover)"></div>
+
+          <div class="history-copy">
+            <strong>{{ item.promptTitle }}</strong>
+            <p>{{ item.summary }}</p>
+          </div>
+
+          <div class="history-meta">
+            <span>{{ item.genre || '封面版本' }}</span>
+            <span>{{ item.authorName || '未署名' }}</span>
+          </div>
+
+          <div class="history-keywords">
+            <span v-for="keyword in item.keywords.slice(0, 4)" :key="keyword">{{ keyword }}</span>
+          </div>
+
+          <div class="history-actions">
+            <n-button size="small" round secondary @click="copyPrompt(item.prompt)">
+              <template #icon>
+                <Copy :size="14" />
+              </template>
+              复制提示词
+            </n-button>
+            <n-button size="small" round type="primary" @click="reuseHistoryItem(item)">
+              <template #icon>
+                <History :size="14" />
+              </template>
+              复用这条
+            </n-button>
+          </div>
+        </article>
+      </div>
+
+      <div v-else class="history-empty">
+        <div class="empty-badge">
+          <History :size="20" />
+        </div>
+        <strong>还没有历史记录</strong>
+        <p>当你第一次 AI 生成封面后，这里会自动保留历史结果，方便回看和复用。</p>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .cover-workbench-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   width: 100%;
   min-width: 0;
 }
 
-.cover-workbench-body {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+.cover-workbench-panel :deep(.n-alert) {
+  border-radius: 14px;
 }
 
-.cover-section,
-.prompt-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  border: 1px solid var(--arc-border);
-  border-radius: 16px;
+.cover-workbench-panel :deep(.n-input) {
+  border-radius: 14px;
+}
+
+.workbench-card,
+.history-card,
+.editor-card,
+.result-card,
+.status-card {
+  border: 1px solid color-mix(in srgb, var(--arc-primary) 10%, var(--arc-border));
+  border-radius: 20px;
   background: var(--arc-bg-surface);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.workbench-card,
+.history-card {
   padding: 20px;
 }
 
-.section-head,
+.workbench-head,
+.history-head,
+.card-head,
 .result-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
 }
 
-.section-head strong,
+.cover-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  color: var(--arc-text-hint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.workbench-head strong,
+.history-head strong,
+.card-head strong,
 .result-head strong,
-.panel-block strong,
-.empty-state strong {
+.history-copy strong,
+.empty-state strong,
+.history-empty strong {
   display: block;
+  margin-top: 8px;
   color: var(--arc-text-primary);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
 }
 
-.section-head p,
+.workbench-head strong,
+.history-head strong {
+  font-size: 24px;
+}
+
+.workbench-head p,
+.history-head p,
+.card-head p,
 .result-head p,
-.panel-block p,
-.note-block,
-.empty-state p {
-  margin: 6px 0 0;
+.hint-block,
+.empty-state p,
+.history-copy p,
+.history-empty p {
+  margin: 8px 0 0;
   color: var(--arc-text-secondary);
   line-height: 1.7;
 }
 
-.cover-stage-row {
+.workbench-grid {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(340px, 0.92fr) minmax(0, 1.08fr);
+  gap: 18px;
   align-items: start;
+  margin-top: 18px;
 }
 
-.cover-preview {
+.editor-card,
+.result-card {
   display: flex;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 16px;
-  color: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
-}
-
-.cover-side-panel {
-  display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 14px;
-}
-
-.panel-block,
-.editor-block,
-.result-block {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  border: 1px solid var(--arc-border);
-  border-radius: 14px;
-  background: var(--arc-bg-weak);
-  padding: 16px;
-}
-
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.action-grid > :last-child {
-  grid-column: 1 / -1;
+  gap: 16px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--arc-bg-surface) 82%, var(--arc-bg-weak));
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
-.toolbar {
+.action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-.reference-alert {
-  border-radius: 12px;
+.action-row--secondary {
+  padding-top: 4px;
 }
 
-.keyword-list {
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.hint-block {
+  border-radius: 14px;
+  background: var(--arc-bg-weak);
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.keyword-list,
+.history-meta,
+.history-keywords,
+.history-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.keyword-list span {
+.keyword-list span,
+.history-keywords span {
   border-radius: 999px;
   background: color-mix(in srgb, var(--arc-primary) 10%, transparent);
   color: var(--arc-primary);
-  padding: 4px 10px;
+  padding: 5px 11px;
   font-size: 12px;
 }
 
-.empty-state {
+.history-head {
+  gap: 0;
+}
+
+.history-masonry {
+  margin-top: 18px;
+  column-count: 3;
+  column-gap: 16px;
+}
+
+.history-card-item {
+  display: inline-flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+  break-inside: avoid;
+  margin-bottom: 16px;
+  border: 1px solid var(--arc-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--arc-bg-surface) 82%, var(--arc-bg-weak));
+  padding: 14px;
+}
+
+.history-cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 14px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.history-meta span {
+  border-radius: 999px;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-hint);
+  font-size: 11px;
+  padding: 4px 9px;
+}
+
+.empty-state,
+.history-empty {
   display: flex;
+  min-height: 280px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  min-height: 220px;
+}
+
+.history-empty {
+  margin-top: 18px;
+  border: 1px dashed var(--arc-border);
+  border-radius: 18px;
+  padding: 20px;
 }
 
 .empty-badge {
@@ -455,39 +649,32 @@ async function generateCoverImage(): Promise<void> {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 960px) {
-  .cover-stage-row,
-  .form-grid {
+@media (max-width: 1100px) {
+  .workbench-grid {
     grid-template-columns: 1fr;
   }
 
-  .cover-preview {
-    width: min(260px, 100%);
-    margin: 0 auto;
+  .history-masonry {
+    column-count: 2;
   }
 }
 
 @media (max-width: 720px) {
-  .cover-section,
-  .prompt-section,
-  .panel-block,
-  .editor-block,
-  .result-block {
+  .workbench-card,
+  .history-card,
+  .editor-card,
+  .result-card,
+  .status-card {
     padding: 14px;
-    border-radius: 12px;
+    border-radius: 16px;
   }
 
-  .section-head,
-  .result-head {
+  .action-row {
     flex-direction: column;
   }
 
-  .action-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .action-grid > :last-child {
-    grid-column: auto;
+  .history-masonry {
+    column-count: 1;
   }
 }
 </style>

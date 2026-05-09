@@ -13,6 +13,7 @@ import type {
   ChatMessage,
   CharacterRelationship,
   CharacterCard,
+  CoverGenerationHistoryItem,
   InspirationEntry,
   KnowledgeDocument,
   NovelLength,
@@ -97,8 +98,33 @@ export function normalizeProjectSummary(project: ProjectSummary): ProjectSummary
     referenceWorks: normalizeReferenceWorks(project.referenceWorks),
     selectedReferenceWorkIds: Array.isArray(project.selectedReferenceWorkIds)
       ? project.selectedReferenceWorkIds.map((id) => String(id).trim()).filter(Boolean)
-      : []
+      : [],
+    coverHistory: normalizeCoverHistory(project.coverHistory)
   }
+}
+
+export function normalizeCoverHistory(items?: CoverGenerationHistoryItem[] | null): CoverGenerationHistoryItem[] {
+  return Array.isArray(items)
+    ? items
+        .map((item) => ({
+          ...item,
+          id: item.id?.trim() || `cover-history-${Date.now()}`,
+          createdAt: item.createdAt || new Date().toISOString(),
+          cover: item.cover?.trim() || '',
+          promptTitle: item.promptTitle?.trim() || '未命名提示词',
+          prompt: item.prompt?.trim() || '',
+          summary: item.summary?.trim() || '',
+          keywords: Array.isArray(item.keywords)
+            ? item.keywords.map((keyword) => String(keyword).trim()).filter(Boolean).slice(0, 20)
+            : [],
+          genre: item.genre?.trim() || '',
+          targetPlatform: item.targetPlatform?.trim() || '',
+          authorName: item.authorName?.trim() || '',
+          extraNotes: item.extraNotes?.trim() || ''
+        }))
+        .filter((item) => item.cover && item.prompt)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    : []
 }
 
 export function normalizeProjectSkills(skills?: ProjectSkillItem[] | null): ProjectSkillItem[] {

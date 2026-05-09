@@ -71,6 +71,19 @@ export type WorkspacePayload = {
     lastEdited: string
     cover: string
     targetPlatform: string
+    coverHistory: Array<{
+      id: string
+      createdAt: string
+      cover: string
+      promptTitle: string
+      prompt: string
+      summary: string
+      keywords: string[]
+      genre: string
+      targetPlatform: string
+      authorName: string
+      extraNotes: string
+    }>
     referenceWorks: Array<{
       id: string
       title: string
@@ -412,6 +425,7 @@ export function normalizeProjectRecord(
     lastEdited: project.lastEdited || '刚刚更新',
     cover: project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
     targetPlatform: project.targetPlatform || '',
+    coverHistory: Array.isArray(project.coverHistory) ? project.coverHistory : [],
     referenceWorks: Array.isArray(project.referenceWorks) ? project.referenceWorks : [],
     writingStylePresetId: project.writingStylePresetId || 'cinematic-cool',
     writingStylePrompt: project.writingStylePrompt || '',

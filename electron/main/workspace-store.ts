@@ -54,6 +54,7 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       last_edited TEXT NOT NULL,
       cover TEXT NOT NULL,
       target_platform TEXT NOT NULL DEFAULT '',
+      cover_history_json TEXT NOT NULL DEFAULT '[]',
       reference_works_json TEXT NOT NULL DEFAULT '[]',
       writing_style_preset_id TEXT NOT NULL DEFAULT 'cinematic-cool',
       writing_style_prompt TEXT NOT NULL DEFAULT '',
@@ -476,6 +477,10 @@ function ensureProjectColumns(db: DatabaseSync): void {
     db.exec(`ALTER TABLE projects ADD COLUMN target_platform TEXT NOT NULL DEFAULT '';`)
   }
 
+  if (!columnNames.has('cover_history_json')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN cover_history_json TEXT NOT NULL DEFAULT '[]';`)
+  }
+
   if (!columnNames.has('reference_works_json')) {
     db.exec(`ALTER TABLE projects ADD COLUMN reference_works_json TEXT NOT NULL DEFAULT '[]';`)
   }
@@ -501,6 +506,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   const projectRows = db.prepare(`
     SELECT id, title, genre, novel_length AS novelLength, word_count AS wordCount, last_edited AS lastEdited, cover,
       target_platform AS targetPlatform,
+      cover_history_json AS coverHistoryJson,
       reference_works_json AS referenceWorksJson,
       writing_style_preset_id AS writingStylePresetId,
       writing_style_prompt AS writingStylePrompt,
@@ -510,7 +516,8 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     FROM projects
     ORDER BY rowid ASC
   `).all() as Array<
-    Omit<WorkspacePayload['projects'][number], 'chapterAssistantTemplates' | 'novelWorkflowStages' | 'projectSkills' | 'referenceWorks'> & {
+    Omit<WorkspacePayload['projects'][number], 'chapterAssistantTemplates' | 'novelWorkflowStages' | 'projectSkills' | 'referenceWorks' | 'coverHistory'> & {
+      coverHistoryJson?: string
       referenceWorksJson?: string
       chapterAssistantTemplatesJson?: string
       novelWorkflowStagesJson?: string
@@ -521,6 +528,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   const projects = projectRows.map((project) =>
     normalizeProjectRecord({
       ...project,
+      coverHistory: parseJson(project.coverHistoryJson, []),
       novelWorkflowStages: parseJson(project.novelWorkflowStagesJson, []),
       referenceWorks: parseJson(project.referenceWorksJson, []),
       projectSkills: parseJson(project.projectSkillsJson, []),
@@ -832,8 +840,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     `)
 
     const insertProject = db.prepare(`
-      INSERT INTO projects (id, title, genre, novel_length, word_count, last_edited, cover, target_platform, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, title, genre, novel_length, word_count, last_edited, cover, target_platform, cover_history_json, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const project of payload.projects) {
       insertProject.run(
@@ -845,6 +853,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
         project.lastEdited,
         project.cover,
         project.targetPlatform,
+        JSON.stringify(project.coverHistory ?? []),
         JSON.stringify(project.referenceWorks ?? []),
         project.writingStylePresetId,
         project.writingStylePrompt,

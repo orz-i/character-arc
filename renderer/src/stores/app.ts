@@ -84,6 +84,7 @@ interface ProjectWorkspacePayload {
     targetPlatform?: string
     referenceWorks?: ProjectSummary['referenceWorks']
     selectedReferenceWorkIds?: ProjectSummary['selectedReferenceWorkIds']
+    coverHistory?: ProjectSummary['coverHistory']
   }
   worldviewEntries?: WorldviewEntry[]
   characters?: CharacterCard[]
@@ -995,7 +996,8 @@ export const useAppStore = defineStore('app', () => {
       projectSkills: payload.project?.projectSkills ?? [],
       targetPlatform: payload.project?.targetPlatform?.trim() || '',
       referenceWorks: payload.project?.referenceWorks ?? [],
-      selectedReferenceWorkIds: payload.project?.selectedReferenceWorkIds ?? []
+      selectedReferenceWorkIds: payload.project?.selectedReferenceWorkIds ?? [],
+      coverHistory: payload.project?.coverHistory ?? []
     }
 
     projects.value = [normalizeProjectSummary(project), ...projects.value]
@@ -1367,7 +1369,8 @@ export const useAppStore = defineStore('app', () => {
       projectSkills: payload.project.projectSkills ?? [],
       targetPlatform: payload.project.targetPlatform?.trim() || '',
       referenceWorks: payload.project.referenceWorks ?? [],
-      selectedReferenceWorkIds: payload.project.selectedReferenceWorkIds ?? []
+      selectedReferenceWorkIds: payload.project.selectedReferenceWorkIds ?? [],
+      coverHistory: payload.project.coverHistory ?? []
     }))
 
     // A new project gets its own isolated workspace instead of reusing the previous project's draft state.
@@ -1454,7 +1457,8 @@ export const useAppStore = defineStore('app', () => {
             referenceWorks: payload.referenceWorks !== undefined ? payload.referenceWorks : project.referenceWorks,
             selectedReferenceWorkIds: payload.selectedReferenceWorkIds !== undefined
               ? payload.selectedReferenceWorkIds
-              : project.selectedReferenceWorkIds
+              : project.selectedReferenceWorkIds,
+            coverHistory: payload.coverHistory !== undefined ? payload.coverHistory : project.coverHistory
           }
         : project
     )

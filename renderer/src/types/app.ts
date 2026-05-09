@@ -240,6 +240,31 @@ export interface ReferenceWorkItem {
   analysis?: ReferenceStyleAnalysis
 }
 
+export interface CoverGenerationHistoryItem {
+  /** 历史记录唯一标识 */
+  id: string
+  /** 生成时间 */
+  createdAt: string
+  /** 封面图 URL 或 data URL */
+  cover: string
+  /** 对应提示词标题 */
+  promptTitle: string
+  /** 完整提示词 */
+  prompt: string
+  /** 简短摘要 */
+  summary: string
+  /** 关键词 */
+  keywords: string[]
+  /** 本次项目题材快照 */
+  genre: string
+  /** 本次目标平台快照 */
+  targetPlatform: string
+  /** 作者署名 */
+  authorName: string
+  /** 额外备注 */
+  extraNotes: string
+}
+
 /** 章节 AI 模板分组 */
 export type ChapterAssistantTemplateGroup = 'write' | 'rewrite' | 'planning' | 'reference'
 
@@ -307,6 +332,8 @@ export interface ProjectSummary {
   referenceWorks: ReferenceWorkItem[]
   /** 本次用于生成流程文件的参考作品 ID 列表，可为空 */
   selectedReferenceWorkIds: string[]
+  /** 封面生成历史记录 */
+  coverHistory: CoverGenerationHistoryItem[]
 }
 
 /** 世界观设定条目 */
