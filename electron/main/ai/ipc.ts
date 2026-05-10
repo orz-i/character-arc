@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { AiTaskPayload, AppSettings } from './shared-types'
 import { runAiTask, streamAiTask, testAiConnection, fetchModels, fetchImageModels, generateImage } from './runtime'
@@ -10,20 +10,41 @@ type AiIpcDeps = {
 }
 
 let deps: AiIpcDeps | null = null
+
+/** 流式任务的 AbortController（按 streamId 索引） */
 const activeAiStreams = new Map<string, AbortController>()
+
+/**
+ * 非流式任务的 AbortController（按 clientTaskId 索引）。
+ * 前端 `runTrackedAiTask` 发起请求时带上 `clientTaskId`，
+ * 超时或用户手动取消时通过 `characterarc:ai-cancel` 通道 abort。
+ */
+const activeAiTasks = new Map<string, AbortController>()
 
 export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   deps = injectedDeps
 
+  // ── 非流式 AI 生成（支持 abort） ──
   ipcMain.handle('characterarc:ai-generate', async (_event, payload: AiTaskPayload) => {
+    const clientTaskId = payload.clientTaskId || ''
+    const controller = new AbortController()
+    if (clientTaskId) {
+      activeAiTasks.set(clientTaskId, controller)
+    }
+
     const knowledgeContext = retrieveKnowledgeContext(payload, deps!.getLatestWorkspaceSnapshot() as Parameters<typeof retrieveKnowledgeContext>[1])
     try {
+      // TODO: 当 transport 层支持 signal 后，把 controller.signal 传进去
+      // 目前先在 IPC 层做"请求发出前检查 abort"的快速失败
+      if (controller.signal.aborted) {
+        throw new Error('任务已被取消。')
+      }
+
       const response = await runAiTask(payload, knowledgeContext)
+
       if (response.meta.projectId) {
         deps!.emitAiRunEvent({ projectId: response.meta.projectId, meta: { id: randomUUID(), ...response.meta } })
       }
-      // 只把内层 AiTaskResult 返给 renderer；meta 通过 ai-run-event 单独广播。
-      // renderer 全部约定为 `(result.result as <Type>).field`，不能再多包一层 wrapper。
       return { success: true, result: response.result }
     } catch (error) {
       const aiRunMeta = error && typeof error === 'object' && 'aiRunMeta' in error
@@ -32,9 +53,23 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
         deps!.emitAiRunEvent({ projectId: String((aiRunMeta as { projectId?: string }).projectId), meta: { id: randomUUID(), ...aiRunMeta } })
       }
       return { success: false, error: error instanceof Error ? error.message : 'AI 调用失败' }
+    } finally {
+      if (clientTaskId) {
+        activeAiTasks.delete(clientTaskId)
+      }
     }
   })
 
+  // ── 取消非流式任务 ──
+  ipcMain.handle('characterarc:ai-cancel', async (_event, clientTaskId: unknown) => {
+    const key = typeof clientTaskId === 'string' ? clientTaskId : ''
+    const controller = activeAiTasks.get(key)
+    if (!controller) return { success: false, error: '未找到对应的运行中任务' }
+    controller.abort()
+    return { success: true }
+  })
+
+  // ── 流式 AI 生成 ──
   ipcMain.handle('characterarc:ai-stream-start', async (event, payload: AiTaskPayload) => {
     try {
       const streamId = `stream-${randomUUID()}`
@@ -87,6 +122,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     }
   })
 
+  // ── 停止流式任务 ──
   ipcMain.handle('characterarc:ai-stream-stop', async (_event, streamId: unknown) => {
     const key = typeof streamId === 'string' ? streamId : ''
     const controller = activeAiStreams.get(key)
@@ -95,6 +131,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     return { success: true }
   })
 
+  // ── 连接测试 ──
   ipcMain.handle('characterarc:ai-test-connection', async (_event, settings: unknown) => {
     try {
       const result = await testAiConnection(settings as AppSettings)
@@ -104,6 +141,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     }
   })
 
+  // ── 模型列表 ──
   ipcMain.handle('characterarc:ai-fetch-models', async (_event, settings: unknown) => {
     try {
       const result = await fetchModels(settings as AppSettings)
@@ -122,6 +160,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     }
   })
 
+  // ── 图片生成 ──
   ipcMain.handle('characterarc:ai-generate-image', async (_event, payload: unknown) => {
     try {
       const request = payload as { settings?: AppSettings; prompt?: string }

@@ -12,7 +12,8 @@ export function buildRunMeta(
   usedSkills: string[],
   repairTriggered: boolean,
   responsePreview: string,
-  error: string
+  error: string,
+  clientKey?: string
 ): AiRunMeta {
   const startedAtMs = new Date(startedAt).getTime()
   const finishedAtMs = new Date(finishedAt).getTime()
@@ -24,6 +25,7 @@ export function buildRunMeta(
     task,
     projectId,
     chapterId,
+    clientKey,
     provider: settings.provider,
     model: settings.model,
     status,

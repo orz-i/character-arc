@@ -33,6 +33,7 @@ export async function runAiTask(
   validateSettings(settings)
   const startedAt = new Date().toISOString()
   const projectId = String(task.context.projectId ?? '').trim()
+  const clientKey = task.clientKey
 
   const handler = getTaskHandler(task.task)
   await refreshRegistry(projectId || undefined).catch(() => {})
@@ -91,7 +92,8 @@ export async function runAiTask(
         usedSkillIds,
         repairTriggered,
         buildResponsePreview(result),
-        ''
+        '',
+        clientKey
       )
     }
   } catch (error) {
@@ -110,7 +112,8 @@ export async function runAiTask(
         usedSkillIds,
         false,
         '',
-        message
+        message,
+        clientKey
       )
     })
   }
@@ -130,6 +133,7 @@ export async function streamAiTask(
   validateSettings(settings)
   const startedAt = new Date().toISOString()
   const projectId = String(task.context.projectId ?? '').trim()
+  const clientKey = task.clientKey
 
   const taskHandler = getTaskHandler(task.task)
   await refreshRegistry(projectId || undefined).catch(() => {})
@@ -165,7 +169,8 @@ export async function streamAiTask(
         usedSkillIds,
         false,
         buildResponsePreview(result),
-        ''
+        '',
+        clientKey
       )
     }
   } catch (error) {
@@ -185,7 +190,8 @@ export async function streamAiTask(
         usedSkillIds,
         false,
         '',
-        message
+        message,
+        clientKey
       )
     })
   }

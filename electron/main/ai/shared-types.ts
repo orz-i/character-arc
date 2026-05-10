@@ -60,6 +60,12 @@ export type AiRunMeta = {
   task: AiTaskName
   projectId: string
   chapterId?: string
+  /**
+   * 前端任务注册表里使用的 key（如 `worldview-entry`、`cover-generate`）。
+   * 让前端能把 IPC 返回的 AiRunMeta 关联回 `runTrackedAiTask` 发起的那条任务，
+   * 从而在进度面板里点击已完成任务跳转到对应的 aiRuns 详情。
+   */
+  clientKey?: string
   provider: string
   model: string
   status: 'running' | 'success' | 'error' | 'canceled'
@@ -109,6 +115,18 @@ export type AiTaskPayload = {
   task: AiTaskName
   settings: AppSettings
   context: Record<string, unknown>
+  /**
+   * 前端任务注册表 key（如 `worldview-entry`、`cover-generate`）。
+   * 可选；随 IPC 一路带到 AiRunMeta，让前端进度面板能关联对应的运行记录。
+   */
+  clientKey?: string
+  /**
+   * 前端发起这次 IPC 请求时的唯一任务 id（`runTrackedAiTask` 内部生成）。
+   * 用于：
+   *   1. 非流式任务的取消 —— `ipcMain.handle('ai-cancel', clientTaskId)` 按此 id 找 AbortController
+   *   2. 客户端超时抛错时告诉主进程放弃
+   */
+  clientTaskId?: string
 }
 
 export type WorldviewResult = {

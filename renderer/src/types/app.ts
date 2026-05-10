@@ -567,6 +567,8 @@ export interface AiRunRecord {
   projectId: string
   /** 关联章节 ID */
   chapterId?: string
+  /** 前端任务注册表 key（如 `worldview-entry`），用于关联进度面板 */
+  clientKey?: string
   /** 任务类型 */
   task: string
   /** AI 供应商 */

@@ -197,6 +197,10 @@ declare global {
         result?: unknown
         error?: string
       }>
+      cancelAiTask: (clientTaskId: string) => Promise<{
+        success: boolean
+        error?: string
+      }>
       startAiStream: (payload: unknown) => Promise<{
         success: boolean
         result?: {

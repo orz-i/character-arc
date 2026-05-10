@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('characterArc', {
   // ── AI 任务 ──
   /** 发送一次非流式 AI 生成请求，返回完整结果 */
   generateAi: (payload: unknown) => ipcRenderer.invoke('characterarc:ai-generate', toIpcPayload(payload)),
+  /** 取消一个正在进行的非流式 AI 任务（按 clientTaskId） */
+  cancelAiTask: (clientTaskId: string) => ipcRenderer.invoke('characterarc:ai-cancel', clientTaskId),
   /** 发起流式 AI 请求，返回 streamId 用于后续事件监听和停止 */
   startAiStream: (payload: unknown) => ipcRenderer.invoke('characterarc:ai-stream-start', toIpcPayload(payload)),
   /** 通过 streamId 中断正在进行的流式 AI 请求 */

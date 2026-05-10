@@ -65,6 +65,11 @@ export interface AiTaskRunInput {
   description?: string
   panel?: string
   onCancel?: () => void
+  /**
+   * 客户端超时（毫秒）。超时后前端会自动标记任务失败并通知主进程 abort。
+   * 默认 90_000ms（90 秒）。设为 0 表示不超时。
+   */
+  timeoutMs?: number
 }
 
 /**
@@ -72,3 +77,10 @@ export interface AiTaskRunInput {
  * 给用户一点时间看到"成功 ✓"或"失败 ×"反馈再淡出。
  */
 export const AI_TASK_RETENTION_MS = 4_500
+
+/**
+ * 非流式 AI 任务的默认客户端超时（毫秒）。
+ * 超时后前端会标记任务失败并通知主进程 abort。
+ * 90 秒对大多数任务足够；章节初稿等长任务应在 input 里覆盖为更大值。
+ */
+export const AI_TASK_DEFAULT_TIMEOUT_MS = 90_000

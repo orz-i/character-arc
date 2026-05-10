@@ -34,7 +34,7 @@ import {
 } from '@/features/workspace/storeHelpers'
 import { characterArcWindowKind, isAssistantWindow } from '@/utils/windowKind'
 import { toIpcPayload } from '@/utils/ipcPayload'
-import { AI_TASK_RETENTION_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
+import { AI_TASK_RETENTION_MS, AI_TASK_DEFAULT_TIMEOUT_MS, type AiTaskRun, type AiTaskRunInput } from '@/features/ai/taskRegistry'
 import type {
   AgentConfirmationState,
   AgentExecutionStep,
@@ -2720,6 +2720,8 @@ export const useAppStore = defineStore('app', () => {
    * - 同 key 已在运行时直接拒绝，避免重复请求。
    * - 无论 executor 抛异常还是成功返回，任务都会被标记为结束并在短暂保留后自动清理。
    * - 返回值是 executor 的返回值，方便调用方继续处理结果。
+   * - 自动生成 `clientTaskId` 并注入到 executor 的闭包上下文中（通过 `getClientTaskId()`）。
+   * - 默认 90s 超时；超时后自动通知主进程 abort 并标记任务失败。
    *
    * @throws 保留 executor 原始错误抛出，让上层可以 try/catch 常规处理。
    */
@@ -2727,6 +2729,11 @@ export const useAppStore = defineStore('app', () => {
     if (isAiTaskRunning(input.key)) {
       throw new Error(`AI 任务「${input.label}」正在进行中，请稍候。`)
     }
+
+    // 生成唯一 clientTaskId，用于主进程 abort 通道
+    const clientTaskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    // 把 clientTaskId 挂到全局，让 executor 内部构造 payload 时可以取到
+    currentClientTaskId = clientTaskId
 
     const run: AiTaskRun = {
       ...input,
@@ -2738,14 +2745,52 @@ export const useAppStore = defineStore('app', () => {
       next.set(input.key, run)
     })
 
+    // 超时控制
+    const timeoutMs = input.timeoutMs ?? AI_TASK_DEFAULT_TIMEOUT_MS
+    let timeoutHandle: number | null = null
+    let timedOut = false
+
+    const timeoutPromise = timeoutMs > 0
+      ? new Promise<never>((_, reject) => {
+          timeoutHandle = window.setTimeout(() => {
+            timedOut = true
+            // 通知主进程 abort
+            window.characterArc.cancelAiTask(clientTaskId).catch(() => {})
+            reject(new Error(`AI 任务超时（${Math.round(timeoutMs / 1000)}s），已自动取消。`))
+          }, timeoutMs)
+        })
+      : null
+
     try {
-      const result = await executor()
+      const result = timeoutPromise
+        ? await Promise.race([executor(), timeoutPromise])
+        : await executor()
       finalizeAiTask(input.key, 'done')
       return result
     } catch (error) {
-      finalizeAiTask(input.key, 'error', error instanceof Error ? error.message : String(error))
+      const msg = timedOut
+        ? `AI 任务超时（${Math.round(timeoutMs / 1000)}s），已自动取消。`
+        : (error instanceof Error ? error.message : String(error))
+      finalizeAiTask(input.key, 'error', msg)
       throw error
+    } finally {
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle)
+      }
+      currentClientTaskId = null
     }
+  }
+
+  /**
+   * 当前正在执行的 `runTrackedAiTask` 的 clientTaskId。
+   * 组件在 executor 闭包里构造 IPC payload 时可以通过 `getClientTaskId()` 取到，
+   * 注入到 `payload.clientTaskId` 字段，让主进程能按此 id 做 abort。
+   */
+  let currentClientTaskId: string | null = null
+
+  /** 获取当前正在执行的任务的 clientTaskId（供 executor 闭包内使用） */
+  function getClientTaskId(): string | undefined {
+    return currentClientTaskId ?? undefined
   }
 
   function finalizeAiTask(key: string, stage: 'done' | 'error', error?: string): void {
@@ -3011,6 +3056,7 @@ export const useAppStore = defineStore('app', () => {
     isAiTaskRunning,
     getAiTaskRun,
     runTrackedAiTask,
+    getClientTaskId,
     dismissAiTask,
     cancelAiTask
   }
