@@ -86,7 +86,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
               onTextDelta: (delta: string) => {
                 streamedContent += delta
                 if (!event.sender.isDestroyed()) {
-                  event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta })
+                  event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
                 }
               }
             },

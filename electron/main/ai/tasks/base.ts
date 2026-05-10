@@ -18,6 +18,12 @@ export interface TaskHandler {
   buildPrompt(input: PromptBuildInput): PromptPair
   normalize(raw: string): AiTaskResult
   validate(result: AiTaskResult): boolean
+  /**
+   * 可选：返回具体的校验失败原因列表。
+   * 如果实现了此方法，repair prompt 会附上这些信息帮助模型精准修复。
+   * 未实现时 orchestrator 会回退到通用的"结构不完整"提示。
+   */
+  describeValidationErrors?(result: AiTaskResult): string[]
   resolveMaxTokens?(input: PromptBuildInput): number
   /**
    * 本任务最多可使用的 skill 数量。默认 4。

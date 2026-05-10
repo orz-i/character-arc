@@ -77,6 +77,7 @@ const threadDetectChapterId = ref<string | null>(null)
 const threadDetectVisible = ref(false)
 const chapterDraftStreamId = ref<string | null>(null)
 const chapterDraftStreamingContent = ref('')
+const chapterDraftStreamCharCount = ref(0)
 const chapterDraftExecutionLabel = ref('')
 let removeChapterDraftStreamListener: (() => void) | null = null
 const sceneResolveCallback = ref<((text: string) => void) | null>(null)
@@ -265,13 +266,13 @@ const linkedOutlineStatusMeta = computed(() => {
   }
 })
 const canSyncOutlineBack = computed(() => Boolean(linkedOutlineItem.value && appStore.selectedChapter))
-const chapterDraftStreamingWordCount = computed(() => chapterDraftStreamingContent.value.trim().length)
+const chapterDraftStreamingWordCount = computed(() => chapterDraftStreamCharCount.value || chapterDraftStreamingContent.value.trim().length)
 const chapterDraftProgressPercent = computed(() => {
   if (!isGeneratingChapterDraft.value) {
     return 0
   }
 
-  if (!chapterDraftStreamingContent.value.trim()) {
+  if (!chapterDraftStreamingWordCount.value) {
     return 12
   }
 
@@ -284,11 +285,11 @@ const chapterDraftProgressText = computed(() => {
     return ''
   }
 
-  if (!chapterDraftStreamingContent.value.trim()) {
+  if (!chapterDraftStreamingWordCount.value) {
     return '正在整理大纲、文风和角色关系上下文...'
   }
 
-  return `正在生成初稿，当前约 ${chapterDraftStreamingWordCount.value} 字 / 目标 ${formatChapterWordTargetLabel(currentTargetWordCount.value)}`
+  return `已生成 ${chapterDraftStreamingWordCount.value} 字 / 目标 ${formatChapterWordTargetLabel(currentTargetWordCount.value)}（${chapterDraftProgressPercent.value}%）`
 })
 // 章节灵感的焦点类型：用于 AI 生成灵感时指定方向
 const chapterInspirationFocuses = ['场景火花', '剧情转折', '人物动机'] as const
@@ -1020,6 +1021,7 @@ async function stopChapterFirstDraft(): Promise<void> {
 function resetChapterDraftStreamingState(): void {
   chapterDraftStreamId.value = null
   chapterDraftExecutionLabel.value = ''
+  chapterDraftStreamCharCount.value = 0
   // isGeneratingChapterDraft 由 runTrackedAiTask 自动收敛，这里只清本地的瞬时态
   isStoppingChapterDraft.value = false
 }
@@ -1183,6 +1185,9 @@ function handleChapterDraftStreamEvent(payload: CharacterArcAiStreamEvent): void
 
   if (payload.type === 'chunk') {
     chapterDraftStreamingContent.value += payload.delta
+    if (payload.charCount != null) {
+      chapterDraftStreamCharCount.value = payload.charCount
+    }
     return
   }
 

@@ -50,6 +50,54 @@ function normalizeDash(text: string): string {
 }
 
 // ════════════════════════════════════════════
+// 1b. 破折号移除
+// ════════════════════════════════════════════
+
+/**
+ * 完全移除正文中的破折号。
+ * AI 生成的中文小说里破折号严重过度使用且不符合网文阅读习惯。
+ *
+ * 策略：
+ *   - "——" 前后都有文字 → 替换为逗号
+ *   - "——" 在句首或紧跟引号 → 直接删除
+ *   - "……——" 或 "——……" 组合 → 简化为省略号
+ */
+function removeDashes(text: string): string {
+  let result = text
+  // 破折号和省略号组合 → 省略号
+  result = result.replace(/——……|……——/g, '……')
+  // 句首/引号后的破折号 → 删除
+  result = result.replace(/([""「『])\s*——/g, '$1')
+  result = result.replace(/^——/gm, '')
+  // 中间的破折号 → 逗号（前后都有文字时）
+  result = result.replace(/——/g, '，')
+  return result
+}
+
+// ════════════════════════════════════════════
+// 1c. 对话标签多样化
+// ════════════════════════════════════════════
+
+/**
+ * AI 生成的对话几乎全用"XX说""XX道"，极度单调。
+ * 按 50% 概率将部分"说""道"替换为更具体的动作标签。
+ */
+const DIALOGUE_TAG_REPLACEMENTS: Record<string, readonly string[]> = {
+  '说': ['开口', '接话', '出声', '应道', '答'],
+  '道': ['说道', '开口道', '接口道', '应声道', '答道'],
+  '笑着说': ['笑道', '笑了笑', '带着笑意'],
+  '冷冷地说': ['冷声道', '语气冰冷', '冷哼一声'],
+  '大声说': ['高声道', '提高了声音', '扬声道'],
+  '小声说': ['低声道', '压低声音', '轻声道'],
+  '急忙说': ['连忙道', '急道', '赶紧接话'],
+  '缓缓说': ['缓声道', '不紧不慢地开口', '慢条斯理道']
+}
+
+function diversifyDialogueTags(text: string): string {
+  return applyDictionary(text, DIALOGUE_TAG_REPLACEMENTS, 0.50)
+}
+
+// ════════════════════════════════════════════
 // 2. AI 元语言段落删除（8条，均为 AI 残留的提示性语言）
 // ════════════════════════════════════════════
 
@@ -447,8 +495,10 @@ export function humanizeText(text: string): string {
   r = applyDictionary(r, PHRASE_REPLACEMENTS, 0.85)
   r = applyDictionary(r, NOVEL_ORAL_WORDS, 0.50)
   r = applyDictionary(r, WORD_REPLACEMENTS, 0.50)
+  r = diversifyDialogueTags(r)
   r = normalizeEllipsis(r)
   r = normalizeDash(r)
+  r = removeDashes(r)
   r = collapseBlankLines(r)
   return r.trim()
 }
@@ -460,7 +510,9 @@ export function humanizeTextPost(text: string): string {
   let r = text
   r = applyDigitNormalization(r)
   r = removeAiFillerPhrases(r)
+  r = diversifyDialogueTags(r)
   r = normalizeEllipsis(r)
   r = normalizeDash(r)
+  r = removeDashes(r)
   return r.trim()
 }

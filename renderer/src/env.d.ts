@@ -19,6 +19,8 @@ declare global {
         streamId: string
         type: 'chunk'
         delta: string
+        /** 当前已生成的总字符数（用于显示字数进度） */
+        charCount?: number
       }
     | {
         streamId: string

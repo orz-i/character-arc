@@ -63,17 +63,34 @@ export async function runAiTask(
     }
     let repairTriggered = false
 
+    // JSON 修复：最多重试 2 次，每次附上具体校验失败原因
     if (handler.outputType === 'json' && (normalizeFailed || !handler.validate(result))) {
-      const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText)
-      logPrompt('REPAIR', settings, repairPromptPair, task.task, usedSkillIds)
-      const repairStartedAt = Date.now()
-      rawText = await requestAiText(settings, repairPromptPair, maxTokens)
-      logResponse('REPAIR', settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
-      result = handler.normalize(rawText)
-      repairTriggered = true
+      const MAX_REPAIR_ATTEMPTS = 2
+      for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt += 1) {
+        const validationErrors = (!normalizeFailed && handler.describeValidationErrors)
+          ? handler.describeValidationErrors(result)
+          : ['JSON 解析失败或结构不完整']
+        const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
+        logPrompt(`REPAIR_${attempt}`, settings, repairPromptPair, task.task, usedSkillIds)
+        const repairStartedAt = Date.now()
+        rawText = await requestAiText(settings, repairPromptPair, maxTokens)
+        logResponse(`REPAIR_${attempt}`, settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
+        normalizeFailed = false
+        try {
+          result = handler.normalize(rawText)
+        } catch {
+          result = {} as AiTaskResult
+          normalizeFailed = true
+        }
+        repairTriggered = true
 
-      if (!handler.validate(result)) {
-        throw new Error('AI 返回的结构化结果不完整，请稍后重试或调整提示词。')
+        if (!normalizeFailed && handler.validate(result)) {
+          break
+        }
+
+        if (attempt === MAX_REPAIR_ATTEMPTS) {
+          throw new Error('AI 返回的结构化结果经过 2 次修复仍不完整，请稍后重试或调整提示词。')
+        }
       }
     }
 
