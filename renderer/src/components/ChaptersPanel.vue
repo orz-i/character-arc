@@ -2507,17 +2507,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 18px;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--chapter-border);
   background: var(--arc-bg-surface);
   flex-shrink: 0; /* ★ 必须加：保护顶部工具栏在窗口极小时不被挤压 */
 }
 
 .editor-context { display: flex; min-width: 0; flex: 1; }
-.editor-context-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.editor-context-main strong { color: var(--arc-text-primary); font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
-.editor-context-main span { color: var(--arc-text-secondary); font-size: 12px; font-weight: 700; }
+.editor-context-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.editor-context-main strong { color: var(--arc-text-primary); font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+.editor-context-main span { color: var(--arc-text-secondary); font-size: 11px; font-weight: 650; }
 .editor-context-main .progress-inline { color: var(--arc-primary); }
 .save-status-inline { display: inline-flex; min-width: 56px; align-items: center; justify-content: center; }
 
@@ -2678,7 +2678,7 @@ onBeforeUnmount(() => {
   min-height: 0; /* ★ 传递高度约束 */
   flex: 1;
   background: var(--arc-bg-body);
-  padding: 20px 24px;
+  padding: 14px 20px;
 }
 
 .editor-body {
@@ -2714,23 +2714,24 @@ onBeforeUnmount(() => {
 .manuscript-heading {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 4px;
   flex-shrink: 0; /* ★ 保护标题区不被压缩 */
 }
 
-.manuscript-overline { color: var(--arc-text-hint); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.manuscript-overline { color: var(--arc-text-hint); font-size: 10px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
 
 .chapter-title {
   width: 100%; border: none; background: transparent; color: var(--arc-text-primary);
-  font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0; outline: none;
+  font-size: clamp(18px, 2.2vw, 22px); font-weight: 650; letter-spacing: -0.015em; margin-bottom: 0; outline: none;
+  line-height: 1.3;
 }
 .chapter-title:hover { color: var(--arc-text-primary); }
 .chapter-title::placeholder { color: var(--arc-text-hint); }
 
 .manuscript-divider {
   height: 1px;
-  margin: 16px 0 24px;
+  margin: 10px 0 16px;
   background: linear-gradient(90deg, transparent, var(--arc-border), transparent);
   flex-shrink: 0; /* ★ 保护分割线不被压缩 */
 }
@@ -2818,10 +2819,10 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: min(100%, 920px);
-  margin: 16px auto 0;
-  padding: 12px 14px;
+  margin: 10px auto 0;
+  padding: 8px 14px;
   border: 1px solid var(--arc-border);
   border-radius: 8px;
   background: var(--arc-bg-surface);

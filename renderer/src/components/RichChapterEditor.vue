@@ -293,7 +293,6 @@ onBeforeUnmount(() => {
         >
           <Redo2 :size="15" />
         </button>
-        <span class="toolbar-shortcuts">Ctrl+S 保存，Ctrl+Shift+S 存版本</span>
       </div>
     </div>
 
