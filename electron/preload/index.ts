@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('characterArc', {
   exportJson: (payload: unknown) => ipcRenderer.invoke('characterarc:export-json', toIpcPayload(payload)),
   /** 将当前项目导出为纯文本文件 */
   exportText: (payload: unknown) => ipcRenderer.invoke('characterarc:export-text', toIpcPayload(payload)),
+  /** 将单个章节导出为 TXT */
+  exportChapterTxt: (payload: unknown) => ipcRenderer.invoke('characterarc:export-chapter-txt', toIpcPayload(payload)),
+  /** 将单个章节导出为 DOCX */
+  exportChapterDocx: (payload: unknown) => ipcRenderer.invoke('characterarc:export-chapter-docx', toIpcPayload(payload)),
   /** 从 JSON 文件导入项目数据 */
   importJson: () => ipcRenderer.invoke('characterarc:import-json'),
   /** 导入参考小说并执行拆书分析 */

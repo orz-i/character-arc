@@ -258,6 +258,18 @@ declare global {
         canceled: boolean
         filePath?: string
       }>
+      exportChapterTxt: (payload: { title?: string; content?: string; defaultFileName?: string }) => Promise<{
+        success: boolean
+        canceled: boolean
+        filePath?: string
+        error?: string
+      }>
+      exportChapterDocx: (payload: { title?: string; content?: string; defaultFileName?: string }) => Promise<{
+        success: boolean
+        canceled: boolean
+        filePath?: string
+        error?: string
+      }>
       setZoomFactor: (factor: number) => Promise<{
         success: boolean
         factor?: number

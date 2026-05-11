@@ -108,6 +108,8 @@ const chapterStatusOptions: SelectOption[] = [ // 章节状态选项列表
 const chapterMenuOptions: DropdownOption[] = [ // 章节侧边栏的右键菜单
   { key: 'edit', label: '编辑章节信息' },
   { key: 'detect-threads', label: 'AI 识别伏笔' },
+  { key: 'export-txt', label: '导出为 TXT' },
+  { key: 'export-docx', label: '导出为 DOCX' },
   { key: 'delete', label: '删除章节' }
 ]
 // 分卷选项列表，用于章节信息编辑弹窗中的分卷下拉选择器
@@ -1329,6 +1331,16 @@ function handleChapterMenuSelect(action: string | number, chapter: ChapterDraft)
     return
   }
 
+  if (action === 'export-txt') {
+    void exportChapterAs(chapter, 'txt')
+    return
+  }
+
+  if (action === 'export-docx') {
+    void exportChapterAs(chapter, 'docx')
+    return
+  }
+
   dialog.warning({
     title: '确认删除章节',
     content: `确定要删除“${chapter.title}”吗？删除后当前章节草稿将无法恢复。`,
@@ -1340,6 +1352,36 @@ function handleChapterMenuSelect(action: string | number, chapter: ChapterDraft)
       appStore.deleteChapter(chapter.id)
     }
   })
+}
+
+async function exportChapterAs(chapter: ChapterDraft, format: 'txt' | 'docx'): Promise<void> {
+  const title = chapter.title?.trim() || '未命名章节'
+  const plainContent = getPlainTextFromEditorContent(chapter.content ?? '').trim()
+  if (!plainContent) {
+    message.warning('当前章节没有可导出的正文内容。')
+    return
+  }
+
+  const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_')
+  const defaultFileName = `${safeTitle}.${format}`
+  const payload = { title, content: plainContent, defaultFileName }
+
+  try {
+    const result = format === 'txt'
+      ? await window.characterArc.exportChapterTxt(payload)
+      : await window.characterArc.exportChapterDocx(payload)
+
+    if (result.canceled) {
+      return
+    }
+    if (!result.success) {
+      message.error(result.error || '导出失败')
+      return
+    }
+    message.success(`已导出到 ${result.filePath}`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '导出失败')
+  }
 }
 
 // --- 章节拖拽排序 ---

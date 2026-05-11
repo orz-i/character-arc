@@ -165,6 +165,85 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     }
   })
 
+  ipcMain.handle('characterarc:export-chapter-txt', async (_event, payload: unknown) => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const request = (payload ?? {}) as {
+      title?: string
+      content?: string
+      defaultFileName?: string
+    }
+
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出章节为 TXT',
+      defaultPath: request.defaultFileName?.trim() || 'chapter.txt',
+      filters: [{ name: '文本文档', extensions: ['txt'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true }
+    }
+
+    const text = [request.title?.trim() || '未命名章节', '', request.content ?? ''].join('\n')
+    await writeFile(result.filePath, text, 'utf-8')
+    return { success: true, canceled: false, filePath: result.filePath }
+  })
+
+  ipcMain.handle('characterarc:export-chapter-docx', async (_event, payload: unknown) => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const request = (payload ?? {}) as {
+      title?: string
+      content?: string
+      defaultFileName?: string
+    }
+
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出章节为 DOCX',
+      defaultPath: request.defaultFileName?.trim() || 'chapter.docx',
+      filters: [{ name: 'Word 文档', extensions: ['docx'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true }
+    }
+
+    const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx')
+    const titleText = request.title?.trim() || '未命名章节'
+    const paragraphs = (request.content ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+
+    const docParagraphs = [
+      new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: titleText, bold: true, size: 36 })]
+      }),
+      ...paragraphs.map((line) =>
+        new Paragraph({
+          spacing: { line: 360 },
+          children: [new TextRun({ text: line, size: 24 })]
+        })
+      )
+    ]
+
+    const doc = new Document({
+      creator: 'CharacterArc',
+      title: titleText,
+      sections: [{ children: docParagraphs }]
+    })
+
+    const buffer = await Packer.toBuffer(doc)
+    await writeFile(result.filePath, buffer)
+    return { success: true, canceled: false, filePath: result.filePath }
+  })
+
   ipcMain.handle('characterarc:import-json', async () => {
     const window = deps.windowManager.getActiveWindow()
     if (!window) {
