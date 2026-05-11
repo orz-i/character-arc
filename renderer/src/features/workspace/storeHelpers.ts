@@ -59,6 +59,7 @@ export interface LegacyStoredState {
   chapterVersions?: ChapterVersion[]
   messages?: ChatMessage[]
   appSettings?: AppSettings
+  coverWorkbenchHistory?: import('@/types/app').CoverWorkbenchHistoryItem[]
 }
 
 // 默认项目列表：空列表，新用户通过向导创建第一个项目
@@ -300,18 +301,29 @@ function normalizeAiRuns(aiRuns?: AiRunRecord[] | null): AiRunRecord[] {
     : []
 }
 
+function sanitizeSettingString(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim()
+  return trimmed || fallback
+}
+
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
+  const source = settings ?? {}
   return {
-    ...defaultAppSettings,
-    ...settings,
-    imageProvider: settings?.imageProvider?.trim() || defaultAppSettings.imageProvider,
-    imageModel: settings?.imageModel?.trim() || defaultAppSettings.imageModel,
-    imageApiKey: settings?.imageApiKey?.trim() || defaultAppSettings.imageApiKey,
-    imageBaseUrl: settings?.imageBaseUrl?.trim() || defaultAppSettings.imageBaseUrl,
+    provider: sanitizeSettingString(source.provider, defaultAppSettings.provider),
+    model: sanitizeSettingString(source.model, defaultAppSettings.model),
+    apiKey: sanitizeSettingString(source.apiKey, defaultAppSettings.apiKey),
+    baseUrl: sanitizeSettingString(source.baseUrl, defaultAppSettings.baseUrl),
+    imageProvider: sanitizeSettingString(source.imageProvider, defaultAppSettings.imageProvider),
+    imageModel: sanitizeSettingString(source.imageModel, defaultAppSettings.imageModel),
+    imageApiKey: sanitizeSettingString(source.imageApiKey, defaultAppSettings.imageApiKey),
+    imageBaseUrl: sanitizeSettingString(source.imageBaseUrl, defaultAppSettings.imageBaseUrl),
+    autoSaveInterval: sanitizeSettingString(source.autoSaveInterval, defaultAppSettings.autoSaveInterval),
     uiScale:
-      settings?.uiScale !== undefined && Number.isFinite(settings.uiScale)
-        ? Math.min(1.75, Math.max(0.75, settings.uiScale))
-        : defaultAppSettings.uiScale
+      typeof source.uiScale === 'number' && Number.isFinite(source.uiScale)
+        ? Math.min(1.75, Math.max(0.75, source.uiScale))
+        : defaultAppSettings.uiScale,
+    darkMode: typeof source.darkMode === 'boolean' ? source.darkMode : defaultAppSettings.darkMode
   }
 }
 

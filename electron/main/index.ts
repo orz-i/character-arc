@@ -14,7 +14,7 @@ import {
   type WorkspacePayload,
   normalizeWorkspacePayload
 } from './workspace-types'
-import { ensureWorkspaceDb, readWorkspaceSnapshot, writeWorkspaceSnapshot } from './workspace-store'
+import { ensureWorkspaceDb, readWorkspaceSnapshot, writeAppSettingsRow, writeWorkspaceSnapshot } from './workspace-store'
 
 /** 主窗口向助手窗口推送的上下文载荷 */
 type AssistantContextPayload = {
@@ -548,6 +548,8 @@ registerMainIpcHandlers({
   ensureWorkspaceDb,
   readWorkspaceSnapshot,
   writeWorkspaceSnapshot: (db, payload) => writeWorkspaceSnapshot(db, payload as WorkspacePayload),
+  writeAppSettingsRow: (db, settings, metadata) =>
+    writeAppSettingsRow(db, settings as Partial<WorkspacePayload['appSettings']>, metadata),
   validateImportedPayload,
   resolveImageMime,
   emitReferenceImportProgress,

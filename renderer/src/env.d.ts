@@ -188,6 +188,9 @@ declare global {
         success: boolean
         error?: string
       }>
+      saveAppSettings: (
+        payload: import('@shared/ipc-types').SaveAppSettingsRequest
+      ) => Promise<import('@shared/ipc-types').IpcResult>
       pickCoverImage: () => Promise<{
         success: boolean
         canceled: boolean

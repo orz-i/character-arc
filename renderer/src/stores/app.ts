@@ -12,6 +12,7 @@ import {
 } from '@/features/workspace/outlineVolumes'
 import { getThemePreset } from '@/theme/presets'
 import { createEmptyWorkspace } from '@/features/workspace/projectWorkspace'
+import { createWorkspacePersistence } from '@/features/workspace/persistence'
 import { validateAssistantCommand } from '@/features/assistant/agentGuards'
 import {
   buildStarterChapter,
@@ -163,14 +164,6 @@ export const useAppStore = defineStore('app', () => {
   const stored = loadStoredState()
   /** 是否已完成初始化水合（从 SQLite 加载数据） */
   const hasHydrated = ref(false)
-  /** 持久化错误信息，null 表示无错误 */
-  const persistenceError = ref<string | null>(null)
-  /** 防抖保存定时器 ID */
-  let saveTimer: number | null = null
-  /** 工作区同步防抖定时器 ID */
-  let workspaceSyncTimer: number | null = null
-  /** 下次计划持久化的时间戳 */
-  const scheduledPersistAt = ref<number | null>(null)
   /** 当前视图：项目列表 / 新建向导 / 工作台 / 章节写作 / 独立能力页 */
   const currentView = ref<'projects' | 'wizard' | 'workbench' | 'chapter-studio' | 'deconstruction-library' | 'skills' | 'cover-workbench'>('projects')
   /** 工作台中当前激活的面板 */
@@ -206,10 +199,27 @@ export const useAppStore = defineStore('app', () => {
   const currentChapterSelection = ref<ChapterSelectionState | null>(null)
   /** 当前选中的章节 ID */
   const selectedChapterId = ref(stored.workspaces[stored.selectedProjectId]?.chapters[0]?.id ?? '')
-  /** 标记是否正在应用远程工作区同步，防止循环同步 */
-  let isApplyingRemoteWorkspaceSync = false
   /** 流程面板当前激活的分卷 ID，空字符串时回退到第一个分卷 */
   const activeWorkflowVolumeId = ref<string>('')
+
+  const {
+    scheduledPersistAt,
+    persistenceError,
+    scheduleWorkspaceSync,
+    persistWorkspace,
+    schedulePersist,
+    scheduleSettingsPersist,
+    handleRemoteWorkspaceSync
+  } = createWorkspacePersistence({
+    hasHydrated,
+    serializeWorkspaceState: () => serializeWorkspaceState(),
+    getSettingsSnapshot: () => ({
+      theme: theme.value,
+      selectedProjectId: selectedProjectId.value,
+      appSettings: appSettings.value
+    }),
+    applyRemoteState: (payload) => applyWorkspaceState(payload)
+  })
 
   // ── 计算属性：从当前工作区派生各业务实体列表 ──
   /** 当前项目的工作区数据，项目不存在时返回空工作区 */
@@ -396,21 +406,6 @@ export const useAppStore = defineStore('app', () => {
     currentChapterSelection.value = null
   }
 
-  /** 防抖调度工作区同步到其他窗口（120ms 延迟） */
-  function scheduleWorkspaceSync(): void {
-    if (!hasHydrated.value || isApplyingRemoteWorkspaceSync) {
-      return
-    }
-
-    if (workspaceSyncTimer) {
-      window.clearTimeout(workspaceSyncTimer)
-    }
-
-    workspaceSyncTimer = window.setTimeout(() => {
-      void window.characterArc.publishWorkspaceSync(toIpcPayload(serializeWorkspaceState()))
-    }, 120)
-  }
-
   /** 向助手窗口推送最新的项目/章节上下文（仅主窗口调用） */
   function publishAssistantContext(): void {
     if (characterArcWindowKind !== 'main') {
@@ -461,20 +456,6 @@ export const useAppStore = defineStore('app', () => {
       id: payload.id,
       prompt: payload.prompt,
       quickAction: payload.quickAction
-    }
-  }
-
-  /** 处理远程工作区同步：应用从其他窗口推送过来的状态更新 */
-  function handleRemoteWorkspaceSync(payload: unknown): void {
-    if (!payload || typeof payload !== 'object') {
-      return
-    }
-
-    isApplyingRemoteWorkspaceSync = true
-    try {
-      applyWorkspaceState(payload as Partial<StoredState>)
-    } finally {
-      isApplyingRemoteWorkspaceSync = false
     }
   }
 
@@ -929,48 +910,6 @@ export const useAppStore = defineStore('app', () => {
     }
 
     hasHydrated.value = true
-  }
-
-  /** 立即执行一次持久化写入（取消待执行的防抖定时器） */
-  async function persistWorkspace(): Promise<void> {
-    if (saveTimer) {
-      window.clearTimeout(saveTimer)
-      saveTimer = null
-    }
-
-    const result = await window.characterArc.saveWorkspace(toIpcPayload(serializeWorkspaceState()))
-    if (!result.success) {
-      console.error('[workspace] saveWorkspace failed:', result.error)
-    }
-    persistenceError.value = result.success ? null : result.error ?? '保存失败'
-    if (result.success) {
-      scheduledPersistAt.value = null
-    }
-  }
-
-  /**
-   * 调度一次防抖持久化。
-   * fast 模式（300ms）用于用户主动操作后的快速保存；
-   * autosave 模式使用用户配置的自动保存间隔。
-   */
-  function schedulePersist(mode: 'fast' | 'autosave' = 'autosave'): void {
-    if (!hasHydrated.value) {
-      return
-    }
-
-    scheduleWorkspaceSync()
-
-    const delay = mode === 'fast' ? FAST_PERSIST_DELAY_MS : resolveAutoSaveDelayMs(appSettings.value.autoSaveInterval)
-    scheduledPersistAt.value = Date.now() + delay
-
-    if (saveTimer) {
-      window.clearTimeout(saveTimer)
-    }
-
-    // Keep one active timer so the latest edit always wins and the interval can be changed on the fly.
-    saveTimer = window.setTimeout(() => {
-      void persistWorkspace()
-    }, delay)
   }
 
   // ── 项目导入 ──
@@ -2589,10 +2528,10 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** 更新单个应用设置项并触发快速持久化 */
+  /** 更新单个应用设置项并触发快速持久化（仅写入 app_settings 行） */
   function updateAppSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     appSettings.value[key] = value
-    schedulePersist('fast')
+    scheduleSettingsPersist()
   }
 
   function updateCoverWorkbenchHistory(items: import('@/types/app').CoverWorkbenchHistoryItem[]): void {

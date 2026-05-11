@@ -201,8 +201,15 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
       </div>
       <div class="head-actions">
         <div class="search-input">
-          <Search :size="16" />
-          <input v-model="keyword" type="text" placeholder="搜索角色..." />
+          <n-input
+            v-model:value="keyword"
+            placeholder="搜索角色..."
+            clearable
+          >
+            <template #prefix>
+              <Search :size="16" />
+            </template>
+          </n-input>
         </div>
         <button class="soft-button" :disabled="isGenerating" @click="handleGenerateCharacter">
           <Sparkles :size="16" />

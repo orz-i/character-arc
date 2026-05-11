@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import packageJson from '../../package.json'
+import { IPC_CHANNELS, type SaveAppSettingsRequest } from '@shared/ipc-types'
 
 function toIpcPayload<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -17,7 +18,10 @@ contextBridge.exposeInMainWorld('characterArc', {
   /** 从 SQLite 加载当前项目的完整工作区快照 */
   loadWorkspace: () => ipcRenderer.invoke('characterarc:load-workspace'),
   /** 将完整工作区快照写入 SQLite（全量覆盖写） */
-  saveWorkspace: (payload: unknown) => ipcRenderer.invoke('characterarc:save-workspace', toIpcPayload(payload)),
+  saveWorkspace: (payload: unknown) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_WORKSPACE, toIpcPayload(payload)),
+  /** 仅更新 app_settings 行，避免全量序列化工作区 */
+  saveAppSettings: (payload: SaveAppSettingsRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SAVE_APP_SETTINGS, toIpcPayload(payload)),
 
   // ── 文件操作 ──
   /** 打开系统文件选择对话框，选取项目封面图片 */

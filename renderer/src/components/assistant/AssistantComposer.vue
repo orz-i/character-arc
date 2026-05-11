@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NButton, NButtonGroup, NPopover, NSelect } from 'naive-ui'
+import { NButton, NButtonGroup, NInput, NPopover, NSelect } from 'naive-ui'
 import type { ChapterAssistantQuickAction } from '@/features/ai/chapterAssistantOptions'
 import { ArrowUp, Square } from 'lucide-vue-next'
 import AssistantInlineContextSections from './AssistantInlineContextSections.vue'
@@ -54,12 +54,13 @@ function handleQuickAction(action: ChapterAssistantQuickAction) {
     </div>
 
     <div class="claude-assistant-composer__input-wrap">
-      <textarea
-        v-model="draft"
+      <n-input
+        v-model:value="draft"
         class="claude-assistant-composer__input"
-        rows="2"
+        type="textarea"
+        :autosize="{ minRows: 2, maxRows: 6 }"
         placeholder="发送消息..."
-        @keydown="(event) => emit('keydown', event)"
+        @keydown="(event: KeyboardEvent) => emit('keydown', event)"
       />
       <button
         type="button"

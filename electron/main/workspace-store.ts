@@ -268,12 +268,28 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       model TEXT NOT NULL,
       api_key TEXT NOT NULL,
       base_url TEXT NOT NULL,
+      image_provider TEXT NOT NULL DEFAULT '',
       image_model TEXT NOT NULL DEFAULT '',
       image_api_key TEXT NOT NULL DEFAULT '',
       image_base_url TEXT NOT NULL DEFAULT '',
       auto_save_interval TEXT NOT NULL,
       ui_scale REAL NOT NULL DEFAULT 1,
       dark_mode INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS cover_workbench_history (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      cover TEXT NOT NULL,
+      prompt_title TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      keywords_json TEXT NOT NULL DEFAULT '[]',
+      genre TEXT NOT NULL DEFAULT '',
+      target_platform TEXT NOT NULL DEFAULT '',
+      author_name TEXT NOT NULL DEFAULT '',
+      extra_notes TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0
     ) STRICT;
   `)
 
@@ -320,6 +336,10 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('dark_mode')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN dark_mode INTEGER NOT NULL DEFAULT 0;`)
+  }
+
+  if (!columnNames.has('image_provider')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN image_provider TEXT NOT NULL DEFAULT '';`)
   }
 
   if (!columnNames.has('image_model')) {
@@ -706,9 +726,29 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     updatedAt: string
   }>
 
+  const coverWorkbenchHistoryRows = db.prepare(`
+    SELECT id, created_at AS createdAt, cover, prompt_title AS promptTitle, prompt, summary,
+      keywords_json AS keywordsJson, genre, target_platform AS targetPlatform,
+      author_name AS authorName, extra_notes AS extraNotes
+    FROM cover_workbench_history
+    ORDER BY sort_order ASC, created_at DESC
+  `).all() as Array<{
+    id: string
+    createdAt: string
+    cover: string
+    promptTitle: string
+    prompt: string
+    summary: string
+    keywordsJson: string
+    genre: string
+    targetPlatform: string
+    authorName: string
+    extraNotes: string
+  }>
+
   const settings = db.prepare(`
     SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
-    , model, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode
+    , model, image_provider AS imageProvider, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode
     FROM app_settings
     WHERE id = 1
   `).get() as
@@ -719,6 +759,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: string
         apiKey: string
         baseUrl: string
+        imageProvider: string
         imageModel: string
         imageApiKey: string
         imageBaseUrl: string
@@ -805,6 +846,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: settings.model,
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
+        imageProvider: settings.imageProvider,
         imageModel: settings.imageModel,
         imageApiKey: settings.imageApiKey,
         imageBaseUrl: settings.imageBaseUrl,
@@ -812,7 +854,20 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         uiScale: settings.uiScale,
         darkMode: Boolean(settings.darkMode)
       })
-    }
+    },
+    coverWorkbenchHistory: coverWorkbenchHistoryRows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      cover: row.cover,
+      promptTitle: row.promptTitle,
+      prompt: row.prompt,
+      summary: row.summary,
+      keywords: parseJson(row.keywordsJson, [] as string[]),
+      genre: row.genre,
+      targetPlatform: row.targetPlatform,
+      authorName: row.authorName,
+      extraNotes: row.extraNotes
+    }))
   }
 }
 
@@ -837,6 +892,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       DELETE FROM workflow_documents;
       DELETE FROM plot_threads;
       DELETE FROM app_settings;
+      DELETE FROM cover_workbench_history;
     `)
 
     const insertProject = db.prepare(`
@@ -1175,9 +1231,33 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     }
 
     const normalizedAppSettings = normalizeAppSettings(payload.appSettings)
+    const coverWorkbenchHistory = Array.isArray(payload.coverWorkbenchHistory) ? payload.coverWorkbenchHistory : []
+    if (coverWorkbenchHistory.length > 0) {
+      const insertCoverHistory = db.prepare(`
+        INSERT INTO cover_workbench_history (id, created_at, cover, prompt_title, prompt, summary, keywords_json, genre, target_platform, author_name, extra_notes, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      coverWorkbenchHistory.forEach((item, index) => {
+        insertCoverHistory.run(
+          item.id,
+          item.createdAt,
+          item.cover,
+          item.promptTitle,
+          item.prompt,
+          item.summary,
+          JSON.stringify(Array.isArray(item.keywords) ? item.keywords : []),
+          item.genre,
+          item.targetPlatform,
+          item.authorName,
+          item.extraNotes,
+          index
+        )
+      })
+    }
+
     db.prepare(`
-      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
       payload.selectedProjectId,
@@ -1185,6 +1265,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       normalizedAppSettings.model,
       normalizedAppSettings.apiKey,
       normalizedAppSettings.baseUrl,
+      normalizedAppSettings.imageProvider,
       normalizedAppSettings.imageModel,
       normalizedAppSettings.imageApiKey,
       normalizedAppSettings.imageBaseUrl,
@@ -1206,4 +1287,44 @@ function parseJson<T>(value: string | undefined, fallback: T): T {
   } catch {
     return fallback
   }
+}
+
+export function writeAppSettingsRow(
+  db: DatabaseSync,
+  settings: Partial<WorkspacePayload['appSettings']>,
+  metadata: { theme: string; selectedProjectId: string }
+): void {
+  const normalized = normalizeAppSettings(settings)
+  db.prepare(`
+    INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      theme = excluded.theme,
+      selected_project_id = excluded.selected_project_id,
+      provider = excluded.provider,
+      model = excluded.model,
+      api_key = excluded.api_key,
+      base_url = excluded.base_url,
+      image_provider = excluded.image_provider,
+      image_model = excluded.image_model,
+      image_api_key = excluded.image_api_key,
+      image_base_url = excluded.image_base_url,
+      auto_save_interval = excluded.auto_save_interval,
+      ui_scale = excluded.ui_scale,
+      dark_mode = excluded.dark_mode
+  `).run(
+    metadata.theme,
+    metadata.selectedProjectId,
+    normalized.provider,
+    normalized.model,
+    normalized.apiKey,
+    normalized.baseUrl,
+    normalized.imageProvider,
+    normalized.imageModel,
+    normalized.imageApiKey,
+    normalized.imageBaseUrl,
+    normalized.autoSaveInterval,
+    normalized.uiScale,
+    normalized.darkMode ? 1 : 0
+  )
 }

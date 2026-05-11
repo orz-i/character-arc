@@ -25,6 +25,30 @@ const emit = defineEmits<{
 
 const isFocused = ref(false)
 
+const CONTENT_EMIT_DEBOUNCE_MS = 600
+let pendingContentEmit: { html: string } | null = null
+let contentEmitTimer: number | null = null
+
+function flushContentEmit(): void {
+  if (contentEmitTimer !== null) {
+    window.clearTimeout(contentEmitTimer)
+    contentEmitTimer = null
+  }
+  if (pendingContentEmit) {
+    const { html } = pendingContentEmit
+    pendingContentEmit = null
+    if (html !== props.modelValue) emit('update:modelValue', html)
+  }
+}
+
+function scheduleContentEmit(html: string): void {
+  pendingContentEmit = { html }
+  if (contentEmitTimer !== null) {
+    window.clearTimeout(contentEmitTimer)
+  }
+  contentEmitTimer = window.setTimeout(flushContentEmit, CONTENT_EMIT_DEBOUNCE_MS)
+}
+
 // ── 搜索/替换状态 ─────────────────────────────
 const showSearch = ref(false)
 const searchTerm = ref('')
@@ -121,6 +145,7 @@ const editor = useEditor({
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
+        flushContentEmit()
         emit('shortcut', { action: event.shiftKey ? 'save-version' : 'save-draft' })
         return true
       }
@@ -130,12 +155,12 @@ const editor = useEditor({
   onFocus: () => { isFocused.value = true },
   onBlur: ({ editor: instance }) => {
     isFocused.value = false
+    flushContentEmit()
     emitSelectionSnapshot(instance)
   },
   onSelectionUpdate: ({ editor: instance }) => { emitSelectionSnapshot(instance) },
   onUpdate: ({ editor: instance }) => {
-    const html = instance.getHTML()
-    if (html !== props.modelValue) emit('update:modelValue', html)
+    scheduleContentEmit(instance.getHTML())
   }
 })
 
@@ -165,6 +190,9 @@ watch(
   ([chapterId, value], previousValue) => {
     const instance = editor.value
     if (!instance) return
+    if (previousValue && previousValue[0] !== chapterId) {
+      flushContentEmit()
+    }
     const nextHtml = ensureEditorHtmlContent(value)
     if (nextHtml === instance.getHTML()) return
     instance.commands.setContent(nextHtml, { emitUpdate: false })
@@ -185,6 +213,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  flushContentEmit()
   editor.value?.destroy()
 })
 </script>

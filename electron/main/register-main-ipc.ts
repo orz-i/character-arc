@@ -47,6 +47,11 @@ type RegisterMainIpcHandlersDeps = {
   ensureWorkspaceDb: () => Promise<DatabaseSync>
   readWorkspaceSnapshot: (db: DatabaseSync) => unknown
   writeWorkspaceSnapshot: (db: DatabaseSync, payload: unknown) => void
+  writeAppSettingsRow: (
+    db: DatabaseSync,
+    settings: unknown,
+    metadata: { theme: string; selectedProjectId: string }
+  ) => void
   validateImportedPayload: (payload: unknown) => { valid: true; payload: unknown; meta: unknown } | { valid: false; message: string }
   resolveImageMime: (filePath: string) => string
   emitReferenceImportProgress: (window: BrowserWindow, payload: ReferenceImportProgressPayload) => void
@@ -612,6 +617,28 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown workspace save error'
+      }
+    }
+  })
+
+  ipcMain.handle('characterarc:save-app-settings', async (_event, payload: unknown) => {
+    try {
+      const db = await deps.ensureWorkspaceDb()
+      const record = (payload ?? {}) as {
+        theme?: unknown
+        selectedProjectId?: unknown
+        appSettings?: unknown
+      }
+      const theme = typeof record.theme === 'string' ? record.theme : 'ocean'
+      const selectedProjectId = typeof record.selectedProjectId === 'string' ? record.selectedProjectId : ''
+      deps.writeAppSettingsRow(db, record.appSettings, { theme, selectedProjectId })
+      nativeTheme.themeSource = (record.appSettings as { darkMode?: boolean } | undefined)?.darkMode ? 'dark' : 'light'
+      return { success: true }
+    } catch (error) {
+      console.error('[workspace] saveAppSettings failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown app settings save error'
       }
     }
   })

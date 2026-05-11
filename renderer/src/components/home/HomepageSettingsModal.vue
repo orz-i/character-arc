@@ -329,13 +329,16 @@ function saveSettings(): void {
           </div>
           <div class="settings-grid">
             <n-form-item label="图片服务预设">
-              <n-select
-                :options="imageProviderOptions"
-                :value="draftSettings.imageProvider"
-                placeholder="选择预设快速填充模型和地址"
-                clearable
-                @update:value="(value) => handleImageProviderChange(value ?? '')"
-              />
+              <div class="preset-field">
+                <n-select
+                  :options="imageProviderOptions"
+                  :value="draftSettings.imageProvider"
+                  placeholder="选择预设快速填充模型和地址"
+                  clearable
+                  @update:value="(value) => handleImageProviderChange(value ?? '')"
+                />
+                <span class="preset-hint">切换预设仅更新模型名和 Base URL，API Key 不会被覆盖。</span>
+              </div>
             </n-form-item>
             <n-form-item label="图片模型名称">
               <div class="model-input-row">
@@ -669,6 +672,19 @@ function saveSettings(): void {
 
 .model-fetch-btn {
   flex-shrink: 0;
+}
+
+.preset-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.preset-hint {
+  color: var(--arc-text-hint);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .spin-icon {

@@ -271,6 +271,7 @@ export type WorkspacePayload = {
     model: string
     apiKey: string
     baseUrl: string
+    imageProvider: string
     imageModel: string
     imageApiKey: string
     imageBaseUrl: string
@@ -278,6 +279,19 @@ export type WorkspacePayload = {
     uiScale: number
     darkMode: boolean
   }
+  coverWorkbenchHistory: Array<{
+    id: string
+    createdAt: string
+    cover: string
+    promptTitle: string
+    prompt: string
+    summary: string
+    keywords: string[]
+    genre: string
+    targetPlatform: string
+    authorName: string
+    extraNotes: string
+  }>
 }
 
 export type LegacyWorkspacePayload = Omit<WorkspacePayload, 'workspaces'> & {
@@ -395,6 +409,7 @@ export function normalizeAppSettings(
     model: settings?.model || 'deepseek-chat',
     apiKey: settings?.apiKey || '',
     baseUrl: settings?.baseUrl || 'https://api.deepseek.com/v1',
+    imageProvider: settings?.imageProvider || '',
     imageModel: settings?.imageModel || '',
     imageApiKey: settings?.imageApiKey || '',
     imageBaseUrl: settings?.imageBaseUrl || '',
@@ -435,12 +450,39 @@ export function normalizeProjectRecord(
   }
 }
 
+export function normalizeCoverWorkbenchHistory(
+  items?: unknown
+): WorkspacePayload['coverWorkbenchHistory'] {
+  if (!Array.isArray(items)) return []
+  return items
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      id: String(item.id ?? ''),
+      createdAt: String(item.createdAt ?? ''),
+      cover: String(item.cover ?? ''),
+      promptTitle: String(item.promptTitle ?? ''),
+      prompt: String(item.prompt ?? ''),
+      summary: String(item.summary ?? ''),
+      keywords: Array.isArray(item.keywords)
+        ? item.keywords.map((k) => String(k)).filter(Boolean)
+        : [],
+      genre: String(item.genre ?? ''),
+      targetPlatform: String(item.targetPlatform ?? ''),
+      authorName: String(item.authorName ?? ''),
+      extraNotes: String(item.extraNotes ?? '')
+    }))
+    .filter((item) => item.id)
+}
+
 export function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWorkspacePayload): WorkspacePayload {
   if ('workspaces' in payload && payload.workspaces) {
     return {
       ...payload,
       projects: payload.projects.map((project) => normalizeProjectRecord(project)),
-      appSettings: normalizeAppSettings(payload.appSettings)
+      appSettings: normalizeAppSettings(payload.appSettings),
+      coverWorkbenchHistory: normalizeCoverWorkbenchHistory(
+        (payload as WorkspacePayload).coverWorkbenchHistory
+      )
     }
   }
 
@@ -538,6 +580,9 @@ export function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWork
     selectedProjectId,
     projects,
     workspaces,
-    appSettings: normalizeAppSettings(legacyPayload.appSettings)
+    appSettings: normalizeAppSettings(legacyPayload.appSettings),
+    coverWorkbenchHistory: normalizeCoverWorkbenchHistory(
+      (legacyPayload as { coverWorkbenchHistory?: unknown }).coverWorkbenchHistory
+    )
   }
 }
