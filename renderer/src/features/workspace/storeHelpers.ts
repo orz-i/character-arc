@@ -229,6 +229,7 @@ export const defaultAppSettings: AppSettings = {
   model: 'deepseek-chat',
   apiKey: '',
   baseUrl: 'https://api.deepseek.com/v1',
+  imageProvider: '',
   imageModel: '',
   imageApiKey: '',
   imageBaseUrl: '',
@@ -303,6 +304,7 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
   return {
     ...defaultAppSettings,
     ...settings,
+    imageProvider: settings?.imageProvider?.trim() || defaultAppSettings.imageProvider,
     imageModel: settings?.imageModel?.trim() || defaultAppSettings.imageModel,
     imageApiKey: settings?.imageApiKey?.trim() || defaultAppSettings.imageApiKey,
     imageBaseUrl: settings?.imageBaseUrl?.trim() || defaultAppSettings.imageBaseUrl,

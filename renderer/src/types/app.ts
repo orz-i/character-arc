@@ -770,6 +770,8 @@ export interface AppSettings {
   apiKey: string
   /** API 基础地址 */
   baseUrl: string
+  /** 图片服务预设标识 */
+  imageProvider: string
   /** 图片生成模型名称 */
   imageModel: string
   /** 图片生成接口鉴权密钥 */

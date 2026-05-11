@@ -42,6 +42,7 @@ const draftSettings = reactive<AppSettings>({
   model: '',
   apiKey: '',
   baseUrl: '',
+  imageProvider: '',
   imageModel: '',
   imageApiKey: '',
   imageBaseUrl: '',
@@ -50,10 +51,9 @@ const draftSettings = reactive<AppSettings>({
   darkMode: false
 })
 const draftTheme = ref<ThemeName>('ocean')
-const draftImageProvider = ref('')
 
 const activeProviderPreset = computed(() => getProviderPreset(draftSettings.provider))
-const activeImageProviderPreset = computed(() => getImageProviderPreset(draftImageProvider.value))
+const activeImageProviderPreset = computed(() => getImageProviderPreset(draftSettings.imageProvider))
 const activeThemePreset = computed(() => themePresets.find((preset) => preset.name === draftTheme.value) ?? themePresets[0])
 const draftAutoSaveLabel = computed(() => formatAutoSaveIntervalLabel(draftSettings.autoSaveInterval))
 const isDraftLiveAutoSave = computed(() => isLiveAutoSaveInterval(draftSettings.autoSaveInterval))
@@ -69,6 +69,7 @@ const hasPendingChanges = computed(() =>
   || draftSettings.model !== appStore.appSettings.model
   || draftSettings.apiKey !== appStore.appSettings.apiKey
   || draftSettings.baseUrl !== appStore.appSettings.baseUrl
+  || draftSettings.imageProvider !== appStore.appSettings.imageProvider
   || draftSettings.imageModel !== appStore.appSettings.imageModel
   || draftSettings.imageApiKey !== appStore.appSettings.imageApiKey
   || draftSettings.imageBaseUrl !== appStore.appSettings.imageBaseUrl
@@ -82,6 +83,7 @@ function syncDraftFromStore(): void {
   draftSettings.model = appStore.appSettings.model
   draftSettings.apiKey = appStore.appSettings.apiKey
   draftSettings.baseUrl = appStore.appSettings.baseUrl
+  draftSettings.imageProvider = appStore.appSettings.imageProvider
   draftSettings.imageModel = appStore.appSettings.imageModel
   draftSettings.imageApiKey = appStore.appSettings.imageApiKey
   draftSettings.imageBaseUrl = appStore.appSettings.imageBaseUrl
@@ -115,7 +117,7 @@ function handleProviderChange(provider: string): void {
 }
 
 function handleImageProviderChange(value: string): void {
-  draftImageProvider.value = value
+  draftSettings.imageProvider = value
   const defaults = resolveImageProviderDefaults(value)
   draftSettings.imageModel = defaults.model
   draftSettings.imageBaseUrl = defaults.baseUrl
@@ -182,6 +184,7 @@ function saveSettings(): void {
   appStore.updateAppSetting('model', draftSettings.model)
   appStore.updateAppSetting('apiKey', draftSettings.apiKey)
   appStore.updateAppSetting('baseUrl', draftSettings.baseUrl)
+  appStore.updateAppSetting('imageProvider', draftSettings.imageProvider)
   appStore.updateAppSetting('imageModel', draftSettings.imageModel)
   appStore.updateAppSetting('imageApiKey', draftSettings.imageApiKey)
   appStore.updateAppSetting('imageBaseUrl', draftSettings.imageBaseUrl)
@@ -328,7 +331,7 @@ function saveSettings(): void {
             <n-form-item label="图片服务预设">
               <n-select
                 :options="imageProviderOptions"
-                :value="draftImageProvider"
+                :value="draftSettings.imageProvider"
                 placeholder="选择预设快速填充模型和地址"
                 clearable
                 @update:value="(value) => handleImageProviderChange(value ?? '')"
