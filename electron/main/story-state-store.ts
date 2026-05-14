@@ -191,6 +191,9 @@ const STORY_STATE_SCHEMA = `
     updated_at TEXT NOT NULL
   ) STRICT;
 
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_world_rules_project_rid
+    ON story_world_rules(project_id, rule_id);
+
   CREATE TABLE IF NOT EXISTS story_countdown_clocks (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
