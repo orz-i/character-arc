@@ -6,9 +6,9 @@
   "main": "./dist-electron/main/index.js",
   "author": "OpenAI Codex",
   "scripts": {
-    "dev": "set ELECTRON_RUN_AS_NODE=&& electron-vite dev",
-    "build": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build",
-    "preview": "set ELECTRON_RUN_AS_NODE=&& electron-vite preview",
+    "dev": "cross-env ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "build": "cross-env ELECTRON_RUN_AS_NODE= vue-tsc --noEmit && cross-env ELECTRON_RUN_AS_NODE= electron-vite build",
+    "preview": "cross-env ELECTRON_RUN_AS_NODE= electron-vite preview",
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
@@ -33,6 +33,7 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "cross-env": "^10.1.0",
     "electron": "^37.2.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
