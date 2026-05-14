@@ -17,6 +17,7 @@ import { probeStructuredOutputMode } from './capability-probe'
 import { buildRunMeta, buildResponsePreview } from './run-meta'
 import { logPrompt, logResponse, logSelection } from './logging'
 import { buildRepairPrompt } from '../prompts/repair'
+import { extractJsonObject } from '../tasks/base'
 import { runAgentTask } from '../agent'
 import { ensureWorkspaceDb } from '../../workspace-store'
 import { buildStoryStateContext, formatStoryStateForPrompt, applyStateDelta } from '../../story-state-store'
@@ -413,9 +414,7 @@ ${chapterContent}
 
   try {
     const raw = await requestAiText(settings, prompt, 1500)
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
-    const parsed = JSON.parse(jsonMatch[0]) as StateDelta
+    const parsed = extractJsonObject(raw) as unknown as StateDelta
     if (!parsed.characters_updated) parsed.characters_updated = []
     if (!parsed.relationships_delta) parsed.relationships_delta = []
     if (!parsed.foreshadowing_delta) parsed.foreshadowing_delta = { planted: [], advanced: [], resolved: [] }
