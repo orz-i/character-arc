@@ -24,6 +24,9 @@ manifest:
     - 节奏设计
   priority: 7
   required: false
+  enabled: true
+  compatibility: native
+  compatibilityNote: 为500+章超长篇设计完整叙事操作系统：分卷/里程碑/伏笔/角色弧/节奏/主题。
   references:
     - file: references/blueprint-schema.md
       loadWhen:

@@ -4,6 +4,19 @@ version: 1.0.0
 description: |
   短篇网文拆文。拆解爆款短篇小说的叙事结构、情绪曲线、反转技巧、钩子设计。
   触发方式：/story-short-analyze、/短篇拆文、「帮我拆这个短篇」「分析这篇故事」
+manifest:
+  category: analysis
+  stages:
+    - reference
+  tasks:
+    - reference-style-chunk
+    - reference-style-analysis
+  triggers:
+    - 拆书
+    - 分析
+  priority: 5
+  enabled: true
+  compatibility: native
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode

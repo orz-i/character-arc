@@ -35,11 +35,7 @@ export async function pickSkillsFor(
       score: computeScore(skill, task, context)
     }))
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => {
-      const priorityDiff = b.skill.manifest.priority - a.skill.manifest.priority
-      if (priorityDiff !== 0) return priorityDiff
-      return b.score - a.score
-    })
+    .sort((a, b) => b.score - a.score)
     .slice(0, maxSkills)
 
   const results: SkillSelection[] = []
@@ -61,14 +57,15 @@ function computeScore(
   task: AiTaskPayload,
   context: Record<string, unknown>
 ): number {
+  // external-only skill 永远不参与匹配
+  if (skill.compatibility === 'external-only') return 0
+
   let score = 0
   const manifest = skill.manifest
 
   // 精确任务匹配：最强信号
-  if (manifest.tasks.length > 0) {
-    if (manifest.tasks.includes(task.task)) {
-      score += 10
-    }
+  if (manifest.tasks.length > 0 && manifest.tasks.includes(task.task)) {
+    score += 10
   }
 
   // 阶段匹配
@@ -101,12 +98,15 @@ function computeScore(
     }
   }
 
-  // required skill 无条件得分（保证不被过滤掉）
+  // required skill 兜底，保证不被 score=0 过滤掉
   if (manifest.required) {
     score = Math.max(score, 1)
   }
 
-  if (skill.compatibility === 'external-only') return 0
+  // priority (0-10) 折算为 0-2 的微调分量：影响排序，但不压过 task/stage 信号
+  if (score > 0) {
+    score += Math.max(0, Math.min(manifest.priority, 10)) * 0.2
+  }
 
   return score
 }

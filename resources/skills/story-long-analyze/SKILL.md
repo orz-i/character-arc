@@ -8,6 +8,19 @@ description: |
   - 深度拆解：逐章拆解整本小说，输出结构化文件到指定目录
   触发方式：/story-long-analyze、/长篇拆文、「帮我拆这本书」「分析黄金三章」
   深度模式触发：「深度拆解」「完整拆解」「系统拆解」或提供小说文本文件路径
+manifest:
+  category: analysis
+  stages:
+    - reference
+  tasks:
+    - reference-style-chunk
+    - reference-style-analysis
+  triggers:
+    - 拆书
+    - 分析
+  priority: 5
+  enabled: true
+  compatibility: native
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode

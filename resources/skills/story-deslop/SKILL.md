@@ -4,6 +4,20 @@ version: 1.0.0
 description: |
   网文去AI味。检测并清除文本中的AI写作痕迹，让文字回归自然、有人味。
   触发方式：/story-deslop、/去AI味、「去AI味」「去味」「deslop」「这篇太AI了」
+manifest:
+  category: polish
+  stages:
+    - draft
+  tasks:
+    - chapter-assistant
+  triggers:
+    - 润色
+    - 去AI味
+    - 降低AI感
+  priority: 4
+  enabled: true
+  compatibility: native
+  compatibilityNote: 适合正文润色与去 AI 味，仅建议在写作阶段启用。
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode

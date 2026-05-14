@@ -4,6 +4,32 @@ version: 1.0.0
 description: |
   短篇网文写作。辅助短篇小说创作，从构思到成稿，聚焦情绪拉扯与节奏把控。
   触发方式：/story-short-write、/写短篇、「帮我写一篇短篇」「写个盐言故事」
+manifest:
+  category: writing
+  stages:
+    - premise
+    - setting
+    - outline
+    - draft
+  tasks:
+    - chapter-assistant
+    - chapter-first-draft
+    - outline-batch
+    - outline-chain
+    - chapter-analysis
+    - inspiration-pack
+    - project-bootstrap
+    - worldview-entry
+    - character-card
+    - outline-item
+  triggers:
+    - 写短篇
+    - 短篇
+    - 创作
+  priority: 6
+  enabled: true
+  compatibility: native
+  compatibilityNote: 适合短篇小说的立项和写作阶段。
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode

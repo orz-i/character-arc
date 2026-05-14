@@ -21,6 +21,9 @@ manifest:
     - 润色文本
   priority: 5
   required: true
+  enabled: true
+  compatibility: native
+  compatibilityNote: 中文小说AI内容人性化v2.0：23条禁止模式+148短语替换+105词汇替换+格式规范化。
   references:
     - file: references/replacement-dict.md
       loadWhen:

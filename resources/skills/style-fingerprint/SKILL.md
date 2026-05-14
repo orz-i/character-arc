@@ -10,6 +10,7 @@ manifest:
     - reference-style-chunk
     - reference-style-analysis
     - reference-deep-analyze
+    - style-fingerprint-extract
   stages:
     - reference
   triggers:
@@ -21,6 +22,9 @@ manifest:
     - 量化分析
   priority: 7
   required: false
+  enabled: true
+  compatibility: native
+  compatibilityNote: 从样本文本中提取量化风格DNA，覆盖叙事/语言/对话/描写/禁忌/主题六大维度。
   references:
     - file: references/fingerprint-schema.md
       loadWhen:

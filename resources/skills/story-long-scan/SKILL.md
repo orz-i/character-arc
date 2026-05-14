@@ -4,6 +4,17 @@ version: 1.0.0
 description: |
   长篇网文扫榜。分析起点、番茄、晋江等平台排行榜数据，提炼市场趋势与热门题材。
   触发方式：/story-long-scan、/长篇扫榜、「长篇什么火」「起点排行」
+manifest:
+  category: market
+  stages:
+    - reference
+  triggers:
+    - 排行
+    - 市场
+    - 趋势
+  priority: 5
+  enabled: true
+  compatibility: native
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode

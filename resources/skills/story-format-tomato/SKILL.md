@@ -21,6 +21,9 @@ manifest:
     - 番茄小说
   priority: 5
   required: false
+  enabled: false
+  compatibility: native
+  compatibilityNote: 番茄小说平台移动端排版优化。仅在用户提及番茄/排版时通过 trigger 激活。
 ---
 
 # 番茄小说平台爽文排版格式化

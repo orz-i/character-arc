@@ -22,6 +22,9 @@ manifest:
     - 风格映射
   priority: 7
   required: false
+  enabled: true
+  compatibility: native
+  compatibilityNote: 将风格指纹映射到新作品，生成可执行500+章的融合创作规则集+初始故事状态机。
   references:
     - file: references/fusion-schema.md
       loadWhen:

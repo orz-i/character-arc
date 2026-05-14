@@ -1,4 +1,10 @@
-import type { SkillManifest } from './types'
+import type { SkillCompatibility, SkillManifest } from './types'
+
+export type SkillFrontmatterOverrides = {
+  compatibility?: SkillCompatibility
+  compatibilityNote?: string
+  enabled?: boolean
+}
 
 export function parseSkillFrontmatter(content: string): {
   name: string
@@ -6,6 +12,7 @@ export function parseSkillFrontmatter(content: string): {
   description: string
   source: string
   manifest: Partial<SkillManifest> | null
+  overrides: SkillFrontmatterOverrides
 } {
   const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   const frontmatter = frontmatterMatch?.[1] ?? ''
@@ -48,45 +55,83 @@ export function parseSkillFrontmatter(content: string): {
   const sourceMatch = frontmatter.match(/^\s*source:\s*(.+)$/m)
   if (sourceMatch?.[1]) source = stripYamlScalar(sourceMatch[1])
 
-  const manifest = parseManifestBlock(frontmatter)
+  const { manifest, overrides } = parseManifestBlock(frontmatter)
 
-  return { name, version, description, source, manifest }
+  return { name, version, description, source, manifest, overrides }
 }
 
-function parseManifestBlock(frontmatter: string): Partial<SkillManifest> | null {
+function parseManifestBlock(frontmatter: string): {
+  manifest: Partial<SkillManifest> | null
+  overrides: SkillFrontmatterOverrides
+} {
   const manifestStart = frontmatter.match(/^manifest:\s*$/m)
-  if (!manifestStart) return null
+  if (!manifestStart) return { manifest: null, overrides: {} }
 
   const startIndex = manifestStart.index! + manifestStart[0].length
   const remaining = frontmatter.slice(startIndex)
   const lines = remaining.split(/\r?\n/)
 
   const result: Record<string, unknown> = {}
+  let currentListKey: string | null = null
+  let currentList: string[] | null = null
+
+  const flushList = (): void => {
+    if (currentListKey && currentList) result[currentListKey] = currentList
+    currentListKey = null
+    currentList = null
+  }
+
   for (const line of lines) {
     if (line.match(/^[A-Za-z]/) && !line.startsWith(' ')) break
 
+    const listItemMatch = line.match(/^\s{4,}-\s*(.+)$/)
+    if (listItemMatch && currentList) {
+      currentList.push(stripYamlScalar(listItemMatch[1]))
+      continue
+    }
+
     const match = line.match(/^\s{2}(\w+):\s*(.*)$/)
     if (!match) continue
+    flushList()
+
     const [, key, rawValue] = match
     const value = stripYamlScalar(rawValue)
 
+    if (value === '') {
+      currentListKey = key
+      currentList = []
+      continue
+    }
+
     if (value.startsWith('[') && value.endsWith(']')) {
-      result[key] = value.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean)
-    } else if (value) {
+      result[key] = value.slice(1, -1).split(',').map((s) => stripYamlScalar(s)).filter(Boolean)
+    } else if (value === 'true' || value === 'false') {
+      result[key] = value === 'true'
+    } else {
       result[key] = isNaN(Number(value)) ? value : Number(value)
     }
   }
+  flushList()
 
-  if (Object.keys(result).length === 0) return null
+  const overrides: SkillFrontmatterOverrides = {}
+  if (typeof result.compatibility === 'string') overrides.compatibility = result.compatibility as SkillCompatibility
+  if (typeof result.compatibilityNote === 'string') overrides.compatibilityNote = result.compatibilityNote
+  if (typeof result.enabled === 'boolean') overrides.enabled = result.enabled
 
-  return {
+  const manifestKeys = ['category', 'tasks', 'stages', 'triggers', 'priority', 'required']
+  const hasManifestField = manifestKeys.some((k) => result[k] !== undefined)
+  if (!hasManifestField) return { manifest: null, overrides }
+
+  const manifest: Partial<SkillManifest> = {
     category: typeof result.category === 'string' ? result.category as SkillManifest['category'] : undefined,
     tasks: Array.isArray(result.tasks) ? result.tasks as SkillManifest['tasks'] : undefined,
     stages: Array.isArray(result.stages) ? result.stages as SkillManifest['stages'] : undefined,
-    triggers: Array.isArray(result.triggers) ? result.triggers : undefined,
+    triggers: Array.isArray(result.triggers) ? result.triggers as string[] : undefined,
     priority: typeof result.priority === 'number' ? result.priority : undefined,
-    required: result.required === true || result.required === 'true' ? true : undefined
-  } as Partial<SkillManifest>
+    required: result.required === true ? true : undefined
+  }
+
+  return { manifest, overrides }
 }
 
 function stripYamlScalar(value: string): string {

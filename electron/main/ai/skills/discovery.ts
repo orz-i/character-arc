@@ -70,9 +70,9 @@ async function loadSkillDefinition(root: string, dirName: string, scope: 'builti
       description: frontmatter.description || '',
       source: frontmatter.source || '',
       manifest: fullManifest,
-      compatibility: heuristic.compatibility,
-      compatibilityNote: heuristic.compatibilityNote,
-      enabled: heuristic.enabled,
+      compatibility: frontmatter.overrides.compatibility ?? heuristic.compatibility,
+      compatibilityNote: frontmatter.overrides.compatibilityNote ?? heuristic.compatibilityNote,
+      enabled: frontmatter.overrides.enabled ?? heuristic.enabled,
       referencesCount,
       content
     }

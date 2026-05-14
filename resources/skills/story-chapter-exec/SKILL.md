@@ -20,6 +20,9 @@ manifest:
     - 章节生成
   priority: 8
   required: false
+  enabled: true
+  compatibility: native
+  compatibilityNote: 基于融合指南+世界状态+细纲批量生成章节正文，输出续写包支持循环调用。
   references:
     - file: references/exec-constraints.md
       loadWhen:

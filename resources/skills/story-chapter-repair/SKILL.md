@@ -22,6 +22,9 @@ manifest:
     - 修复章节
   priority: 6
   required: false
+  enabled: false
+  compatibility: native
+  compatibilityNote: 对问题章节进行深度诊断+外科手术式重写。仅在用户明确要求修复时启用。
   references:
     - file: references/diagnostic-schema.md
       loadWhen:

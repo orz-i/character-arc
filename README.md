@@ -359,3 +359,7 @@ CharacterArc/
 - 更强的知识冲突检测、写作审校与一致性校验
 - 更成熟的项目 Skill 编排与提示词治理能力
 - macOS / Linux 平台脚本适配
+
+## 鸣谢
+
+- [oh-story-claudecode](https://github.com/worldwonderer/oh-story-claudecode) — 提供了核心写作 Skills 的方法论与 prompt 工程基础

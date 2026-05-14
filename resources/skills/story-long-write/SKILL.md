@@ -4,6 +4,35 @@ version: 1.0.0
 description: |
   长篇网文写作。从大纲到正文，辅助长篇网络小说的创作，包括世界观、人物、情节线管理。
   触发方式：/story-long-write、/写长篇、/story、/网文、「帮我开书」「写大纲」
+manifest:
+  category: writing
+  stages:
+    - premise
+    - setting
+    - outline
+    - draft
+  tasks:
+    - chapter-assistant
+    - chapter-first-draft
+    - outline-batch
+    - outline-chain
+    - chapter-analysis
+    - inspiration-pack
+    - project-bootstrap
+    - worldview-entry
+    - character-card
+    - outline-item
+  triggers:
+    - 写正文
+    - 写章节
+    - 大纲
+    - 开书
+    - 写长篇
+    - 网文
+  priority: 6
+  enabled: true
+  compatibility: native
+  compatibilityNote: 适合立项、设定、大纲和正文阶段，作为当前项目的核心写作规则来源。
 metadata:
   openclaw:
     source: https://github.com/worldwonderer/oh-story-claudecode
