@@ -882,32 +882,32 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
 export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePayload): void {
   db.exec('BEGIN')
   try {
-    db.exec(`
-      DELETE FROM projects;
-      DELETE FROM worldview_entries;
-      DELETE FROM characters;
-      DELETE FROM organizations;
-      DELETE FROM character_relationships;
-      DELETE FROM organization_memberships;
-      DELETE FROM inspiration_entries;
-      DELETE FROM outline_volumes;
-      DELETE FROM outline_items;
-      DELETE FROM chapter_versions;
-      DELETE FROM chapters;
-      DELETE FROM ai_messages;
-      DELETE FROM knowledge_documents;
-      DELETE FROM ai_runs;
-      DELETE FROM workflow_documents;
-      DELETE FROM plot_threads;
-      DELETE FROM app_settings;
-      DELETE FROM cover_workbench_history;
-    `)
+    const allIds: Record<string, Set<string>> = {
+      projects: new Set(),
+      worldview_entries: new Set(),
+      characters: new Set(),
+      organizations: new Set(),
+      character_relationships: new Set(),
+      organization_memberships: new Set(),
+      inspiration_entries: new Set(),
+      outline_volumes: new Set(),
+      outline_items: new Set(),
+      chapters: new Set(),
+      chapter_versions: new Set(),
+      ai_messages: new Set(),
+      knowledge_documents: new Set(),
+      ai_runs: new Set(),
+      workflow_documents: new Set(),
+      plot_threads: new Set(),
+      cover_workbench_history: new Set()
+    }
 
     const insertProject = db.prepare(`
-      INSERT INTO projects (id, title, genre, novel_length, word_count, last_edited, cover, target_platform, cover_history_json, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
+      INSERT OR REPLACE INTO projects (id, title, genre, novel_length, word_count, last_edited, cover, target_platform, cover_history_json, reference_works_json, writing_style_preset_id, writing_style_prompt, novel_workflow_stages_json, project_skills_json, chapter_assistant_templates_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const project of payload.projects) {
+      allIds.projects.add(project.id)
       insertProject.run(
         project.id,
         project.title,
@@ -928,76 +928,76 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     }
 
     const insertWorldview = db.prepare(`
-      INSERT INTO worldview_entries (id, project_id, type, title, content, sort_order, created_at, updated_at)
+      INSERT OR REPLACE INTO worldview_entries (id, project_id, type, title, content, sort_order, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertCharacter = db.prepare(`
-      INSERT INTO characters (id, project_id, name, role, description, avatar, tags_json)
+      INSERT OR REPLACE INTO characters (id, project_id, name, role, description, avatar, tags_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertOrganization = db.prepare(`
-      INSERT INTO organizations (id, project_id, name, type, description, motto, color, sort_order, created_at, updated_at)
+      INSERT OR REPLACE INTO organizations (id, project_id, name, type, description, motto, color, sort_order, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertCharacterRelationship = db.prepare(`
-      INSERT INTO character_relationships (id, project_id, from_character_id, to_character_id, type, description, intensity, created_at, updated_at)
+      INSERT OR REPLACE INTO character_relationships (id, project_id, from_character_id, to_character_id, type, description, intensity, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertOrganizationMembership = db.prepare(`
-      INSERT INTO organization_memberships (id, project_id, character_id, organization_id, role, notes, created_at, updated_at)
+      INSERT OR REPLACE INTO organization_memberships (id, project_id, character_id, organization_id, role, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertInspiration = db.prepare(`
-      INSERT INTO inspiration_entries (id, project_id, type, title, content, tags_json, source, sort_order, created_at, updated_at)
+      INSERT OR REPLACE INTO inspiration_entries (id, project_id, type, title, content, tags_json, source, sort_order, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertOutlineVolume = db.prepare(`
-      INSERT INTO outline_volumes (id, project_id, title, word_target, summary, sort_order)
+      INSERT OR REPLACE INTO outline_volumes (id, project_id, title, word_target, summary, sort_order)
       VALUES (?, ?, ?, ?, ?, ?)
     `)
 
     const insertOutline = db.prepare(`
-      INSERT INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, status, sort_order)
+      INSERT OR REPLACE INTO outline_items (id, project_id, volume_id, title, word_target, conflict, summary, status, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertChapter = db.prepare(`
-      INSERT INTO chapters (id, project_id, volume_id, outline_item_id, title, summary, status, word_target, content, sort_order)
+      INSERT OR REPLACE INTO chapters (id, project_id, volume_id, outline_item_id, title, summary, status, word_target, content, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertChapterVersion = db.prepare(`
-      INSERT INTO chapter_versions (id, project_id, chapter_id, title, summary, status, word_target, content, created_at)
+      INSERT OR REPLACE INTO chapter_versions (id, project_id, chapter_id, title, summary, status, word_target, content, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     const insertMessage = db.prepare(`
-      INSERT INTO ai_messages (id, project_id, role, content, sort_order)
+      INSERT OR REPLACE INTO ai_messages (id, project_id, role, content, sort_order)
       VALUES (?, ?, ?, ?, ?)
     `)
 
     const insertKnowledgeDocument = db.prepare(`
-      INSERT INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
+      INSERT OR REPLACE INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertAiRun = db.prepare(`
-      INSERT INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, repair_triggered, error, response_preview, sort_order)
+      INSERT OR REPLACE INTO ai_runs (id, project_id, chapter_id, task, provider, model, status, started_at, finished_at, duration_ms, used_knowledge_json, repair_triggered, error, response_preview, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertWorkflowDocument = db.prepare(`
-      INSERT INTO workflow_documents (id, project_id, volume_id, doc_key, title, content, updated_at, sort_order)
+      INSERT OR REPLACE INTO workflow_documents (id, project_id, volume_id, doc_key, title, content, updated_at, sort_order)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const insertPlotThread = db.prepare(`
-      INSERT INTO plot_threads (id, project_id, title, description, opened_in_chapter_id, status, closed_in_chapter_id, tags_json, created_at, updated_at)
+      INSERT OR REPLACE INTO plot_threads (id, project_id, title, description, opened_in_chapter_id, status, closed_in_chapter_id, tags_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
@@ -1021,6 +1021,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       }
 
       workspace.worldviewEntries.forEach((entry, index) => {
+        allIds.worldview_entries.add(entry.id)
         insertWorldview.run(
           entry.id,
           project.id,
@@ -1034,6 +1035,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.characters.forEach((character) => {
+        allIds.characters.add(character.id)
         insertCharacter.run(
           character.id,
           project.id,
@@ -1046,6 +1048,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.organizations.forEach((organization, index) => {
+        allIds.organizations.add(organization.id)
         insertOrganization.run(
           organization.id,
           project.id,
@@ -1061,6 +1064,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.characterRelationships.forEach((relationship) => {
+        allIds.character_relationships.add(relationship.id)
         insertCharacterRelationship.run(
           relationship.id,
           project.id,
@@ -1075,6 +1079,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.organizationMemberships.forEach((membership) => {
+        allIds.organization_memberships.add(membership.id)
         insertOrganizationMembership.run(
           membership.id,
           project.id,
@@ -1088,6 +1093,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.inspirationEntries.forEach((entry, index) => {
+        allIds.inspiration_entries.add(entry.id)
         insertInspiration.run(
           entry.id,
           project.id,
@@ -1103,10 +1109,12 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.outlineVolumes.forEach((volume, index) => {
+        allIds.outline_volumes.add(volume.id)
         insertOutlineVolume.run(volume.id, project.id, volume.title, volume.wordTarget, volume.summary, index)
       })
 
       workspace.outlineItems.forEach((item, index) => {
+        allIds.outline_items.add(item.id)
         insertOutline.run(
           item.id,
           project.id,
@@ -1121,6 +1129,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.chapters.forEach((chapter, index) => {
+        allIds.chapters.add(chapter.id)
         insertChapter.run(
           chapter.id,
           project.id,
@@ -1136,6 +1145,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.chapterVersions.forEach((version) => {
+        allIds.chapter_versions.add(version.id)
         insertChapterVersion.run(
           version.id,
           project.id,
@@ -1150,10 +1160,12 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.messages.forEach((message, index) => {
+        allIds.ai_messages.add(message.id)
         insertMessage.run(message.id, project.id, message.role, message.content, index)
       })
 
       workspace.knowledgeDocuments.forEach((document) => {
+        allIds.knowledge_documents.add(document.id)
         insertKnowledgeDocument.run(
           document.id,
           project.id,
@@ -1170,6 +1182,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       })
 
       workspace.aiRuns.forEach((run, index) => {
+        allIds.ai_runs.add(run.id)
         insertAiRun.run(
           run.id,
           project.id,
@@ -1209,8 +1222,10 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
 
       ;(volumeWorkflowSources.length > 0 ? volumeWorkflowSources : fallbackWorkflowSources).forEach(
         ({ volumeId, document, sortOrder }) => {
+          const docId = `${project.id}-${volumeId}-${document.key}`
+          allIds.workflow_documents.add(docId)
           insertWorkflowDocument.run(
-            `${project.id}-${volumeId}-${document.key}`,
+            docId,
             project.id,
             volumeId,
             document.key,
@@ -1223,6 +1238,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       )
 
       ;(workspace.plotThreads ?? []).forEach((thread) => {
+        allIds.plot_threads.add(thread.id)
         insertPlotThread.run(
           thread.id,
           project.id,
@@ -1242,10 +1258,11 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     const coverWorkbenchHistory = Array.isArray(payload.coverWorkbenchHistory) ? payload.coverWorkbenchHistory : []
     if (coverWorkbenchHistory.length > 0) {
       const insertCoverHistory = db.prepare(`
-        INSERT INTO cover_workbench_history (id, created_at, cover, prompt_title, prompt, summary, keywords_json, genre, target_platform, author_name, extra_notes, sort_order)
+        INSERT OR REPLACE INTO cover_workbench_history (id, created_at, cover, prompt_title, prompt, summary, keywords_json, genre, target_platform, author_name, extra_notes, sort_order)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       coverWorkbenchHistory.forEach((item, index) => {
+        allIds.cover_workbench_history.add(item.id)
         insertCoverHistory.run(
           item.id,
           item.createdAt,
@@ -1264,7 +1281,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     }
 
     db.prepare(`
-      INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
+      INSERT OR REPLACE INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
@@ -1283,15 +1300,23 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       normalizedAppSettings.darkModeStyle
     )
 
-    // 孤儿 embedding 清理：所有不再对应活跃 chapter / reference_work 的向量段都删除，
-    // 防止章节/参考作品被删除后 story_embeddings 表里留下无引用的垃圾数据。
-    const activeChapterIds = new Set<string>()
+    // 删除不再存在于 payload 中的孤儿行
+    for (const [table, ids] of Object.entries(allIds)) {
+      if (ids.size === 0) {
+        db.exec(`DELETE FROM ${table}`)
+      } else {
+        const existing = db.prepare(`SELECT id FROM ${table}`).all() as Array<{ id: string }>
+        const deleteStmt = db.prepare(`DELETE FROM ${table} WHERE id = ?`)
+        for (const row of existing) {
+          if (!ids.has(row.id)) deleteStmt.run(row.id)
+        }
+      }
+    }
+
+    // 孤儿 embedding 清理
+    const activeChapterIds = allIds.chapters
     const activeReferenceWorkIds = new Set<string>()
     for (const project of payload.projects) {
-      const workspace = payload.workspaces[project.id]
-      if (workspace) {
-        for (const chapter of workspace.chapters) activeChapterIds.add(chapter.id)
-      }
       for (const work of project.referenceWorks ?? []) {
         if (work?.id) activeReferenceWorkIds.add(String(work.id))
       }
