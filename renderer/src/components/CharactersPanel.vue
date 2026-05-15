@@ -4,6 +4,7 @@ import { MoreVertical, Network, Plus, Search, Sparkles } from 'lucide-vue-next'
 import { NButton, NDropdown, NDynamicTags, NForm, NFormItem, NInput, NModal, NTag, useDialog, useMessage } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
+import { resolveAccentColor, resolveReadableTextColor } from '@/features/relations/graph'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type { CharacterCard } from '@/types/app'
 import type { DropdownOption } from 'naive-ui'
@@ -50,7 +51,14 @@ const menuOptions: DropdownOption[] = [
   { key: 'delete', label: '删除角色' }
 ]
 
-// 将标签的语义色调（danger/success/warning）映射为 Naive UI NTag 组件所需的 type 值
+function avatarStyle(avatar: string, seed: string): { background: string, color: string } {
+  const accent = resolveAccentColor(avatar, seed)
+  return {
+    background: avatar?.trim() ? avatar : accent,
+    color: resolveReadableTextColor(accent)
+  }
+}
+
 function tagType(tone?: 'default' | 'danger' | 'success' | 'warning'): 'default' | 'error' | 'success' | 'warning' {
   switch (tone) {
     case 'danger':
@@ -229,7 +237,7 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
     <div class="character-grid">
       <!-- Direct card click keeps high-frequency editing faster than routing every change through the overflow menu. -->
       <article v-for="character in filteredCharacters" :key="character.id" class="character-card" @click="openEditor(character)">
-        <div class="avatar" :style="{ background: character.avatar }">
+        <div class="avatar" :style="avatarStyle(character.avatar, character.name)">
           <span>{{ character.name.slice(0, 1) }}</span>
         </div>
         <div class="character-info">
@@ -451,11 +459,10 @@ function handleMenuSelect(action: string | number, character: CharacterCard): vo
 }
 
 .avatar span {
-  color: white;
+  color: inherit;
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.04em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .character-head {

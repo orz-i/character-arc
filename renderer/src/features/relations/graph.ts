@@ -364,7 +364,7 @@ export function buildOrganizationNodeId(organizationId: string): string {
   return `organization-${organizationId}`
 }
 
-function resolveAccentColor(source: string, fallbackSeed: string): string {
+export function resolveAccentColor(source: string, fallbackSeed: string): string {
   const hexMatch = source.match(/#(?:[0-9a-fA-F]{3}){1,2}/)
   if (hexMatch) {
     return hexMatch[0]
