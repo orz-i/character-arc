@@ -276,7 +276,7 @@ export function useChapterAi(): {
           const result = await startFn(toIpcPayload({
             task: 'chapter-assistant',
             settings: appStore.appSettings,
-            context
+            context: { ...context, chapterId: chapter.id }
           }))
 
           const sid = (result.result as { streamId?: string } | undefined)?.streamId

@@ -59,7 +59,7 @@ export async function runStreamingAgentLoop(params: StreamingAgentLoopParams): P
 
     const textBeforeTools = extractText(response.contentBlocks)
     if (textBeforeTools) {
-      params.handlers.onTextDelta(textBeforeTools + '\n\n')
+      await emitTextProgressively(textBeforeTools + '\n\n', params.handlers.onTextDelta, params.ctx.signal)
     }
 
     messages.push({ role: 'assistant', content: response.contentBlocks })
@@ -105,8 +105,8 @@ function extractText(blocks: AssistantContentBlock[]): string {
   return blocks.filter(isTextBlock).map((b) => b.text).join('').trim()
 }
 
-const CHUNK_SIZE = 12
-const CHUNK_DELAY_MS = 15
+const CHUNK_SIZE = 32
+const CHUNK_DELAY_MS = 8
 
 async function emitTextProgressively(
   text: string,

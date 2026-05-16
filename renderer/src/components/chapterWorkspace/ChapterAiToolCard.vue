@@ -55,8 +55,8 @@ const toolIcon = computed(() => {
 }
 
 .tool-card.error {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: color-mix(in srgb, #dc2626 30%, var(--arc-border));
+  background: color-mix(in srgb, #dc2626 8%, var(--arc-bg-surface));
 }
 
 .tool-header {

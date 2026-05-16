@@ -38,7 +38,8 @@ export async function runStreamingAgentTask(
 
   const input = buildPromptInput(task, candidateSkills, knowledgeContext)
   const prompt = handler.buildPrompt(input)
-  const maxTokens = handler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task)
+  const baseMaxTokens = handler.resolveMaxTokens?.(input) ?? resolveMaxTokens(task) ?? 4096
+  const maxTokens = Math.max(baseMaxTokens, 4096)
 
   const candidateSkillDefs = candidateSkills
     .map((sel) => getSkillById(sel.id, projectId || undefined))
