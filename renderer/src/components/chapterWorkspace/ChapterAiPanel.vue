@@ -22,7 +22,7 @@ defineEmits<{
 
 const message = useMessage()
 const appStore = useAppStore()
-const { messages, isResponding, hasSelection, send, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+const { messages, isResponding, hasSelection, send, stop, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
 const draft = useChapterFirstDraft()
 const detect = useChapterThreadDetect()
 const summary = useChapterSummary()
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
       @regenerate="send"
     />
 
-    <ChapterAiInput :disabled="isResponding" @send="send" />
+    <ChapterAiInput :disabled="isResponding" @send="send" @stop="stop" />
 
     <ChapterFirstDraftDialog
       :show="draft.modalVisible.value"

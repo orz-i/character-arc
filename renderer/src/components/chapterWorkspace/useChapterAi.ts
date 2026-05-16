@@ -30,6 +30,7 @@ export function useChapterAi(): {
   hasSelection: Ref<boolean>
   selectedText: Ref<string>
   send: (prompt: string) => Promise<void>
+  stop: () => Promise<void>
   resetMessages: () => void
   applyToChapter: (content: string, mode: ChapterInsertionMode) => boolean
   registerStreamListener: () => void
@@ -213,6 +214,11 @@ export function useChapterAi(): {
     }
   }
 
+  async function stop(): Promise<void> {
+    if (!streamId) return
+    await window.characterArc.stopAiStream(streamId)
+  }
+
   function resetMessages(): void {
     messages.value = []
   }
@@ -227,6 +233,7 @@ export function useChapterAi(): {
     hasSelection,
     selectedText,
     send,
+    stop,
     resetMessages,
     applyToChapter,
     registerStreamListener,

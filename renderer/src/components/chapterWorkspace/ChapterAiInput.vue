@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ArrowUp } from 'lucide-vue-next'
+import { ArrowUp, Square } from 'lucide-vue-next'
 
 const props = defineProps<{
   disabled: boolean
@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [value: string]
+  stop: []
 }>()
 
 const text = ref('')
@@ -59,7 +60,10 @@ function handleKey(event: KeyboardEvent): void {
             {{ mode }}
           </button>
         </div>
-        <button class="send" :disabled="disabled || !text.trim()" @click="handleSend">
+        <button v-if="disabled" class="send stop" @click="$emit('stop')">
+          <Square :size="12" />
+        </button>
+        <button v-else class="send" :disabled="!text.trim()" @click="handleSend">
           <ArrowUp :size="14" />
         </button>
       </div>
@@ -164,5 +168,19 @@ function handleKey(event: KeyboardEvent): void {
 .send:disabled {
   background: color-mix(in srgb, var(--arc-text-hint) 60%, transparent);
   cursor: not-allowed;
+}
+
+.send.stop {
+  background: #ef4444;
+  animation: pulse-stop 1.5s ease-in-out infinite;
+}
+
+.send.stop:hover {
+  background: #dc2626;
+}
+
+@keyframes pulse-stop {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
 }
 </style>
