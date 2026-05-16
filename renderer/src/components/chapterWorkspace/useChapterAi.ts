@@ -124,6 +124,7 @@ export function useChapterAi(): {
           versionId: payload.versionId
         })
       }
+      void appStore.reloadChapterFromDb(payload.chapterId)
       return
     }
     if (payload.type === 'agent_status') {

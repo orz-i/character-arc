@@ -265,6 +265,24 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
     }
   })
 
+  // ── 读取单个章节内容（供 agent 编辑后前端刷新） ──
+  ipcMain.handle('characterarc:ai-read-chapter', async (_event, payload: unknown) => {
+    try {
+      const req = payload as { projectId?: string; chapterId?: string }
+      const projectId = String(req?.projectId ?? '').trim()
+      const chapterId = String(req?.chapterId ?? '').trim()
+      if (!projectId || !chapterId) throw new Error('缺少 projectId 或 chapterId。')
+      const db = await ensureWorkspaceDb()
+      const row = db.prepare(
+        'SELECT id, title, summary, status, word_target, content FROM chapters WHERE id = ? AND project_id = ?'
+      ).get(chapterId, projectId) as Record<string, unknown> | undefined
+      if (!row) throw new Error('章节不存在')
+      return { success: true, result: { id: row.id, title: row.title, summary: row.summary, status: row.status, wordTarget: row.word_target, content: row.content } }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '读取章节失败' }
+    }
+  })
+
   // ── 螺旋式深度生成 ──
   let activeSpiralController: AbortController | null = null
 

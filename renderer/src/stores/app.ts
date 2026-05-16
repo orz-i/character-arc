@@ -2400,6 +2400,21 @@ export const useAppStore = defineStore('app', () => {
     schedulePersist('autosave')
   }
 
+  async function reloadChapterFromDb(chapterId: string): Promise<void> {
+    const projectId = currentProject.value?.id
+    if (!projectId) return
+    const res = await window.characterArc.readChapterFromDb(projectId, chapterId)
+    if (!res.success || !res.result) return
+    const data = res.result
+    updateChapter(chapterId, {
+      title: data.title,
+      summary: data.summary,
+      status: data.status as ChapterDraft['status'],
+      wordTarget: data.wordTarget,
+      content: data.content
+    })
+  }
+
   function updateChapterSummary(value: string): void {
     const chapter = selectedChapter.value
     if (!chapter) {
@@ -3031,6 +3046,7 @@ export const useAppStore = defineStore('app', () => {
     persistWorkspace,
     updateChapter,
     updateChapterContent,
+    reloadChapterFromDb,
     updateChapterSelection,
     updateChapterSummary,
     updateChapterTitle,
