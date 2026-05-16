@@ -808,13 +808,13 @@ watch(
 }
 
 .storage-status.error {
-  border-color: rgba(254, 202, 202, 0.95);
-  background: rgba(254, 242, 242, 0.96);
+  border-color: color-mix(in srgb, var(--arc-danger) 30%, var(--arc-border));
+  background: color-mix(in srgb, var(--arc-danger) 8%, var(--arc-bg-surface));
 }
 
 .storage-status.error span,
 .storage-status.error strong {
-  color: #991b1b;
+  color: var(--arc-danger);
 }
 
 .import-modal-body {

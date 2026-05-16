@@ -316,8 +316,8 @@ const runningCount = computed(() => appStore.runningAiTasks.length)
 }
 
 .stage-done .task-icon {
-  color: #16a34a;
-  background: rgba(22, 163, 74, 0.12);
+  color: var(--arc-success);
+  background: color-mix(in srgb, var(--arc-success) 12%, transparent);
 }
 
 .stage-error .task-icon {

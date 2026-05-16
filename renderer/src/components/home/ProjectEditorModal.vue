@@ -282,7 +282,7 @@ function clearCover(): void {
 }
 
 .length-card:hover {
-  background: rgba(243, 244, 246, 0.96);
+  background: var(--arc-bg-surface-hover);
 }
 
 .length-card.active {

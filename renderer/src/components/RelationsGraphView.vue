@@ -1325,15 +1325,15 @@ function syncNodeLabels(): void {
   position: absolute;
   transform: translateX(-50%);
   pointer-events: auto;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--arc-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.98);
-  color: #0f172a;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-primary);
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
   padding: 7px 10px;
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 18px var(--arc-border);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -1345,13 +1345,13 @@ function syncNodeLabels(): void {
 
 .graph-node-label:hover {
   transform: translateX(-50%) translateY(-1px);
-  border-color: color-mix(in srgb, var(--node-accent) 26%, rgba(15, 23, 42, 0.08));
+  border-color: color-mix(in srgb, var(--node-accent) 26%, var(--arc-border));
   color: var(--node-accent);
   box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
 }
 
 .graph-node-label.active {
-  border-color: color-mix(in srgb, var(--node-accent) 28%, rgba(15, 23, 42, 0.08));
+  border-color: color-mix(in srgb, var(--node-accent) 28%, var(--arc-border));
   color: var(--node-accent);
   box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
 }
@@ -1401,7 +1401,7 @@ function syncNodeLabels(): void {
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: color-mix(in srgb, var(--arc-bg-surface) 84%, white);
+  background: color-mix(in srgb, var(--arc-bg-surface) 84%, var(--arc-bg-surface-hover));
 }
 
 .detail-card-top {
@@ -1423,7 +1423,7 @@ function syncNodeLabels(): void {
 .detail-action {
   border: 1px solid var(--arc-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--arc-bg-surface);
   color: var(--arc-text-primary);
   font-size: 12px;
   font-weight: 700;
@@ -1545,12 +1545,12 @@ function syncNodeLabels(): void {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--arc-bg-surface);
   color: var(--arc-text-primary);
   font-size: 11px;
   font-weight: 700;
   padding: 6px 10px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--arc-border) 50%, transparent);
 }
 
 .dossier-grid {
@@ -1560,14 +1560,14 @@ function syncNodeLabels(): void {
 }
 
 .dossier-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--arc-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--arc-bg-surface);
   padding: 14px;
 }
 
 .dossier-card.primary {
-  background: color-mix(in srgb, var(--arc-primary) 7%, white);
+  background: color-mix(in srgb, var(--arc-primary) 7%, var(--arc-bg-surface));
 }
 
 .dossier-label {
@@ -1602,7 +1602,7 @@ function syncNodeLabels(): void {
 .camp-summary-card {
   border: 1px solid color-mix(in srgb, var(--arc-primary) 28%, var(--arc-border));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--arc-primary) 7%, white);
+  background: color-mix(in srgb, var(--arc-primary) 7%, var(--arc-bg-surface));
   padding: 14px;
 }
 
@@ -1621,7 +1621,7 @@ function syncNodeLabels(): void {
 .signature-card {
   border: 1px solid color-mix(in srgb, var(--arc-primary) 28%, var(--arc-border));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--arc-primary) 5%, white);
+  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-surface));
   padding: 14px;
 }
 
@@ -1663,12 +1663,12 @@ function syncNodeLabels(): void {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--arc-bg-surface);
   color: var(--arc-text-primary);
   font-size: 12px;
   font-weight: 700;
   padding: 8px 12px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--arc-border) 50%, transparent);
 }
 
 .detail-connection-block {
@@ -1700,9 +1700,9 @@ function syncNodeLabels(): void {
 }
 
 .connection-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--arc-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--arc-bg-surface);
   padding: 12px 13px;
   transition:
     transform 0.16s ease,

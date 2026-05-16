@@ -1138,9 +1138,9 @@ function openGraphNodeEditor(payload: { kind: 'character' | 'organization'; enti
 }
 
 .icon-button.danger:hover {
-  border-color: rgba(252, 165, 165, 0.86);
-  color: #dc2626;
-  background: rgba(254, 242, 242, 0.92);
+  border-color: color-mix(in srgb, var(--arc-danger) 40%, var(--arc-border));
+  color: var(--arc-danger);
+  background: color-mix(in srgb, var(--arc-danger) 10%, var(--arc-bg-surface));
 }
 
 .link-pair {

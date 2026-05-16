@@ -951,13 +951,13 @@ function handleMenuSelect(action: string | number, item: OutlineItem): void {
 }
 
 .outline-status-pill.warning {
-  background: color-mix(in srgb, #b45309 14%, var(--arc-bg-surface));
-  color: color-mix(in srgb, #b45309 70%, var(--arc-text-primary));
+  background: color-mix(in srgb, var(--arc-warning) 14%, var(--arc-bg-surface));
+  color: var(--arc-warning);
 }
 
 .outline-status-pill.success {
-  background: color-mix(in srgb, #15803d 14%, var(--arc-bg-surface));
-  color: color-mix(in srgb, #15803d 70%, var(--arc-text-primary));
+  background: color-mix(in srgb, var(--arc-success) 14%, var(--arc-bg-surface));
+  color: var(--arc-success);
 }
 
 .outline-status-pill.chapter {
