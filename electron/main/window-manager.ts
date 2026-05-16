@@ -185,8 +185,8 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       icon: windowIcon,
       titleBarStyle: 'hidden',
       titleBarOverlay: {
-        color: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f8f7f4',
-        symbolColor: nativeTheme.shouldUseDarkColors ? '#f4f4f5' : '#1c1917',
+        color: nativeTheme.shouldUseDarkColors ? '#2e3440' : '#f8f7f4',
+        symbolColor: nativeTheme.shouldUseDarkColors ? '#eceff4' : '#1c1917',
         height: 36
       },
       x: assistantX,
@@ -196,7 +196,7 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       title: `character-arc v${app.getVersion()} - AI 创作助理`,
       maximizable: false,
       fullscreenable: false,
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f8f7f4',
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#2e3440' : '#f8f7f4',
       show: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
@@ -255,8 +255,8 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
 
   function updateTitleBarOverlayColors(): void {
     const dark = nativeTheme.shouldUseDarkColors
-    const color = dark ? '#0c0c0e' : '#f8f7f4'
-    const symbolColor = dark ? '#f4f4f5' : '#1c1917'
+    const color = dark ? '#2e3440' : '#f8f7f4'
+    const symbolColor = dark ? '#eceff4' : '#1c1917'
     const overlay = { color, symbolColor, height: 40 }
     const assistantOverlay = { color, symbolColor, height: 36 }
 

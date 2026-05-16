@@ -2,7 +2,7 @@
 export type ThemeName = 'ocean' | 'jade' | 'amber' | 'rose'
 
 /** 深色模式风格预设 */
-export type DarkModeStyle = 'standard' | 'nord'
+export type DarkModeStyle = 'nord'
 
 /** 工作台面板名称 */
 export type PanelName = 'workflow' | 'overview' | 'deconstruction' | 'project-knowledge' | 'world' | 'characters' | 'relations' | 'inspiration' | 'outline' | 'threads' | 'chapters' | 'settings'

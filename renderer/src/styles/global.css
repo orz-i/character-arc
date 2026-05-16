@@ -28,6 +28,11 @@
   /* Semantic */
   --arc-success: #15803d;
   --arc-warning: #a16207;
+  /* Selection */
+  --arc-selection-bg: #b4d5fe;
+  --arc-selection-text: #1c1917;
+  --arc-caret-color: var(--arc-primary);
+}
   --arc-danger: #dc2626;
   font-family:
     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei',
@@ -50,8 +55,20 @@ body {
   overflow: hidden;
   background: var(--arc-bg-body);
   color: var(--arc-text-primary);
+  caret-color: var(--arc-caret-color);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--arc-selection-bg);
+  color: var(--arc-selection-text);
+}
+
+.dark-mode {
+  --arc-selection-bg: #5e81ac;
+  --arc-selection-text: #eceff4;
+  --arc-caret-color: #88c0d0;
 }
 
 button,

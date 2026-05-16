@@ -420,9 +420,9 @@ export function normalizeAppSettings(
     uiScale,
     darkMode: Boolean(settings?.darkMode),
     darkModeStyle:
-      settings?.darkModeStyle === 'nord' || settings?.darkModeStyle === 'standard'
+      settings?.darkModeStyle === 'nord'
         ? settings.darkModeStyle
-        : 'standard'
+        : 'nord'
   }
 }
 

@@ -49,7 +49,7 @@ const draftSettings = reactive<AppSettings>({
   autoSaveInterval: '5m',
   uiScale: 1,
   darkMode: false,
-  darkModeStyle: 'standard'
+  darkModeStyle: 'nord'
 })
 const draftTheme = ref<ThemeName>('ocean')
 

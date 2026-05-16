@@ -76,40 +76,19 @@ export interface DarkModePreset {
 
 export const darkModePresets: DarkModePreset[] = [
   {
-    name: 'standard',
-    label: '中性暗灰',
-    description: '默认深色风格，柔和中性灰背景，长时间写作不刺眼。',
-    bgBody: '#0c0c0e',
-    bgWeak: '#111115',
-    bgSurface: '#18181b',
-    bgSurfaceHover: '#27272a',
-    bgSidebar: '#111115',
-    sidebarBorder: '#27272a',
-    textPrimary: '#f4f4f5',
-    textSecondary: '#a1a1aa',
-    textHint: '#71717a',
-    border: '#27272a',
-    borderStrong: '#3f3f46',
-    shadowSm: '0 1px 3px rgba(0, 0, 0, 0.36)',
-    shadowMd: '0 4px 12px rgba(0, 0, 0, 0.5)',
-    shadowLg: '0 8px 24px rgba(0, 0, 0, 0.6)',
-    bgMix: '#18181b',
-    primarySoftBase: '#18181b'
-  },
-  {
     name: 'nord',
     label: 'Nord 北欧',
-    description: '冷静克制的北欧蓝灰，界面干净、层次柔和。',
+    description: '冷静克制的北欧蓝灰，界面干净、层次柔和，适合长时间写作。',
     bgBody: '#2e3440',
-    bgWeak: '#343a48',
+    bgWeak: '#333a47',
     bgSurface: '#3b4252',
     bgSurfaceHover: '#434c5e',
-    bgSidebar: '#343a48',
-    sidebarBorder: '#4c566a',
+    bgSidebar: '#2e3440',
+    sidebarBorder: '#434c5e',
     textPrimary: '#eceff4',
     textSecondary: '#d8dee9',
-    textHint: '#9aa3b1',
-    border: '#4c566a',
+    textHint: '#8892a2',
+    border: '#434c5e',
     borderStrong: '#5e6b83',
     shadowSm: '0 1px 3px rgba(17, 20, 28, 0.46)',
     shadowMd: '0 6px 18px rgba(17, 20, 28, 0.56)',
@@ -127,7 +106,7 @@ export function getDarkModePreset(name: DarkModeStyle): DarkModePreset {
 export function createNaiveThemeOverrides(
   name: ThemeName,
   darkMode: boolean = false,
-  darkStyle: DarkModeStyle = 'standard'
+  darkStyle: DarkModeStyle = 'nord'
 ): GlobalThemeOverrides {
   const preset = getThemePreset(name)
   const dark = getDarkModePreset(darkStyle)
