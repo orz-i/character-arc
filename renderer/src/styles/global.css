@@ -75,6 +75,18 @@ input {
   background: var(--arc-bg-body);
 }
 
+.app-titlebar {
+  height: 40px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+  background: var(--arc-bg-body);
+}
+
+.app-titlebar + .app-content {
+  height: calc(100dvh - 40px);
+}
+
 .app-content {
   display: flex;
   flex: 1;

@@ -116,10 +116,15 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       minWidth,
       minHeight,
       icon: windowIcon,
-      frame: true,
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#f8f7f4',
+        symbolColor: '#1c1917',
+        height: 40
+      },
       autoHideMenuBar: true,
       title: `弧光 v${app.getVersion()}`,
-      backgroundColor: '#f5f5f7',
+      backgroundColor: '#f8f7f4',
       show: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
@@ -178,7 +183,12 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       minWidth: ASSISTANT_WINDOW_MIN_WIDTH,
       minHeight: ASSISTANT_WINDOW_MIN_HEIGHT,
       icon: windowIcon,
-      frame: true,
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f8f7f4',
+        symbolColor: nativeTheme.shouldUseDarkColors ? '#f4f4f5' : '#1c1917',
+        height: 36
+      },
       x: assistantX,
       y: assistantY,
       parent: mainWindow ?? undefined,
@@ -186,7 +196,7 @@ export function createWindowManager(options: CreateWindowManagerOptions) {
       title: `character-arc v${app.getVersion()} - AI 创作助理`,
       maximizable: false,
       fullscreenable: false,
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f4f7fb',
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e0e12' : '#f8f7f4',
       show: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),

@@ -118,6 +118,7 @@ onBeforeUnmount(() => {
       <n-dialog-provider>
         <n-global-style />
         <div class="app-shell" :style="appStyleVars" :class="{ 'dark-mode': appStore.appSettings.darkMode }">
+          <div class="app-titlebar" />
           <div class="app-content">
             <div v-if="appStore.persistenceError" class="app-error-banner">
               <strong>本地数据读写异常</strong>
