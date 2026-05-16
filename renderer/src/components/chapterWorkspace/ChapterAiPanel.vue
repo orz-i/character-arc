@@ -22,7 +22,7 @@ defineEmits<{
 
 const message = useMessage()
 const appStore = useAppStore()
-const { messages, isResponding, hasSelection, send, resetMessages, applyToChapter } = useChapterAi()
+const { messages, isResponding, hasSelection, send, resetMessages, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
 const draft = useChapterFirstDraft()
 const detect = useChapterThreadDetect()
 const summary = useChapterSummary()
@@ -109,8 +109,14 @@ function sendPrompt(prompt: string): void {
 
 defineExpose({ sendPrompt })
 
-onMounted(() => draft.registerStreamListener())
-onBeforeUnmount(() => draft.unregisterStreamListener())
+onMounted(() => {
+  registerChatStream()
+  draft.registerStreamListener()
+})
+onBeforeUnmount(() => {
+  unregisterChatStream()
+  draft.unregisterStreamListener()
+})
 </script>
 
 <template>

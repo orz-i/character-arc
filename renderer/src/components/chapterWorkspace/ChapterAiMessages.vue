@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowDown, Copy, Replace, RotateCw } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
 import type { ChapterAiMessage } from './useChapterAi'
@@ -18,12 +18,18 @@ const emit = defineEmits<{
 const message = useMessage()
 const scrollRef = ref<HTMLDivElement | null>(null)
 
+const lastMsg = computed(() => props.messages[props.messages.length - 1])
+
 watch(
-  () => [props.messages.length, props.isResponding] as const,
+  () => [props.messages.length, lastMsg.value?.content] as const,
   () => nextTick(() => {
     if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
   })
 )
+
+function isStreaming(msg: ChapterAiMessage): boolean {
+  return props.isResponding && msg.id === lastMsg.value?.id && msg.role === 'assistant'
+}
 
 function formatTime(ts: number): string {
   const d = new Date(ts)
@@ -56,8 +62,14 @@ async function copyMessage(content: string): Promise<void> {
     </div>
 
     <div v-for="msg in messages" :key="msg.id" class="msg" :class="msg.role">
-      <div class="bubble">{{ msg.content }}</div>
-      <div v-if="msg.role === 'assistant'" class="actions">
+      <div class="bubble" :class="{ streaming: isStreaming(msg) }">
+        <template v-if="msg.content">{{ msg.content }}</template>
+        <template v-else-if="isStreaming(msg)">
+          <span class="dot" /><span class="dot" /><span class="dot" />
+        </template>
+        <span v-if="isStreaming(msg) && msg.content" class="cursor" />
+      </div>
+      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.content" class="actions">
         <button
           v-if="hasSelection"
           class="mini primary"
@@ -85,14 +97,8 @@ async function copyMessage(content: string): Promise<void> {
           <RotateCw :size="11" /> 重生成
         </button>
       </div>
-      <div v-if="msg.createdAt" class="msg-meta">{{ formatTime(msg.createdAt) }}</div>
-    </div>
-
-    <div v-if="isResponding" class="msg assistant">
-      <div class="bubble typing">
-        <span class="dot" />
-        <span class="dot" />
-        <span class="dot" />
+      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.createdAt" class="msg-meta">
+        {{ formatTime(msg.createdAt) }}
       </div>
     </div>
   </div>
@@ -149,22 +155,39 @@ async function copyMessage(content: string): Promise<void> {
   border-bottom-left-radius: 4px;
 }
 
-.bubble.typing {
+.bubble.streaming {
   display: inline-flex;
-  gap: 4px;
-  padding: 12px 16px;
+  flex-wrap: wrap;
+  align-items: baseline;
 }
 
-.bubble.typing .dot {
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--arc-primary);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.dot {
+  display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--arc-text-hint);
   animation: bounce 1.2s infinite;
+  margin-right: 4px;
 }
 
-.bubble.typing .dot:nth-child(2) { animation-delay: 0.15s; }
-.bubble.typing .dot:nth-child(3) { animation-delay: 0.3s; }
+.dot:nth-child(2) { animation-delay: 0.15s; }
+.dot:nth-child(3) { animation-delay: 0.3s; margin-right: 0; }
 
 @keyframes bounce {
   0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
@@ -191,9 +214,15 @@ async function copyMessage(content: string): Promise<void> {
   transition: 0.15s;
 }
 
-.mini:hover {
+.mini:hover:not(:disabled) {
   border-color: var(--arc-primary);
   color: var(--arc-primary);
+}
+
+.mini:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .mini.primary {
@@ -205,12 +234,6 @@ async function copyMessage(content: string): Promise<void> {
 .mini.primary:hover {
   background: var(--arc-primary-hover);
   color: white;
-}
-
-.mini:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
 }
 
 .msg-meta {

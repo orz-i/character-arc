@@ -14,7 +14,6 @@ export interface ChapterAiMessage {
   role: ChapterAiRole
   content: string
   createdAt: number
-  /** 与 AI 上下文相关的章节 ID，用于切章后区分 */
   chapterId?: string
 }
 
@@ -34,6 +33,8 @@ export function useChapterAi(): {
   send: (prompt: string) => Promise<void>
   resetMessages: () => void
   applyToChapter: (content: string, mode: ChapterInsertionMode) => boolean
+  registerStreamListener: () => void
+  unregisterStreamListener: () => void
 } {
   const appStore = useAppStore()
   const messages = ref<ChapterAiMessage[]>([])
@@ -46,6 +47,60 @@ export function useChapterAi(): {
       && selectedText.value
     )
   )
+
+  let streamId: string | null = null
+  let resolveStream: ((text: string) => void) | null = null
+  let rejectStream: ((err: Error) => void) | null = null
+  let removeListener: (() => void) | null = null
+  let streamingMsgId: string | null = null
+
+  function handleStreamEvent(payload: CharacterArcAiStreamEvent): void {
+    if (payload.streamId !== streamId) return
+
+    if (payload.type === 'chunk') {
+      const msg = messages.value.find((m) => m.id === streamingMsgId)
+      if (msg) msg.content += payload.delta
+      return
+    }
+    if (payload.type === 'done') {
+      const msg = messages.value.find((m) => m.id === streamingMsgId)
+      if (msg && payload.content) msg.content = payload.content
+      const resolve = resolveStream
+      resolveStream = null
+      rejectStream = null
+      streamId = null
+      streamingMsgId = null
+      resolve?.(msg?.content ?? '')
+      return
+    }
+    if (payload.type === 'canceled') {
+      const reject = rejectStream
+      resolveStream = null
+      rejectStream = null
+      streamId = null
+      streamingMsgId = null
+      reject?.(new Error('canceled'))
+      return
+    }
+    if (payload.type === 'error') {
+      const reject = rejectStream
+      resolveStream = null
+      rejectStream = null
+      streamId = null
+      streamingMsgId = null
+      reject?.(new Error(payload.error || 'AI 对话生成失败'))
+    }
+  }
+
+  function registerStreamListener(): void {
+    if (removeListener) return
+    removeListener = window.characterArc.onAiStreamEvent(handleStreamEvent)
+  }
+
+  function unregisterStreamListener(): void {
+    removeListener?.()
+    removeListener = null
+  }
 
   function pushMessage(role: ChapterAiRole, content: string): ChapterAiMessage {
     const item: ChapterAiMessage = {
@@ -71,16 +126,18 @@ export function useChapterAi(): {
     }
 
     pushMessage('user', trimmed)
+    const assistantMsg = pushMessage('assistant', '')
+    streamingMsgId = assistantMsg.id
 
     try {
-      const response = await appStore.runTrackedAiTask(
+      await appStore.runTrackedAiTask(
         {
           key: TASK_KEY,
           kind: 'chapter-assistant',
           label: 'AI 章节助手',
           description: '与创作助理对话',
           panel: 'chapters',
-          timeoutMs: 180_000
+          timeoutMs: 0
         },
         async () => {
           const projectSkills = await loadEnabledProjectSkillsContext(appStore.currentProject, 'draft')
@@ -105,7 +162,7 @@ export function useChapterAi(): {
                 ? { title: appStore.chapters[0].title, summary: appStore.chapters[0].summary }
                 : undefined,
             recentMessages: messages.value
-              .slice(-6, -1)
+              .slice(-8, -2)
               .map((item) => ({ role: item.role, content: item.content })),
             worldviewEntries: appStore.worldviewEntries,
             characters: appStore.characters,
@@ -124,22 +181,38 @@ export function useChapterAi(): {
             chapterContent: getPlainTextFromEditorContent(chapter.content ?? ''),
             projectSkills
           })
-          return window.characterArc.generateAi(toIpcPayload({
+
+          const result = await window.characterArc.startAiStream(toIpcPayload({
             task: 'chapter-assistant',
             settings: appStore.appSettings,
             context
           }))
+
+          const sid = (result.result as { streamId?: string } | undefined)?.streamId
+          if (!result.success || !sid) {
+            throw new Error(result.error ?? 'AI 对话启动失败')
+          }
+          streamId = sid
+
+          return new Promise<string>((resolve, reject) => {
+            resolveStream = resolve
+            rejectStream = reject
+          })
         }
       )
 
-      const payload = response.result as { content?: string } | undefined
-      const reply = String(payload?.content ?? '').trim()
-      if (!response.success || !reply) {
-        throw new Error(response.error ?? 'AI 未返回内容')
+      if (!assistantMsg.content.trim()) {
+        assistantMsg.content = '（AI 未返回内容）'
       }
-      pushMessage('assistant', reply)
     } catch (error) {
-      pushMessage('assistant', `生成失败：${error instanceof Error ? error.message : '未知错误'}`)
+      const isCanceled = error instanceof Error && error.message === 'canceled'
+      if (isCanceled) {
+        if (!assistantMsg.content.trim()) {
+          assistantMsg.content = '（已取消）'
+        }
+      } else {
+        assistantMsg.content = `生成失败：${error instanceof Error ? error.message : '未知错误'}`
+      }
     }
   }
 
@@ -158,6 +231,8 @@ export function useChapterAi(): {
     selectedText,
     send,
     resetMessages,
-    applyToChapter
+    applyToChapter,
+    registerStreamListener,
+    unregisterStreamListener
   }
 }
