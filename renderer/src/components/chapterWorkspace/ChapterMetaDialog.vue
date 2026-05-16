@@ -118,8 +118,8 @@ function submit(): void {
     :show="show"
     preset="card"
     title="编辑章节信息"
+    :style="{ width: 'min(560px, 92vw)' }"
     :bordered="false"
-    class="chapter-meta-modal"
     @update:show="(v) => emit('update:show', v)"
   >
     <n-form label-placement="top">
@@ -167,10 +167,6 @@ function submit(): void {
 </template>
 
 <style scoped>
-.chapter-meta-modal :deep(.n-card) {
-  width: min(560px, 92vw);
-}
-
 .actions {
   display: flex;
   justify-content: flex-end;

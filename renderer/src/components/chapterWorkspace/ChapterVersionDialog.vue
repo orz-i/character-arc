@@ -84,8 +84,8 @@ function restore(version: ChapterVersion): void {
   <n-modal
     :show="show"
     preset="card"
-    class="version-modal"
     title="章节历史版本"
+    :style="{ width: 'min(640px, 92vw)' }"
     :bordered="false"
     @update:show="(v) => emit('update:show', v)"
   >
@@ -122,10 +122,6 @@ function restore(version: ChapterVersion): void {
 </template>
 
 <style scoped>
-.version-modal :deep(.n-card) {
-  width: min(640px, 92vw);
-}
-
 .version-list {
   display: flex;
   flex-direction: column;

@@ -22,7 +22,7 @@ function close(): void {
     :show="show"
     preset="card"
     title="AI 识别到的潜在伏笔"
-    class="thread-modal"
+    :style="{ width: 'min(560px, 92vw)' }"
     :mask-closable="false"
     @update:show="(v) => $emit('update:show', v)"
   >
@@ -56,10 +56,6 @@ function close(): void {
 </template>
 
 <style scoped>
-.thread-modal :deep(.n-card) {
-  width: min(560px, 92vw);
-}
-
 .list {
   display: flex;
   flex-direction: column;

@@ -21,8 +21,8 @@ defineEmits<{
   <n-modal
     :show="show"
     preset="card"
-    class="draft-modal"
     title="AI 初稿执行中"
+    :style="{ width: 'min(720px, 92vw)' }"
     :mask-closable="false"
     :closable="!isGenerating"
     :bordered="false"
@@ -71,10 +71,6 @@ defineEmits<{
 </template>
 
 <style scoped>
-.draft-modal :deep(.n-card) {
-  width: min(720px, 92vw);
-}
-
 .card {
   display: flex;
   flex-direction: column;
