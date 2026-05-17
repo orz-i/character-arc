@@ -3,12 +3,19 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult, ReferenceStyleChunkResult } from '../shared-types'
 import { formatProjectSkillsContext } from '../prompts/shared'
 
+/**
+ * 将未知值标准化为字符串数组，最多取前 4 项
+ * @param value - 待标准化的值
+ * @param fallback - 值无效时的默认数组
+ * @returns 字符串数组
+ */
 function toList(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback
   const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
   return normalized.length ? normalized : fallback
 }
 
+/** 参考作品分块分析任务：对单个分块进行局部风格和桥段作用分析 */
 const handler: TaskHandler = {
   name: 'reference-style-chunk',
   outputType: 'json',

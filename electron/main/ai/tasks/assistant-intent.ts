@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { extractJsonObject } from './base'
 import type { AiTaskResult, AssistantIntentResult } from '../shared-types'
 
+/** 助手意图路由任务：判断用户请求是普通聊天还是可执行的写作动作 */
 const handler: TaskHandler = {
   name: 'assistant-intent',
   outputType: 'json',

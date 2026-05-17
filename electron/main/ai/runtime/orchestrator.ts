@@ -25,6 +25,14 @@ import type { StateDelta } from '../../story-state-store'
 import { indexChapterSegments, retrieveHybridContext, formatSemanticSegmentsForPrompt } from '../knowledge-retrieval'
 import { runLightCheck } from '../audit/light-check'
 
+/**
+ * 执行一次完整的 AI 任务调用（非流式）。
+ * 流程：校验设置 → 选择技能 → 混合检索 → 构建提示词 → 调用模型 → 校验/修复结果 → 触发后处理。
+ * @param task - AI 任务载荷，包含任务类型、设置和上下文
+ * @param knowledgeContext - 可选的知识检索上下文
+ * @param signal - 可选的中止信号
+ * @returns 任务执行结果与运行元数据
+ */
 export async function runAiTask(
   task: AiTaskPayload,
   knowledgeContext?: AiTaskKnowledgeContext,
@@ -185,6 +193,15 @@ export async function runAiTask(
   }
 }
 
+/**
+ * 以流式方式执行 AI 任务，通过 handlers 回调逐步返回生成内容。
+ * 仅支持 chapter-assistant 和 chapter-first-draft 两种任务。
+ * @param task - AI 任务载荷
+ * @param handlers - 流式输出回调（onChunk / onDone）
+ * @param signal - 中止信号
+ * @param knowledgeContext - 可选的知识检索上下文
+ * @returns 任务执行结果与运行元数据
+ */
 export async function streamAiTask(
   task: AiTaskPayload,
   handlers: AiStreamHandlers,
@@ -288,6 +305,11 @@ export async function streamAiTask(
   }
 }
 
+/**
+ * 测试 AI 连接是否可用，发送一条简单探测提示并验证返回
+ * @param rawSettings - 原始应用设置
+ * @returns 成功时返回当前 provider 和 model 名称
+ */
 export async function testAiConnection(rawSettings: AppSettings): Promise<{ provider: string; model: string }> {
   const settings = normalizeSettings(rawSettings)
   validateSettings(settings)
@@ -303,6 +325,7 @@ export async function testAiConnection(rawSettings: AppSettings): Promise<{ prov
   return { provider: settings.provider, model: settings.model }
 }
 
+/** 根据输出类型和 provider 能力，决定是否启用结构化输出选项 */
 function resolveStructuredOptions(settings: AppSettings, outputType: 'json' | 'text'): StructuredOutputOptions | undefined {
   if (outputType !== 'json') return undefined
   const mode = probeStructuredOutputMode(settings)
@@ -310,6 +333,7 @@ function resolveStructuredOptions(settings: AppSettings, outputType: 'json' | 't
   return { mode }
 }
 
+/** 根据任务上下文中的 projectSkills 构建技能启用/禁用映射表 */
 function resolveEnabledSkillOverrides(
   task: AiTaskPayload,
   projectId: string
@@ -337,6 +361,7 @@ function resolveEnabledSkillOverrides(
   return new Map(allSkills.map((skill) => [skill.id, enabledIds.has(skill.id)]))
 }
 
+/** 从任务上下文中提取涉及的角色 ID 列表 */
 function extractInvolvedCharacterIds(context: Record<string, unknown>): string[] {
   const ids: string[] = []
   const characters = context.characters
@@ -360,6 +385,7 @@ export function setChapterWarningsEmitter(emit: (payload: ChapterStateWarningsPa
   chapterWarningsEmitter = emit
 }
 
+/** 章节初稿生成后的异步后处理管线：提取状态变更 → 轻量审计 → 写入状态库 → 建立向量索引 */
 async function runPostGenerationPipeline(
   settings: AppSettings,
   projectId: string,
@@ -396,6 +422,13 @@ async function runPostGenerationPipeline(
   }
 }
 
+/**
+ * 调用 LLM 从章节正文中提取状态变更增量（角色、关系、伏笔、时间线）
+ * @param settings - 应用设置
+ * @param chapterContent - 章节正文内容
+ * @param preState - 生成前的世界状态快照
+ * @returns 提取到的状态变更增量，失败时返回 null
+ */
 export async function extractStateDeltaViaLLM(
   settings: AppSettings,
   chapterContent: string,

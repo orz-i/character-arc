@@ -4,6 +4,7 @@ import type { AiTaskResult, InspirationPackResult, InspirationResult } from '../
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { formatWorldviewEntries, formatCharacters, formatOrganizations, formatCharacterRelationships, formatOrganizationMemberships, formatInspirationEntries, formatOutlineItems } from '../prompts/format-helpers'
 
+/** 灵感包生成任务：围绕当前章节生成一组灵感卡片 */
 const handler: TaskHandler = {
   name: 'inspiration-pack',
   outputType: 'json',

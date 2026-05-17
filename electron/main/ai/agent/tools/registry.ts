@@ -6,8 +6,14 @@ import type {
   ToolResultBlock
 } from './types'
 
+/** 工具注册表，以工具名为 key 的只读 Map */
 export type ToolRegistry = ReadonlyMap<string, Tool>
 
+/**
+ * 创建工具注册表，重复工具名会抛出异常
+ * @param tools - 工具定义数组
+ * @returns 只读的工具注册表
+ */
 export function createToolRegistry(tools: Tool[]): ToolRegistry {
   const map = new Map<string, Tool>()
   for (const tool of tools) {
@@ -19,6 +25,11 @@ export function createToolRegistry(tools: Tool[]): ToolRegistry {
   return map
 }
 
+/**
+ * 从注册表中提取所有工具的 schema 定义
+ * @param registry - 工具注册表
+ * @returns 工具定义数组
+ */
 export function listToolDefinitions(registry: ToolRegistry): ToolDefinition[] {
   return Array.from(registry.values()).map((tool) => tool.definition)
 }

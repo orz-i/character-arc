@@ -3,12 +3,19 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult, ChapterAnalysisResult } from '../shared-types'
 import { formatWorldviewEntries, formatCharacters, formatOrganizations, formatCharacterRelationships, formatOrganizationMemberships, formatInspirationEntries, formatOutlineItems } from '../prompts/format-helpers'
 
+/**
+ * 将未知值标准化为字符串数组，最多取前 5 项
+ * @param value - 待标准化的值
+ * @param fallback - 值无效时的默认数组
+ * @returns 字符串数组
+ */
 function toList(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback
   const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 5)
   return normalized.length ? normalized : fallback
 }
 
+/** 章节分析任务：对当前章节进行写作质量分析并输出优化建议 */
 const handler: TaskHandler = {
   name: 'chapter-analysis',
   outputType: 'json',

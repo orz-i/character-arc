@@ -5,6 +5,7 @@ import type { SpiralSeedResult } from '../spiral/types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { resolveProjectBootstrapPromptParts } from '../prompts/bootstrap-strategies'
 
+/** 螺旋播种任务：从故事前提提炼主角核心矛盾、主线方向和最小世界规则 */
 const handler: TaskHandler = {
   name: 'spiral-seed',
   outputType: 'json',

@@ -13,12 +13,23 @@ import { createToolRegistry } from './tools/registry'
 import { buildAgentBehaviorRules, buildSkillIndex } from './system-prompt'
 import type { AiKnowledgeDocumentDraft, AiTaskKnowledgeContext } from '../shared-types'
 
+/** 去掉 SKILL.md 开头的 YAML frontmatter 块（--- ... ---）。 */
 function stripSkillFrontmatter(content: string): string {
   const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/)
   if (!match) return content
   return content.slice(match[0].length)
 }
 
+/**
+ * 流式 Agent 模式的 AI 任务入口。与 runAgentTask 类似，但通过 handlers 回调
+ * 实时推送文本增量、工具调用状态和编辑事件，适用于前端需要流式渲染的场景。
+ *
+ * @param task - AI 任务载荷
+ * @param handlers - 流式回调处理器（文本增量、工具状态、编辑应用等）
+ * @param signal - 中止信号，支持前端取消请求
+ * @param knowledgeContext - 可选的知识库上下文
+ * @returns 任务结果，包含标准化输出和运行元数据
+ */
 export async function runStreamingAgentTask(
   task: AiTaskPayload,
   handlers: AiAgentStreamHandlers,

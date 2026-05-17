@@ -18,8 +18,10 @@ import { ensureWorkspaceDb } from '../workspace-store'
 // 关键词检索（usedKnowledge）
 // ─────────────────────────────────────────────────────────────
 
+/** 知识文档来源类型 */
 type KnowledgeDocumentSourceType = 'reference-summary' | 'reference-chunk' | 'workflow-document' | 'canon-fact' | 'chapter-summary'
 
+/** 工作区知识文档在 SQLite 中的完整结构 */
 type WorkspaceKnowledgeDocument = {
   id: string
   projectId: string
@@ -34,15 +36,20 @@ type WorkspaceKnowledgeDocument = {
   updatedAt: string
 }
 
+/**
+ * 检索后注入 prompt 的知识条目（精简字段，不含全文）。
+ */
 export type WorkspaceAiRunKnowledgeItem = {
   documentId: string
   title: string
   sourceType: KnowledgeDocumentSourceType
   sourceLabel: string
+  /** 摘要片段，长度受 buildKnowledgeSnippet 控制 */
   snippet: string
   keywords: string[]
 }
 
+/** 将文本分词，过滤掉短于 2 字符的 token，用于关键词匹配。 */
 function tokenizeKnowledgeText(value: string): string[] {
   return value
     .toLowerCase()
@@ -51,6 +58,7 @@ function tokenizeKnowledgeText(value: string): string[] {
     .filter((token) => token.length >= 2)
 }
 
+/** 从任务上下文中提取所有可能的关键词，拼接为检索查询文本。 */
 function buildKnowledgeQuery(task: AiTaskPayload): string {
   return [
     String(task.context.userPrompt ?? ''),
@@ -67,10 +75,12 @@ function buildKnowledgeQuery(task: AiTaskPayload): string {
   ].filter(Boolean).join('\n')
 }
 
+/** 判断知识来源是否属于项目内文档（工作流文档、设定事实、章节摘要）。 */
 function isProjectKnowledgeSource(sourceType: KnowledgeDocumentSourceType): boolean {
   return sourceType === 'workflow-document' || sourceType === 'canon-fact' || sourceType === 'chapter-summary'
 }
 
+/** 根据知识来源类型返回基础相关性分数，设定事实优先级最高。 */
 function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType): number {
   switch (sourceType) {
     case 'canon-fact': return 3.4
@@ -82,6 +92,7 @@ function resolveKnowledgeSourceBaseScore(sourceType: KnowledgeDocumentSourceType
   }
 }
 
+/** 需要知识检索注入的 AI 任务白名单 */
 const KNOWLEDGE_RETRIEVAL_TASKS: ReadonlySet<string> = new Set([
   'chapter-assistant',
   'chapter-first-draft',
@@ -95,6 +106,7 @@ const KNOWLEDGE_RETRIEVAL_TASKS: ReadonlySet<string> = new Set([
   'project-bootstrap'
 ])
 
+/** 根据文档类型截取不同长度的摘要片段。参考文献类允许更长，项目内文档较短。 */
 function buildKnowledgeSnippet(document: WorkspaceKnowledgeDocument): string {
   const sourceType = document.sourceType
   if (sourceType === 'reference-summary') {
@@ -109,6 +121,14 @@ function buildKnowledgeSnippet(document: WorkspaceKnowledgeDocument): string {
   return text.length > 320 ? `${text.slice(0, 320)}…` : text
 }
 
+/**
+ * 基于关键词匹配的知识检索：从工作区快照中筛选与当前任务最相关的知识文档。
+ * 最多返回 5 条，优先项目内文档。
+ *
+ * @param task - AI 任务 payload
+ * @param latestWorkspaceSnapshot - 最新工作区快照
+ * @returns 匹配的知识条目列表
+ */
 export function retrieveKnowledgeContext(
   task: AiTaskPayload,
   latestWorkspaceSnapshot: { workspaces?: Record<string, { knowledgeDocuments?: WorkspaceKnowledgeDocument[] }> } | null
@@ -194,13 +214,21 @@ export function retrieveKnowledgeContext(
 // 混合检索（state block + 语义段）
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * 混合检索结果：结构化故事状态块 + 向量语义检索的相似片段。
+ */
 export interface HybridRetrievalResult {
+  /** 格式化后的故事状态上下文文本（角色状态、关系、伏笔等） */
   storyStateBlock: string
+  /** 语义检索命中的片段，按相似度降序 */
   semanticSegments: Array<{ text: string; score: number; sourceType: string; chapterIndex?: number }>
 }
 
+/** 语义检索返回的最大片段数 */
 const SEMANTIC_TOP_K = 8
+/** 语义检索的最低相似度阈值 */
 const SEMANTIC_MIN_SCORE = 0.68
+/** 需要混合检索（状态块 + 语义）的任务白名单 */
 const HYBRID_RETRIEVAL_TASKS = new Set([
   'chapter-first-draft',
   'chapter-assistant',
@@ -208,6 +236,14 @@ const HYBRID_RETRIEVAL_TASKS = new Set([
   'chapter-scene-plan'
 ])
 
+/**
+ * 混合检索：注入结构化故事状态 + 向量语义检索相关片段。
+ * embedding 不可用时静默退化为仅返回状态块。
+ *
+ * @param task - AI 任务 payload
+ * @param settings - AI 设置（用于 embedding 调用）
+ * @returns 混合检索结果，不适用的任务返回 null
+ */
 export async function retrieveHybridContext(
   task: AiTaskPayload,
   settings: AppSettings
@@ -238,6 +274,7 @@ export async function retrieveHybridContext(
   return { storyStateBlock, semanticSegments }
 }
 
+/** 从 story_embeddings 表中做向量语义检索，返回最相关的片段。 */
 async function retrieveSemanticSegments(
   db: DatabaseSync,
   projectId: string,
@@ -289,6 +326,7 @@ async function retrieveSemanticSegments(
   return scored
 }
 
+/** 从任务上下文中提取语义检索查询文本（章节标题、摘要、用户提示等）。 */
 function buildSemanticQuery(context: Record<string, unknown>): string {
   const parts: string[] = []
   if (context.chapterTitle) parts.push(String(context.chapterTitle))
@@ -298,6 +336,7 @@ function buildSemanticQuery(context: Record<string, unknown>): string {
   return parts.join(' ').trim()
 }
 
+/** 从任务上下文中提取参与角色的 id 列表，用于构建角色相关的故事状态。 */
 function extractCharacterIds(context: Record<string, unknown>): string[] {
   const characters = context.characters
   if (!Array.isArray(characters)) return []
@@ -306,6 +345,12 @@ function extractCharacterIds(context: Record<string, unknown>): string[] {
     .map((c) => String((c as { id: string }).id))
 }
 
+/**
+ * 将语义检索结果格式化为可注入 prompt 的文本块。
+ *
+ * @param segments - 语义检索片段列表
+ * @returns 格式化后的 Markdown 文本，无结果时返回空字符串
+ */
 export function formatSemanticSegmentsForPrompt(
   segments: HybridRetrievalResult['semanticSegments']
 ): string {
@@ -321,6 +366,15 @@ export function formatSemanticSegmentsForPrompt(
 // 向量索引写入
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * 将章节内容拆段并写入向量索引。先删除旧记录再插入，保证幂等。
+ *
+ * @param settings - AI 设置
+ * @param projectId - 项目 id
+ * @param chapterIndex - 章节序号
+ * @param chapterContent - 章节全文
+ * @param chapterId - 章节 id
+ */
 export async function indexChapterSegments(
   settings: AppSettings,
   projectId: string,
@@ -360,6 +414,14 @@ export async function indexChapterSegments(
   }
 }
 
+/**
+ * 将参考小说文本拆段并写入向量索引，用于后续语义检索。
+ *
+ * @param settings - AI 设置
+ * @param projectId - 项目 id
+ * @param refId - 参考文献 id
+ * @param novelText - 小说全文
+ */
 export async function indexReferenceNovel(
   settings: AppSettings,
   projectId: string,
@@ -396,6 +458,16 @@ export async function indexReferenceNovel(
   }
 }
 
+/**
+ * 在已索引的参考小说中做向量语义搜索。
+ *
+ * @param settings - AI 设置
+ * @param projectId - 项目 id
+ * @param refId - 参考文献 id
+ * @param query - 查询文本
+ * @param topK - 返回的最大结果数，默认 20
+ * @returns 按相似度降序的文本片段及分数
+ */
 export async function searchReferenceNovel(
   settings: AppSettings,
   projectId: string,
@@ -423,6 +495,7 @@ export async function searchReferenceNovel(
     .slice(0, topK)
 }
 
+/** 按段落边界拆分文本为不超过 maxChars 的片段，过短片段（< 30 字符）丢弃。 */
 function splitForEmbedding(text: string, maxChars = 500): string[] {
   const paragraphs = text.split(/\n{2,}/)
   const segments: string[] = []

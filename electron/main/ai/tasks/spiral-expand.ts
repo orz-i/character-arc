@@ -5,6 +5,7 @@ import type { SpiralExpandResult, SpiralSeedResult } from '../spiral/types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { resolveProjectBootstrapPromptParts } from '../prompts/bootstrap-strategies'
 
+/** 螺旋展开任务：基于核心骨架展开配角、大纲节拍和补充世界设定 */
 const handler: TaskHandler = {
   name: 'spiral-expand',
   outputType: 'json',

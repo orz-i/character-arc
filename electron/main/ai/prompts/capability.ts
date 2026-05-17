@@ -1,13 +1,16 @@
 import type { AiTaskName, PromptPair } from '../shared-types'
 
+/** AI 任务可用的功能模块标识 */
 export type PromptCapabilityId =
   | 'workflow' | 'worldview' | 'characters' | 'relations'
   | 'inspiration' | 'outline' | 'chapters' | 'analysis'
   | 'writing-style' | 'project-skills' | 'versioning'
   | 'import-export' | 'settings'
 
+/** 单个功能模块的定义，包含标签、系统提示和用户规则 */
 type PromptCapabilityDefinition = { label: string; systemNote: string; userRule: string }
 
+/** 所有功能模块的完整定义映射 */
 const PROMPT_CAPABILITY_DEFINITIONS: Record<PromptCapabilityId, PromptCapabilityDefinition> = {
   workflow: { label: '小说流程与项目文件', systemNote: '可以读写 task_plan、findings、progress、current_status、novel_setting、character_relationships、pending_hooks、resource_ledger 这些流程文件。', userRule: '流程文件是当前项目的工作记忆，应该延续已有内容，不要凭空另起一套口径。' },
   worldview: { label: '世界观设定', systemNote: '可以引用世界背景、规则、势力、历史等设定条目。设定吃书禁止：前文已写明的设定，后文不能矛盾覆盖；若必须修改，要明确说明覆盖了哪些旧设定。不要整段讲百科——设定必须在场景里落地。', userRule: '世界观内容必须服务当前项目，不能把未锁定设定写成正式事实。设定融入剧情，不要大段复制粘贴背景介绍。' },
@@ -24,6 +27,7 @@ const PROMPT_CAPABILITY_DEFINITIONS: Record<PromptCapabilityId, PromptCapability
   settings: { label: '设置与模型配置', systemNote: '项目具有模型设置、主题和自动保存等配置能力。', userRule: '不要假设存在未实现的远程协作、社区、云同步或插件市场能力。' }
 }
 
+/** 每种 AI 任务默认启用的功能模块列表 */
 const TASK_DEFAULT_CAPABILITIES: Record<AiTaskName, PromptCapabilityId[]> = {
   'worldview-entry': ['settings', 'worldview', 'writing-style'],
   'character-card': ['settings', 'characters', 'relations', 'worldview', 'writing-style'],
@@ -52,10 +56,23 @@ const TASK_DEFAULT_CAPABILITIES: Record<AiTaskName, PromptCapabilityId[]> = {
   'spiral-validate': ['settings', 'worldview', 'characters', 'outline']
 }
 
+/**
+ * 获取指定任务类型的默认功能模块列表。
+ *
+ * @param task AI 任务名称
+ * @returns 该任务默认启用的功能模块 ID 数组
+ */
 export function getDefaultCapabilities(task: AiTaskName): PromptCapabilityId[] {
   return TASK_DEFAULT_CAPABILITIES[task] ?? ['settings']
 }
 
+/**
+ * 根据任务类型和功能模块列表，生成系统提示和用户规则的 PromptPair。
+ *
+ * @param task AI 任务名称
+ * @param capabilities 本次启用的功能模块 ID 数组
+ * @returns 包含 system 和 user 字段的 PromptPair
+ */
 export function buildCapabilityContext(task: AiTaskName, capabilities: PromptCapabilityId[]): PromptPair {
   const capabilityLines = capabilities.map((id) => {
     const definition = PROMPT_CAPABILITY_DEFINITIONS[id]

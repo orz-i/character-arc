@@ -1,11 +1,23 @@
 import type { StateDelta } from '../story-state-store'
 
+/**
+ * 从 AI 输出中提取状态变更的解析结果。
+ */
 export interface DeltaExtractionResult {
+  /** 解析出的状态变更，未检测到 YAML 块时为 null */
   delta: StateDelta | null
+  /** 章节正文部分（YAML 块之前的内容） */
   chapterContent: string
+  /** 解析过程中的警告信息 */
   warnings: string[]
 }
 
+/**
+ * 从 AI 输出中分离章节正文与 state_delta YAML 块，并解析状态变更。
+ *
+ * @param rawOutput - AI 的完整输出文本
+ * @returns 解析结果，含 delta、正文和警告
+ */
 export function extractStateDeltaFromOutput(rawOutput: string): DeltaExtractionResult {
   const warnings: string[] = []
 
@@ -19,6 +31,7 @@ export function extractStateDeltaFromOutput(rawOutput: string): DeltaExtractionR
   return { delta, chapterContent, warnings }
 }
 
+/** 将 AI 输出按 state_delta 标记拆分为章节正文和 YAML 块两部分。 */
 function splitOutputSections(raw: string): { chapterContent: string; yamlBlock: string | null } {
   const markers = [
     /^state_delta:\s*$/m,
@@ -46,6 +59,7 @@ function splitOutputSections(raw: string): { chapterContent: string; yamlBlock: 
   return { chapterContent: raw, yamlBlock: null }
 }
 
+/** 将 YAML 文本解析为 StateDelta 结构，解析失败时返回 null 并记录警告。 */
 function parseStateDeltaYaml(yaml: string, warnings: string[]): StateDelta | null {
   try {
     const delta: StateDelta = {
@@ -79,6 +93,7 @@ function parseStateDeltaYaml(yaml: string, warnings: string[]): StateDelta | nul
   }
 }
 
+/** 从 YAML 中解析 characters_updated 块，提取每个角色的状态变更。 */
 function parseCharactersUpdated(yaml: string, _warnings: string[]): StateDelta['characters_updated'] {
   const results: StateDelta['characters_updated'] = []
   const charBlockRegex = /- character_id:\s*["']?([^"'\n]+)["']?\s*\n([\s\S]*?)(?=\n- character_id:|\nrelationships_delta:|\nforeshadowing_delta:|\ntimeline:|\n[a-z]|$)/g
@@ -131,6 +146,7 @@ function parseCharactersUpdated(yaml: string, _warnings: string[]): StateDelta['
   return results
 }
 
+/** 从 YAML 中解析 relationships_delta 块，提取关系状态变化。 */
 function parseRelationshipsDelta(yaml: string, _warnings: string[]): StateDelta['relationships_delta'] {
   const results: StateDelta['relationships_delta'] = []
   const section = extractSection(yaml, 'relationships_delta')
@@ -157,6 +173,7 @@ function parseRelationshipsDelta(yaml: string, _warnings: string[]): StateDelta[
   return results
 }
 
+/** 从 YAML 中解析 foreshadowing_delta 块（埋设 / 推进 / 回收伏笔）。 */
 function parseForeshadowingDelta(yaml: string, _warnings: string[]): StateDelta['foreshadowing_delta'] {
   const result: StateDelta['foreshadowing_delta'] = { planted: [], advanced: [], resolved: [] }
 
@@ -207,6 +224,7 @@ function parseForeshadowingDelta(yaml: string, _warnings: string[]): StateDelta[
   return result
 }
 
+/** 从 YAML 中解析 timeline 块（故事时间流逝与事件）。 */
 function parseTimeline(yaml: string, _warnings: string[]): StateDelta['timeline'] {
   const section = extractSection(yaml, 'timeline')
   if (!section) return { story_time_elapsed: '', current_story_date: '', events: [] }
@@ -221,12 +239,14 @@ function parseTimeline(yaml: string, _warnings: string[]): StateDelta['timeline'
 
 // ==================== YAML Parsing Helpers ====================
 
+/** 从 YAML 块中提取单个 key 的值（单行，去除引号）。 */
 function extractValue(block: string, key: string): string | null {
   const regex = new RegExp(`${key}:\\s*["']?([^"'\\n]+?)["']?\\s*$`, 'm')
   const match = block.match(regex)
   return match ? match[1].trim() : null
 }
 
+/** 从 YAML 块中提取数值型字段，无法解析时返回 undefined。 */
 function extractNumber(block: string, key: string): number | undefined {
   const val = extractValue(block, key)
   if (!val) return undefined
@@ -234,6 +254,7 @@ function extractNumber(block: string, key: string): number | undefined {
   return isNaN(num) ? undefined : num
 }
 
+/** 从 YAML 块中提取列表字段，支持内联 `[...]` 和 `- item` 两种格式。 */
 function extractList(block: string, key: string): string[] {
   const sectionStart = block.indexOf(`${key}:`)
   if (sectionStart < 0) return []
@@ -261,6 +282,7 @@ function extractList(block: string, key: string): string[] {
   return items
 }
 
+/** 从 YAML 中提取指定 key 的缩进子块文本。 */
 function extractSection(yaml: string, sectionKey: string): string | null {
   const regex = new RegExp(`^(\\s*)${sectionKey}:\\s*$`, 'm')
   const match = yaml.match(regex)

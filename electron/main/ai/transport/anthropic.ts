@@ -11,12 +11,15 @@ import type {
 import { performAiRequest, readErrorMessage } from './http'
 import { consumeSseResponse, extractAnthropicDelta } from './sse'
 
+/** Anthropic 请求重试时 max_tokens 的上限 */
 const ANTHROPIC_MAX_TOKENS_RETRY_CAP = 16000
 
+/** Anthropic 单次请求的返回结果，成功时包含文本内容，失败时标记是否可因长度不足重试 */
 type AnthropicSingleShotOutcome =
   | { ok: true; content: string }
   | { ok: false; retryableLength: boolean; error: Error }
 
+/** 执行单次 Anthropic Messages API 请求（非流式） */
 async function runAnthropicAttempt(
   settings: AppSettings,
   prompt: PromptPair,
@@ -64,6 +67,16 @@ async function runAnthropicAttempt(
   return { ok: true, content }
 }
 
+/**
+ * 向 Anthropic Messages API 发送非流式文本生成请求。
+ * 若首次因 max_tokens 不足导致内容为空，会自动加倍预算重试一次。
+ *
+ * @param settings - 应用配置（含 baseUrl、apiKey、model）
+ * @param prompt - 系统提示词与用户提示词
+ * @param maxTokens - 最大输出 token 数，默认 600
+ * @param signal - 用于中止请求的 AbortSignal
+ * @returns 生成的文本内容
+ */
 export async function requestAnthropic(
   settings: AppSettings,
   prompt: PromptPair,
@@ -81,6 +94,16 @@ export async function requestAnthropic(
   throw second.error
 }
 
+/**
+ * 向 Anthropic Messages API 发送流式文本生成请求。
+ *
+ * @param settings - 应用配置（含 baseUrl、apiKey、model）
+ * @param prompt - 系统提示词与用户提示词
+ * @param handlers - 流式回调，接收每个文本增量
+ * @param signal - 用于中止请求的 AbortSignal
+ * @param maxTokens - 最大输出 token 数，默认 600
+ * @returns 完整的拼接文本
+ */
 export async function requestAnthropicStream(
   settings: AppSettings,
   prompt: PromptPair,
@@ -182,6 +205,7 @@ export async function requestAnthropicWithTools(
   }
 }
 
+/** 将通用工具定义转换为 Anthropic API 格式 */
 function toAnthropicTool(tool: ToolDefinition): Record<string, unknown> {
   return {
     name: tool.name,
@@ -190,6 +214,7 @@ function toAnthropicTool(tool: ToolDefinition): Record<string, unknown> {
   }
 }
 
+/** 将通用 AgentMessage 转换为 Anthropic Messages API 消息格式 */
 function toAnthropicMessage(message: AgentMessage): Record<string, unknown> {
   if (message.role === 'user') {
     if (typeof message.content === 'string') {
@@ -217,6 +242,7 @@ function toAnthropicMessage(message: AgentMessage): Record<string, unknown> {
   }
 }
 
+/** 将 Anthropic 响应中的内容块转换为通用 AssistantContentBlock */
 function fromAnthropicContentBlock(block: Record<string, unknown>): AssistantContentBlock | null {
   const type = String(block.type ?? '')
   if (type === 'text' && typeof block.text === 'string') {
@@ -229,6 +255,7 @@ function fromAnthropicContentBlock(block: Record<string, unknown>): AssistantCon
   return null
 }
 
+/** 将 Anthropic 停止原因映射为通用的 AgentStopReason */
 function mapAnthropicStopReason(reason: string | undefined): AgentStopReason {
   switch (reason) {
     case 'end_turn':

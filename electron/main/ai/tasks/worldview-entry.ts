@@ -3,6 +3,7 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult, WorldviewResult } from '../shared-types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 
+/** 世界观设定生成任务：为小说项目新增一条世界观设定 */
 const handler: TaskHandler = {
   name: 'worldview-entry',
   outputType: 'json',

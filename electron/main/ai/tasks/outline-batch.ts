@@ -4,6 +4,7 @@ import type { AiTaskResult, OutlineBatchResult } from '../shared-types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { normalizeOutline } from './outline-item'
 
+/** 批量大纲生成任务：为当前分卷连续补充 3-5 个剧情大纲节点 */
 const handler: TaskHandler = {
   name: 'outline-batch',
   outputType: 'json',

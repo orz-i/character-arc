@@ -3,17 +3,29 @@ import { extractStateDeltaViaLLM } from './runtime/orchestrator'
 import type { AppSettings } from './shared-types'
 import { ensureWorkspaceDb } from '../workspace-store'
 
+/**
+ * 状态补录进度回调的 payload 类型。
+ * 通过 IPC 广播给前端进度面板。
+ */
 export type BackfillProgressPayload = {
   projectId: string
+  /** 当前处理到第几章 */
   current: number
+  /** 总章节数 */
   total: number
   chapterTitle: string
+  /** 当前阶段：提取状态差异 / 写入状态表 / 完成 */
   phase: 'extracting' | 'applying' | 'done'
 }
 
+/**
+ * 状态补录的最终结果汇总。
+ */
 export type BackfillResult = {
   totalChapters: number
+  /** 成功提取并写入状态的章节数 */
   processedChapters: number
+  /** 因提取失败或内容不足而跳过的章节数 */
   skipped: number
 }
 

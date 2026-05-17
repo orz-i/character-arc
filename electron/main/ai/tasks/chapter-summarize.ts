@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { normalizeAssistantText } from './base'
 import type { AiTaskResult, ChapterAssistantResult } from '../shared-types'
 
+/** 章节摘要生成任务：按四维格式（核心事件/信息增量/状态变化/留存悬念）生成结构化摘要 */
 const handler: TaskHandler = {
   name: 'chapter-summarize',
   outputType: 'text',

@@ -1,3 +1,9 @@
+/**
+ * 将组织数据格式化为可读文本，最多取前 6 条。
+ *
+ * @param source 组织数组数据
+ * @returns 格式化后的组织信息字符串，无数据时返回空串
+ */
 export function formatOrganizations(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -10,6 +16,13 @@ export function formatOrganizations(source: unknown): string {
     : ''
 }
 
+/**
+ * 将角色关系数据格式化为可读文本，最多取前 8 条。
+ *
+ * @param source 角色关系数组数据
+ * @param charactersSource 角色数组，用于将 ID 解析为角色名
+ * @returns 格式化后的关系信息字符串，无数据时返回空串
+ */
 export function formatCharacterRelationships(source: unknown, charactersSource: unknown): string {
   if (!Array.isArray(source)) return ''
   const characterNameMap = new Map(
@@ -31,6 +44,14 @@ export function formatCharacterRelationships(source: unknown, charactersSource: 
     .join('\n')
 }
 
+/**
+ * 将角色-组织归属关系格式化为可读文本，最多取前 8 条。
+ *
+ * @param membershipsSource 归属关系数组数据
+ * @param organizationsSource 组织数组，用于将组织 ID 解析为名称
+ * @param charactersSource 角色数组，用于将角色 ID 解析为名称
+ * @returns 格式化后的归属信息字符串，无数据时返回空串
+ */
 export function formatOrganizationMemberships(membershipsSource: unknown, organizationsSource: unknown, charactersSource: unknown): string {
   if (!Array.isArray(membershipsSource)) return ''
   const organizationNameMap = new Map(
@@ -60,6 +81,12 @@ export function formatOrganizationMemberships(membershipsSource: unknown, organi
     .join('\n')
 }
 
+/**
+ * 将世界观设定条目格式化为可读文本，最多取前 8 条。
+ *
+ * @param source 世界观条目数组数据
+ * @returns 格式化后的设定信息字符串，无数据时返回空串
+ */
 export function formatWorldviewEntries(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -69,6 +96,12 @@ export function formatWorldviewEntries(source: unknown): string {
     : ''
 }
 
+/**
+ * 将角色数据格式化为可读文本，最多取前 8 条。
+ *
+ * @param source 角色数组数据
+ * @returns 格式化后的角色信息字符串，无数据时返回空串
+ */
 export function formatCharacters(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -78,6 +111,12 @@ export function formatCharacters(source: unknown): string {
     : ''
 }
 
+/**
+ * 将灵感卡片数据格式化为可读文本，最多取前 6 条。
+ *
+ * @param source 灵感条目数组数据
+ * @returns 格式化后的灵感信息字符串，无数据时返回空串
+ */
 export function formatInspirationEntries(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -91,6 +130,12 @@ export function formatInspirationEntries(source: unknown): string {
     : ''
 }
 
+/**
+ * 将大纲条目格式化为可读文本，最多取前 6 条。
+ *
+ * @param source 大纲条目数组数据
+ * @returns 格式化后的大纲信息字符串，无数据时返回空串
+ */
 export function formatOutlineItems(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -100,6 +145,12 @@ export function formatOutlineItems(source: unknown): string {
     : ''
 }
 
+/**
+ * 将关联章节数据格式化为可读文本，最多取前 2 条。
+ *
+ * @param source 关联章节数组数据
+ * @returns 格式化后的关联章节信息字符串，无数据时返回空串
+ */
 export function formatRelatedChapters(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -112,6 +163,12 @@ export function formatRelatedChapters(source: unknown): string {
     : ''
 }
 
+/**
+ * 将分卷下各章节摘要格式化为可读文本。
+ *
+ * @param source 章节数组数据，需包含 title 和 summary 字段
+ * @returns 格式化后的章节摘要列表字符串，无数据时返回空串
+ */
 export function formatVolumeChapterSummaries(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -123,12 +180,24 @@ export function formatVolumeChapterSummaries(source: unknown): string {
     : ''
 }
 
+/**
+ * 将小说开篇信息格式化为标题和摘要。
+ *
+ * @param source 包含 title 和 summary 的对象数据
+ * @returns 格式化后的开篇摘要字符串，无数据时返回空串
+ */
 export function formatNovelOpenerSummary(source: unknown): string {
   if (!source) return ''
   const record = source as Record<string, unknown>
   return `标题：${String(record.title ?? '')}\n摘要：${String(record.summary ?? '') || '暂无摘要'}`
 }
 
+/**
+ * 将状态为 open 的未关闭伏笔格式化为可读文本。
+ *
+ * @param source 伏笔/剧情线程数组数据
+ * @returns 格式化后的未关闭伏笔信息字符串，无数据时返回空串
+ */
 export function formatOpenPlotThreads(source: unknown): string {
   return Array.isArray(source)
     ? source
@@ -141,6 +210,12 @@ export function formatOpenPlotThreads(source: unknown): string {
     : ''
 }
 
+/**
+ * 将最近的对话消息格式化为可读文本，最多取最后 4 条。
+ *
+ * @param source 消息数组数据，需包含 role 和 content 字段
+ * @returns 格式化后的对话记录字符串，无数据时返回空串
+ */
 export function formatRecentMessages(source: unknown): string {
   return Array.isArray(source)
     ? source

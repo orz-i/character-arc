@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { normalizeAssistantText } from './base'
 import type { AiTaskResult, ChapterAssistantResult } from '../shared-types'
 
+/** 风格指纹提取任务：从参考小说中提取六大维度的作者风格指纹并落库 */
 const handler: TaskHandler = {
   name: 'style-fingerprint-extract',
   outputType: 'text',

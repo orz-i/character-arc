@@ -18,18 +18,29 @@ export type SkillToolFactoryOptions = {
   scriptTimeoutMs?: number
 }
 
+/** 参考文件单次读取默认字符上限 */
 const DEFAULT_REFERENCE_CHAR_CAP = 8000
+/** glob 一次返回的默认最多文件数 */
 const DEFAULT_GLOB_ENTRY_CAP = 200
+/** 脚本执行默认超时（毫秒） */
 const DEFAULT_SCRIPT_TIMEOUT_MS = 30_000
 
+/** 构造成功的工具返回 */
 function ok(content: string): ToolHandlerResult {
   return { content }
 }
 
+/** 构造失败的工具返回 */
 function err(message: string): ToolHandlerResult {
   return { content: message, isError: true }
 }
 
+/**
+ * 从输入参数中提取必填的字符串字段，缺失或为空时抛出异常
+ * @param input - 工具输入对象
+ * @param key - 字段名
+ * @returns 去除首尾空白的字符串
+ */
 function requireString(input: Record<string, unknown>, key: string): string {
   const value = input[key]
   if (typeof value !== 'string' || !value.trim()) {
@@ -38,11 +49,17 @@ function requireString(input: Record<string, unknown>, key: string): string {
   return value.trim()
 }
 
+/**
+ * 创建 skill 相关的一组工具（加载、读取参考文件、列出文件、运行脚本）
+ * @param opts - 工厂配置选项
+ * @returns 工具数组
+ */
 export function createSkillTools(opts: SkillToolFactoryOptions): Tool[] {
   const maxReferenceChars = opts.maxReferenceChars ?? DEFAULT_REFERENCE_CHAR_CAP
   const maxGlobEntries = opts.maxGlobEntries ?? DEFAULT_GLOB_ENTRY_CAP
   const scriptTimeoutMs = opts.scriptTimeoutMs ?? DEFAULT_SCRIPT_TIMEOUT_MS
 
+  /** 根据 id 解析 skill，未找到时返回错误对象 */
   function resolveSkillOrError(skillId: string): SkillDefinition | { error: string } {
     const skill = opts.resolveSkill(skillId)
     if (!skill) return { error: `skill 未找到：${skillId}` }
@@ -191,6 +208,12 @@ export function createSkillTools(opts: SkillToolFactoryOptions): Tool[] {
   return [skillLoad, skillReadReference, skillGlob, skillRunScript]
 }
 
+/**
+ * 递归列出目录下所有文件（相对路径），达到上限时提前终止
+ * @param rootDir - 根目录绝对路径
+ * @param cap - 最大返回文件数
+ * @returns 排序后的相对路径数组
+ */
 async function listFilesRecursive(rootDir: string, cap: number): Promise<string[]> {
   const out: string[] = []
 

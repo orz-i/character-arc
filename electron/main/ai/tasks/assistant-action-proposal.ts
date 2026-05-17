@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { extractJsonObject } from './base'
 import type { AiTaskResult, AssistantActionProposalResult } from '../shared-types'
 
+/** 助手动作提议任务：将用户请求转换为单步可确认的写作动作提议 */
 const handler: TaskHandler = {
   name: 'assistant-action-proposal',
   outputType: 'json',

@@ -1,11 +1,13 @@
 import type { AppSettings } from '../shared-types'
 import { performAiRequest } from './http'
 
+/** 图片生成接口的返回结果 */
 export type GeneratedImageResult = {
   dataUrl: string
   revisedPrompt?: string
 }
 
+/** 将图片生成相关的配置项（imageModel、imageApiKey、imageBaseUrl）提取到通用字段中 */
 function normalizeImageSettings(settings: AppSettings): AppSettings {
   return {
     ...settings,
@@ -15,6 +17,7 @@ function normalizeImageSettings(settings: AppSettings): AppSettings {
   }
 }
 
+/** 根据 base64 数据的头部特征推断图片 MIME 类型 */
 function inferMimeType(base64: string): string {
   if (base64.startsWith('/9j/')) {
     return 'image/jpeg'
@@ -27,6 +30,13 @@ function inferMimeType(base64: string): string {
   return 'image/png'
 }
 
+/**
+ * 调用 OpenAI 兼容的图片生成接口，返回 data URL 格式的图片。
+ *
+ * @param settings - 应用配置（需包含 imageModel、imageBaseUrl、imageApiKey）
+ * @param prompt - 图片生成提示词
+ * @returns 包含 dataUrl 和可选 revisedPrompt 的结果
+ */
 export async function generateImage(settings: AppSettings, prompt: string): Promise<GeneratedImageResult> {
   const normalized = normalizeImageSettings(settings)
   if (!normalized.model.trim()) {

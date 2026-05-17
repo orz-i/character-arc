@@ -8,6 +8,7 @@ import type {
 } from './types'
 import { runAiTask } from '../runtime/orchestrator'
 
+/** 螺旋引导流程的输入参数 */
 export interface SpiralBootstrapInput {
   settings: AppSettings
   projectTitle: string
@@ -18,14 +19,17 @@ export interface SpiralBootstrapInput {
   projectSkills?: unknown[]
 }
 
+/** 螺旋引导进度回调函数类型 */
 export type SpiralProgressCallback = (event: SpiralProgressEvent) => void
 
+/** expand 阶段降级时使用的空结果 */
 const EMPTY_EXPAND: SpiralExpandResult = {
   supportingCharacters: [],
   outlineBeats: [],
   expandedWorldview: []
 }
 
+/** validate 阶段降级时使用的空结果 */
 const EMPTY_VALIDATE: SpiralValidateResult = {
   arcValidation: { isComplete: true, gaps: [] },
   plotCausalChain: { isSound: true, breaks: [] },
@@ -33,6 +37,14 @@ const EMPTY_VALIDATE: SpiralValidateResult = {
   patches: { characterAdjustments: [], outlineAdjustments: [], worldviewAdditions: [] }
 }
 
+/**
+ * 执行螺旋引导流程：依次运行 seed → expand → validate 三个 AI 圈
+ * 后续阶段失败时自动降级，保证至少能从 seed 生成基础 workspace
+ * @param input - 项目配置与上下文信息
+ * @param onProgress - 可选的进度回调
+ * @param signal - 可选的中止信号
+ * @returns 三圈结果的汇总对象
+ */
 export async function runSpiralBootstrap(
   input: SpiralBootstrapInput,
   onProgress?: SpiralProgressCallback,

@@ -1,5 +1,12 @@
 import type { AiTaskName, AiTaskPayload, AppSettings, ProviderName } from './shared-types'
 
+/**
+ * 根据供应商名称返回其默认 Base URL 和推荐模型。
+ * 用于用户未手动填写时的兜底值。
+ *
+ * @param provider - 供应商标识（如 'openai'、'deepseek'）
+ * @returns 默认的 baseUrl 和 model
+ */
 export function resolveProviderDefaults(provider: ProviderName): { baseUrl: string; model: string } {
   switch (provider) {
     case 'openai':
@@ -26,6 +33,12 @@ export function resolveProviderDefaults(provider: ProviderName): { baseUrl: stri
   }
 }
 
+/**
+ * 规范化用户设置：trim、转小写、缺失字段回退到供应商默认值。
+ *
+ * @param settings - 用户原始设置
+ * @returns 规范化后的 AppSettings
+ */
 export function normalizeSettings(settings: AppSettings): AppSettings {
   const provider = settings.provider?.trim().toLowerCase() || 'deepseek'
   const defaults = resolveProviderDefaults(provider)
@@ -41,10 +54,24 @@ export function normalizeSettings(settings: AppSettings): AppSettings {
   }
 }
 
+/**
+ * 判断 baseUrl 是否指向本地服务（127.0.0.1 或 localhost）。
+ * 本地服务通常不需要 API Key。
+ *
+ * @param baseUrl - API 基础地址
+ * @returns 是否为本地地址
+ */
 export function isLocalBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(baseUrl.trim())
 }
 
+/**
+ * 判断当前设置是否需要 API Key。
+ * Ollama 和本地地址的供应商不需要 Key。
+ *
+ * @param settings - 当前 AI 设置
+ * @returns 是否需要填写 API Key
+ */
 export function requiresApiKey(settings: AppSettings): boolean {
   if (settings.provider === 'ollama') {
     return false
@@ -52,6 +79,12 @@ export function requiresApiKey(settings: AppSettings): boolean {
   return !isLocalBaseUrl(settings.baseUrl)
 }
 
+/**
+ * 校验 AI 设置的必填项，不满足时抛出带提示信息的 Error。
+ *
+ * @param settings - 待校验的设置
+ * @throws 模型名称、Base URL 或 API Key 缺失时抛错
+ */
 export function validateSettings(settings: AppSettings): void {
   if (!settings.model.trim()) {
     throw new Error('请先填写模型名称。')

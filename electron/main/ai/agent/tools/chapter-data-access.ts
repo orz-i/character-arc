@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ensureWorkspaceDb } from '../../../workspace-store'
 
+/** 章节完整数据 */
 export type ChapterData = {
   id: string
   projectId: string
@@ -13,6 +14,7 @@ export type ChapterData = {
   sortOrder: number
 }
 
+/** 章节摘要条目（列表展示用） */
 export type ChapterSummaryItem = {
   id: string
   title: string
@@ -21,6 +23,7 @@ export type ChapterSummaryItem = {
   wordCount: number
 }
 
+/** 章节编辑操作描述 */
 export type ChapterEdit = {
   operation: 'replace' | 'insert' | 'append'
   search?: string
@@ -28,20 +31,37 @@ export type ChapterEdit = {
   position?: 'before' | 'after' | 'start' | 'end'
 }
 
+/** 全局搜索结果条目 */
 export type SearchResult = {
   type: string
   title: string
   content: string
 }
 
+/**
+ * 去除 HTML 标签并解码常见 HTML 实体
+ * @param html - HTML 字符串
+ * @returns 纯文本
+ */
 function stripHtmlTags(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim()
 }
 
+/**
+ * 统计 HTML 正文的纯文本字数（不含空白）
+ * @param html - HTML 字符串
+ * @returns 字数
+ */
 function countChars(html: string): number {
   return stripHtmlTags(html).replace(/\s/g, '').length
 }
 
+/**
+ * 从数据库读取单个章节的完整数据
+ * @param projectId - 项目 ID
+ * @param chapterId - 章节 ID
+ * @returns 章节数据，不存在时返回 null
+ */
 export async function readChapterFromDb(projectId: string, chapterId: string): Promise<ChapterData | null> {
   const db = await ensureWorkspaceDb()
   const row = db.prepare(
@@ -62,6 +82,11 @@ export async function readChapterFromDb(projectId: string, chapterId: string): P
   }
 }
 
+/**
+ * 列出项目下所有章节的摘要信息
+ * @param projectId - 项目 ID
+ * @returns 章节摘要数组，按 sortOrder 排序
+ */
 export async function listProjectChapters(projectId: string): Promise<ChapterSummaryItem[]> {
   const db = await ensureWorkspaceDb()
   const rows = db.prepare(
@@ -77,6 +102,13 @@ export async function listProjectChapters(projectId: string): Promise<ChapterSum
   }))
 }
 
+/**
+ * 对章节正文执行编辑操作（replace/insert/append），并自动保存版本快照
+ * @param projectId - 项目 ID
+ * @param chapterId - 章节 ID
+ * @param edit - 编辑操作描述
+ * @returns 版本 ID 和操作预览文本
+ */
 export async function applyChapterEdit(
   projectId: string,
   chapterId: string,
@@ -141,6 +173,14 @@ export async function applyChapterEdit(
   return { versionId, preview }
 }
 
+/**
+ * 在项目数据中全文搜索（世界观、角色、大纲、章节、知识文档、剧情线索）
+ * @param projectId - 项目 ID
+ * @param query - 搜索关键词
+ * @param scope - 可选的搜索范围过滤
+ * @param maxResults - 最大返回条数，默认 10
+ * @returns 匹配的搜索结果数组
+ */
 export async function searchProjectData(
   projectId: string,
   query: string,
@@ -241,10 +281,21 @@ export async function searchProjectData(
   return results
 }
 
+/**
+ * 将纯文本按换行分割并包装为 HTML 段落
+ * @param text - 纯文本
+ * @returns HTML 字符串
+ */
 function textToHtmlParagraphs(text: string): string {
   return text.split(/\n{2,}|\n/).filter(Boolean).map((p) => `<p>${p.trim()}</p>`).join('')
 }
 
+/**
+ * 将纯文本中的字符索引映射到包含 HTML 标签的原始字符串中的位置
+ * @param html - 包含标签的 HTML 字符串
+ * @param plainIdx - 纯文本中的字符索引
+ * @returns HTML 字符串中对应的字节位置
+ */
 function mapPlainIndexToHtml(html: string, plainIdx: number): number {
   let charCount = 0
   let i = 0
@@ -270,6 +321,13 @@ function mapPlainIndexToHtml(html: string, plainIdx: number): number {
   return i
 }
 
+/**
+ * 在 HTML 字符串中查找纯文本文本段并替换为新内容
+ * @param html - 原始 HTML 字符串
+ * @param searchPlain - 要查找的纯文本片段
+ * @param replacePlain - 替换用的纯文本
+ * @returns 替换后的 HTML 字符串
+ */
 function replaceInHtml(html: string, searchPlain: string, replacePlain: string): string {
   const plain = stripHtmlTags(html)
   const idx = plain.indexOf(searchPlain)
@@ -281,6 +339,14 @@ function replaceInHtml(html: string, searchPlain: string, replacePlain: string):
   return html.slice(0, startPos) + replaceHtml + html.slice(endPos)
 }
 
+/**
+ * 在 HTML 字符串中搜索纯文本文本段，然后在其前/后插入新内容
+ * @param html - 原始 HTML 字符串
+ * @param searchPlain - 定位用的纯文本片段
+ * @param insertHtml - 要插入的 HTML 字符串
+ * @param position - 插入位置：before 或 after
+ * @returns 插入后的 HTML 字符串
+ */
 function insertInHtml(html: string, searchPlain: string, insertHtml: string, position: 'before' | 'after'): string {
   const plain = stripHtmlTags(html)
   const idx = plain.indexOf(searchPlain)

@@ -1,6 +1,7 @@
 import type { AiTaskKnowledgeContext } from '../shared-types'
 import type { SkillSelection } from '../skills/types'
 
+/** 项目级 Skill 上下文条目的标准化结构 */
 type ProjectSkillContextEntry = {
   id: string
   name: string
@@ -8,6 +9,13 @@ type ProjectSkillContextEntry = {
   content: string
 }
 
+/**
+ * 将检索到的知识条目格式化为 prompt 可用的文本块。
+ * 按来源分组为"项目记忆"和"参考资料"两部分。
+ *
+ * @param knowledge 检索到的知识条目数组
+ * @returns 格式化后的知识文本，无数据时返回空串
+ */
 export function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['usedKnowledge']): string {
   if (!knowledge?.length) return ''
 
@@ -24,12 +32,14 @@ export function formatRetrievedKnowledge(knowledge?: AiTaskKnowledgeContext['use
   ].filter(Boolean).join('\n\n')
 }
 
+/** 根据来源类型判断所属分组：项目记忆或参考资料 */
 function resolveKnowledgeSourceGroupLabel(sourceType: string): '项目记忆' | '参考资料' {
   return sourceType === 'workflow-document' || sourceType === 'canon-fact' || sourceType === 'chapter-summary'
     ? '项目记忆'
     : '参考资料'
 }
 
+/** 将知识来源类型标识转为中文显示标签 */
 function resolveKnowledgeSourceTypeLabel(sourceType: string): string {
   switch (sourceType) {
     case 'canon-fact': return '项目 canon'
@@ -41,6 +51,7 @@ function resolveKnowledgeSourceTypeLabel(sourceType: string): string {
   }
 }
 
+/** 将一组知识条目格式化为带标签和用法说明的文本块 */
 function formatSection(label: string, entries: AiTaskKnowledgeContext['usedKnowledge'], usageHint: string): string {
   if (!entries.length) return ''
   return [
@@ -58,6 +69,12 @@ function formatSection(label: string, entries: AiTaskKnowledgeContext['usedKnowl
   ].join('\n\n')
 }
 
+/**
+ * 将已挂载的 skill 内容格式化为 prompt 可用的文本块，最多取前 4 个。
+ *
+ * @param skills 已选择的 skill 列表
+ * @returns 格式化后的 skill 内容字符串，无数据时返回空串
+ */
 export function formatMountedSkills(skills: SkillSelection[]): string {
   if (!skills.length) return ''
 
@@ -90,6 +107,13 @@ function stripFrontmatter(content: string): string {
   return content.slice(match[0].length)
 }
 
+/**
+ * 将项目级 skill 数据格式化为 prompt 可用的文本块。
+ *
+ * @param rawSkills 原始 skill 数组数据
+ * @param maxSkills 最多取前几个 skill，默认 8
+ * @returns 格式化后的 skill 内容字符串，无数据时返回空串
+ */
 export function formatProjectSkillsContext(rawSkills: unknown, maxSkills = 8): string {
   if (!Array.isArray(rawSkills) || rawSkills.length === 0) {
     return ''
@@ -116,6 +140,7 @@ export function formatProjectSkillsContext(rawSkills: unknown, maxSkills = 8): s
     .join('\n\n')
 }
 
+/** 将原始数据规范化为 ProjectSkillContextEntry，字段缺失或无效时返回 null */
 function normalizeProjectSkillContextEntry(value: unknown): ProjectSkillContextEntry | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -138,6 +163,13 @@ function normalizeProjectSkillContextEntry(value: unknown): ProjectSkillContextE
   }
 }
 
+/**
+ * 根据项目上下文生成写作风格指令。
+ * 优先使用已配置的风格标签和提示词，未配置时给出默认提示。
+ *
+ * @param context 项目上下文，可包含 writingStyleLabel 和 writingStylePrompt
+ * @returns 写作风格指令字符串
+ */
 export function resolveWritingStyleInstruction(context: Record<string, unknown>): string {
   const label = String(context.writingStyleLabel ?? '').trim()
   const prompt = String(context.writingStylePrompt ?? '').trim()

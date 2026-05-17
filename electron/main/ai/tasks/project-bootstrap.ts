@@ -4,6 +4,7 @@ import type { AiTaskResult, ProjectBootstrapResult, WorldviewResult, OutlineResu
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { resolveProjectBootstrapPromptParts } from '../prompts/bootstrap-strategies'
 
+/** 项目初始化任务：基于小说简介生成首批世界观设定和剧情大纲 */
 const handler: TaskHandler = {
   name: 'project-bootstrap',
   outputType: 'json',

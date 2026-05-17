@@ -3,6 +3,11 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult, OutlineResult } from '../shared-types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 
+/**
+ * 将原始大纲数据标准化为规范的 OutlineResult 格式
+ * @param parsed - 原始大纲数据
+ * @returns 标准化后的大纲结果
+ */
 export function normalizeOutline(parsed: Partial<OutlineResult>): OutlineResult {
   return {
     title: parsed.title?.trim() || '第1章：新剧情节点',
@@ -12,6 +17,7 @@ export function normalizeOutline(parsed: Partial<OutlineResult>): OutlineResult 
   }
 }
 
+/** 单条大纲生成任务：为当前章节之后补充一个新的大纲节点 */
 const handler: TaskHandler = {
   name: 'outline-item',
   outputType: 'json',

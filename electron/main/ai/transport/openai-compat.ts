@@ -13,12 +13,15 @@ import type {
 import { performAiRequest, readErrorMessage } from './http'
 import { consumeSseResponse, extractOpenAiCompatibleDelta } from './sse'
 
+/** 重试时 max_tokens 的上限 */
 const MAX_TOKENS_RETRY_CAP = 16000
 
+/** 单次请求的返回结果，成功时包含文本内容，失败时标记是否可因长度不足重试 */
 type SingleShotOutcome =
   | { ok: true; content: string }
   | { ok: false; retryableLength: boolean; error: Error }
 
+/** 执行单次 OpenAI 兼容接口的非流式文本生成请求 */
 async function runOpenAiCompatibleAttempt(
   settings: AppSettings,
   prompt: PromptPair,
@@ -82,6 +85,17 @@ async function runOpenAiCompatibleAttempt(
   return { ok: true, content }
 }
 
+/**
+ * 向 OpenAI 兼容接口发送非流式文本生成请求。
+ * 若首次因 max_tokens 不足导致内容为空，会自动加倍预算重试一次。
+ *
+ * @param settings - 应用配置（含 baseUrl、apiKey、model）
+ * @param prompt - 系统提示词与用户提示词
+ * @param maxTokens - 最大输出 token 数
+ * @param structured - 结构化输出选项
+ * @param signal - 中止信号
+ * @returns 生成的文本内容
+ */
 export async function requestOpenAiCompatible(
   settings: AppSettings,
   prompt: PromptPair,
@@ -99,6 +113,16 @@ export async function requestOpenAiCompatible(
   throw second.error
 }
 
+/**
+ * 向 OpenAI 兼容接口发送流式文本生成请求。
+ *
+ * @param settings - 应用配置（含 baseUrl、apiKey、model）
+ * @param prompt - 系统提示词与用户提示词
+ * @param handlers - 流式回调，接收每个文本增量
+ * @param signal - 中止信号
+ * @param maxTokens - 最大输出 token 数
+ * @returns 完整的拼接文本
+ */
 export async function requestOpenAiCompatibleStream(
   settings: AppSettings,
   prompt: PromptPair,
@@ -227,6 +251,7 @@ export async function requestOpenAiCompatibleWithTools(
   }
 }
 
+/** 将通用工具定义转换为 OpenAI function calling 格式 */
 function toOpenAiTool(tool: ToolDefinition): Record<string, unknown> {
   return {
     type: 'function',
@@ -238,6 +263,7 @@ function toOpenAiTool(tool: ToolDefinition): Record<string, unknown> {
   }
 }
 
+/** 将通用 AgentMessage 转换为 OpenAI Chat Completions 消息格式（可能返回多条消息） */
 function toOpenAiMessages(message: AgentMessage): Array<Record<string, unknown>> {
   if (message.role === 'user') {
     if (typeof message.content === 'string') {
@@ -273,6 +299,7 @@ function toOpenAiMessages(message: AgentMessage): Array<Record<string, unknown>>
   return [out]
 }
 
+/** 将 OpenAI 响应中的 tool_call 转换为通用的 AssistantToolUseBlock */
 function fromOpenAiToolCall(call: {
   id?: string
   type?: string
@@ -290,6 +317,7 @@ function fromOpenAiToolCall(call: {
   return { type: 'tool_use', id: call.id, name: call.function.name, input }
 }
 
+/** 将 OpenAI finish_reason 映射为通用的 AgentStopReason */
 function mapOpenAiFinishReason(reason: string | undefined): AgentStopReason {
   switch (reason) {
     case 'stop':

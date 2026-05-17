@@ -1,3 +1,9 @@
+/**
+ * 根据章节助手模式返回对应的指令文本。
+ *
+ * @param mode 助手模式，如 polish / continue / suggest / reference
+ * @returns 该模式下的指令说明字符串
+ */
 export function resolveChapterAssistantModeInstruction(mode: string): string {
   switch (mode) {
     case 'polish': return '当前模式是"润色"。请尽量直接输出可替换原文的润色结果，减少分析。'
@@ -8,6 +14,12 @@ export function resolveChapterAssistantModeInstruction(mode: string): string {
   }
 }
 
+/**
+ * 根据期望输出长度返回字数控制指令。
+ *
+ * @param length 长度偏好：short / medium / long
+ * @returns 对应的字数范围和要求说明
+ */
 export function resolveChapterAssistantLengthInstruction(length: string): string {
   switch (length) {
     case 'short': return '控制在 80 到 180 字，结论优先，避免铺垫过长。'
@@ -17,6 +29,12 @@ export function resolveChapterAssistantLengthInstruction(length: string): string
   }
 }
 
+/**
+ * 根据快捷动作名称返回对应的输出形态指令。
+ *
+ * @param quickAction 快捷动作名称，如"章节标题"、"润色选中"等
+ * @returns 该快捷动作下的输出格式要求
+ */
 export function resolveChapterAssistantQuickActionInstruction(quickAction: string): string {
   switch (quickAction) {
     case '章节标题': return '如果当前任务是生成章节标题，只输出一个最终标题，不要解释、不要分点、不要加书名号；若与通用长度要求冲突，以本条为准。'

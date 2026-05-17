@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { extractJsonObject } from './base'
 import type { AiTaskResult, WorkflowDocumentsResult } from '../shared-types'
 
+/** 流程文件生成任务：为项目当前阶段生成对应的流程文件内容 */
 const handler: TaskHandler = {
   name: 'workflow-documents',
   outputType: 'json',

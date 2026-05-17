@@ -5,6 +5,12 @@ import { join } from 'node:path'
 import type { AiTaskPayload } from '../shared-types'
 import type { SkillDefinition } from './types'
 
+/**
+ * 根据 manifest 中的 references 规则，按条件加载 skill 的参考文件
+ * @param skill - skill 定义
+ * @param task - 当前 AI 任务上下文
+ * @returns 参考文件列表，每项包含文件名和截断后的内容
+ */
 export async function loadSkillReferences(
   skill: SkillDefinition,
   task: AiTaskPayload
@@ -33,6 +39,7 @@ export async function loadSkillReferences(
   return results
 }
 
+/** 判断参考文件的加载条件是否满足当前任务 */
 function shouldLoadReference(
   condition: { task?: string; chapterIndexMax?: number } | undefined,
   task: AiTaskPayload
@@ -49,6 +56,11 @@ function shouldLoadReference(
   return true
 }
 
+/**
+ * 异步读取 skill 的 SKILL.md 原始内容
+ * @param skill - skill 定义
+ * @returns 文件内容，读取失败时返回 null
+ */
 export async function loadSkillContentAsync(skill: SkillDefinition): Promise<string | null> {
   const filePath = join(skill.rootDir, 'SKILL.md')
   try {

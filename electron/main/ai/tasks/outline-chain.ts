@@ -4,6 +4,7 @@ import type { AiTaskResult, OutlineBatchResult } from '../shared-types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { normalizeOutline } from './outline-item'
 
+/** 剧情链规划任务：基于当前章节规划 2-4 个后续大纲节点 */
 const handler: TaskHandler = {
   name: 'outline-chain',
   outputType: 'json',

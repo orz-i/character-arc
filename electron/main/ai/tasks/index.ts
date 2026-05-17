@@ -27,8 +27,13 @@ import spiralSeed from './spiral-seed'
 import spiralExpand from './spiral-expand'
 import spiralValidate from './spiral-validate'
 
+/** 任务处理器注册表，按任务名称映射 */
 const TASK_REGISTRY = new Map<AiTaskName, TaskHandler>()
 
+/**
+ * 将任务处理器注册到全局注册表
+ * @param handler - 任务处理器
+ */
 function register(handler: TaskHandler): void {
   TASK_REGISTRY.set(handler.name, handler)
 }
@@ -59,6 +64,11 @@ register(spiralSeed)
 register(spiralExpand)
 register(spiralValidate)
 
+/**
+ * 根据任务名称获取对应的任务处理器
+ * @param name - AI 任务名称
+ * @returns 匹配的任务处理器
+ */
 export function getTaskHandler(name: AiTaskName): TaskHandler {
   const handler = TASK_REGISTRY.get(name)
   if (!handler) throw new Error(`未知任务类型：${name}`)

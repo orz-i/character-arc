@@ -1,6 +1,7 @@
 import type { SkillCategory, SkillCompatibility, SkillManifest, SkillStageId } from './types'
 import type { AiTaskName } from '../shared-types'
 
+/** 启发式推断结果：当 skill 缺少 frontmatter manifest 时自动推断的元数据 */
 export type HeuristicResult = {
   category: SkillCategory
   compatibility: SkillCompatibility
@@ -41,6 +42,12 @@ export function inferSkillMeta(skillId: string, description: string): HeuristicR
   return buildHeuristic('writing', [], [], [], false, 'partial', '已识别为通用 skill，可手动决定是否启用并绑定到对应阶段。')
 }
 
+/**
+ * 将用户提供的 partial manifest 与启发式推断结果合并为完整的 SkillManifest
+ * @param partial - 用户在 frontmatter 中声明的 manifest（可能为 null）
+ * @param heuristic - 启发式推断的兜底值
+ * @returns 合并后的完整 SkillManifest
+ */
 export function buildFullManifest(
   partial: Partial<SkillManifest> | null,
   heuristic: HeuristicResult
@@ -56,6 +63,7 @@ export function buildFullManifest(
   }
 }
 
+/** 写作类 skill 默认关联的 AI 任务列表 */
 const WRITING_TASKS: AiTaskName[] = [
   'chapter-assistant', 'chapter-first-draft', 'outline-batch', 'outline-chain',
   'chapter-analysis', 'inspiration-pack', 'project-bootstrap',
@@ -63,6 +71,7 @@ const WRITING_TASKS: AiTaskName[] = [
   'spiral-seed', 'spiral-expand', 'spiral-validate'
 ]
 
+/** 构造 HeuristicResult 的便捷工厂函数 */
 function buildHeuristic(
   category: SkillCategory,
   stages: SkillStageId[],

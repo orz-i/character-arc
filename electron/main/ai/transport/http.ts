@@ -1,5 +1,6 @@
 import { AI_REQUEST_TIMEOUT_MS } from '../shared-types'
 
+/** 从错误响应体中提取可读的错误信息 */
 async function readErrorMessage(response: Response, fallbackLabel: string): Promise<string> {
   const fallback = `${fallbackLabel} 请求失败：${response.status} ${response.statusText}`
   try {
@@ -15,6 +16,16 @@ async function readErrorMessage(response: Response, fallbackLabel: string): Prom
   }
 }
 
+/**
+ * 发送 AI 请求的通用函数，自带超时控制和错误处理。
+ *
+ * @param url - 请求地址
+ * @param init - fetch 请求配置
+ * @param providerLabel - 供应商名称，用于错误提示
+ * @param externalSignal - 外部中止信号
+ * @returns 成功的 Response 对象
+ * @throws 请求失败或超时时抛出错误
+ */
 async function performAiRequest(
   url: string,
   init: RequestInit,

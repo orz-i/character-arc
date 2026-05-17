@@ -12,12 +12,20 @@ import { ensureWorkspaceDb } from '../workspace-store'
 import { runSpiralBootstrap } from './spiral'
 import type { SpiralBootstrapInput } from './spiral'
 
+/**
+ * AI IPC 模块的外部依赖注入接口。
+ * 由主进程初始化时提供，用于获取工作区快照和广播事件。
+ */
 type AiIpcDeps = {
+  /** 获取最新工作区快照（知识文档、AI 运行记录等） */
   getLatestWorkspaceSnapshot: () => { workspaces?: Record<string, { knowledgeDocuments?: unknown[]; aiRuns?: unknown[] }> } | null
+  /** 向 renderer 广播 AI 运行事件 */
   emitAiRunEvent: (payload: { projectId: string; meta: Record<string, unknown> }) => void
+  /** 向 renderer 广播章节状态告警事件 */
   emitChapterStateWarnings: (payload: ChapterStateWarningsPayload) => void
 }
 
+/** 注入的外部依赖，registerAiIpcHandlers 调用时初始化 */
 let deps: AiIpcDeps | null = null
 
 /** 流式任务的 AbortController（按 streamId 索引） */
@@ -30,6 +38,13 @@ const activeAiStreams = new Map<string, AbortController>()
  */
 const activeAiTasks = new Map<string, AbortController>()
 
+/**
+ * 注册所有 AI 相关的 IPC handler。
+ * 包括非流式生成、流式生成、Agent 生成、连接测试、模型列表、图片生成、
+ * 世界状态读取、章节版本读取、螺旋生成、状态补录等。
+ *
+ * @param injectedDeps - 外部依赖注入
+ */
 export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   deps = injectedDeps
   setChapterWarningsEmitter((payload) => deps?.emitChapterStateWarnings(payload))
@@ -302,6 +317,7 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   })
 
   // ── 螺旋式深度生成 ──
+  /** 当前进行中的螺旋生成任务的 AbortController */
   let activeSpiralController: AbortController | null = null
 
   ipcMain.handle('characterarc:ai-spiral-bootstrap', async (event, payload: unknown) => {

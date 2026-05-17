@@ -1,11 +1,17 @@
 import type { SkillCompatibility, SkillManifest } from './types'
 
+/** 用户在 frontmatter 中显式覆盖的 skill 属性 */
 export type SkillFrontmatterOverrides = {
   compatibility?: SkillCompatibility
   compatibilityNote?: string
   enabled?: boolean
 }
 
+/**
+ * 解析 SKILL.md 文件头部的 YAML frontmatter
+ * @param content - SKILL.md 的完整文本内容
+ * @returns 解析后的名称、版本、描述、source、manifest 和覆盖项
+ */
 export function parseSkillFrontmatter(content: string): {
   name: string
   version: string
@@ -60,6 +66,7 @@ export function parseSkillFrontmatter(content: string): {
   return { name, version, description, source, manifest, overrides }
 }
 
+/** 解析 frontmatter 中 `manifest:` 缩进块为结构化数据 */
 function parseManifestBlock(frontmatter: string): {
   manifest: Partial<SkillManifest> | null
   overrides: SkillFrontmatterOverrides
@@ -134,6 +141,7 @@ function parseManifestBlock(frontmatter: string): {
   return { manifest, overrides }
 }
 
+/** 去除 YAML 标量值两端的引号并 trim */
 function stripYamlScalar(value: string): string {
   const trimmed = value.trim()
   if (

@@ -33,7 +33,9 @@ export type ScriptRunResult = {
   durationMs: number
 }
 
+/** 默认脚本超时时间（毫秒） */
 const DEFAULT_TIMEOUT_MS = 30_000
+/** 默认 stdout/stderr 各自的字节上限 */
 const DEFAULT_MAX_OUTPUT_BYTES = 65_536
 
 /**
@@ -95,6 +97,7 @@ export async function runScript(scriptPath: string, opts: ScriptRunOptions): Pro
       stdio: ['ignore', 'pipe', 'pipe']
     })
 
+    /** 最终结算结果，确保只 resolve 一次 */
     const finalize = (result: Omit<ScriptRunResult, 'durationMs'>): void => {
       if (settled) return
       settled = true
@@ -102,6 +105,7 @@ export async function runScript(scriptPath: string, opts: ScriptRunOptions): Pro
       resolveResult({ ...result, durationMs: Date.now() - startedAt })
     }
 
+    /** 终止子进程：先 SIGTERM，1s 后未退出则 SIGKILL */
     const killChain = (reason: 'timeout' | 'aborted'): void => {
       if (reason === 'timeout') timedOut = true
       else abortedByExternal = true
@@ -136,6 +140,7 @@ export async function runScript(scriptPath: string, opts: ScriptRunOptions): Pro
       if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
     }
 
+    /** 将 chunk 追加到对应缓冲区，超出上限则截断并标记 truncated */
     function appendChunk(target: 'stdout' | 'stderr', chunk: Buffer): void {
       const current = target === 'stdout' ? stdoutBuf : stderrBuf
       const remaining = maxOutputBytes - current.length

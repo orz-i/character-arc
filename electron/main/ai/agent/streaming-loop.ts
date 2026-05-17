@@ -5,6 +5,9 @@ import type { AgentMessage, AssistantContentBlock, ToolResultBlock } from './too
 import { isTextBlock, isToolUseBlock } from './tools/types'
 import { dispatchTool, listToolDefinitions, type ToolRegistry } from './tools/registry'
 
+/**
+ * 流式 Agent 循环的入参。
+ */
 export type StreamingAgentLoopParams = {
   settings: AppSettings
   systemPrompt: string
@@ -17,12 +20,21 @@ export type StreamingAgentLoopParams = {
   maxIterations?: number
 }
 
+/**
+ * 流式 Agent 循环的返回结果。
+ */
 export type StreamingAgentLoopResult = {
   finalText: string
   toolCalls: ToolCallTrace[]
   iterations: number
 }
 
+/**
+ * 流式 Agent 循环：每轮调用 LLM，按需分发工具，通过 handlers 回调实时推送文本增量与工具状态。
+ *
+ * @param params - 循环参数，包含设置、prompt、工具注册表、流式回调等
+ * @returns 最终文本、工具调用轨迹和实际迭代轮数
+ */
 export async function runStreamingAgentLoop(params: StreamingAgentLoopParams): Promise<StreamingAgentLoopResult> {
   const maxIterations = params.maxIterations ?? AGENT_STREAM_MAX_ITERATIONS
   const tools = listToolDefinitions(params.registry)
@@ -101,13 +113,23 @@ export async function runStreamingAgentLoop(params: StreamingAgentLoopParams): P
   return { finalText, toolCalls, iterations: maxIterations }
 }
 
+/** 从 assistant 内容块中提取所有文本并拼接为纯文本。 */
 function extractText(blocks: AssistantContentBlock[]): string {
   return blocks.filter(isTextBlock).map((b) => b.text).join('').trim()
 }
 
+// 流式输出时每次发送的字符数
 const CHUNK_SIZE = 32
+// 每个 chunk 之间的延迟毫秒数，模拟打字效果
 const CHUNK_DELAY_MS = 8
 
+/**
+ * 将文本按固定块大小逐段推送，模拟逐字输出效果。
+ *
+ * @param text - 待推送的完整文本
+ * @param onTextDelta - 每个文本增量的回调
+ * @param signal - 中止信号，中止时立即停止推送
+ */
 async function emitTextProgressively(
   text: string,
   onTextDelta: (delta: string) => void,

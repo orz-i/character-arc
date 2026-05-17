@@ -6,11 +6,17 @@ import {
   searchProjectData
 } from './chapter-data-access'
 
+/** 章节工具所需的上下文和回调 */
 export type ChapterToolCallbacks = {
   currentChapterId: string
   onEditApplied?: (chapterId: string, editType: string, preview: string, versionId: string) => void
 }
 
+/**
+ * 创建章节相关的一组工具（读取、编辑、搜索、列表）
+ * @param callbacks - 章节上下文与回调
+ * @returns 工具数组
+ */
 export function createChapterTools(callbacks: ChapterToolCallbacks): Tool[] {
   const { currentChapterId, onEditApplied } = callbacks
 

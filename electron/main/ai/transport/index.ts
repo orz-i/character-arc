@@ -5,12 +5,24 @@ import { requestAnthropic, requestAnthropicStream, requestAnthropicWithTools } f
 export { fetchModels, fetchImageModels, type FetchedModel } from './models'
 export { generateImage, type GeneratedImageResult } from './images'
 
+/** 结构化输出的模式：JSON 对象、工具调用或纯提示词引导 */
 export type StructuredOutputMode = 'json_object' | 'tool_use' | 'prompt_only'
 
+/** 结构化输出选项 */
 export type StructuredOutputOptions = {
   mode: StructuredOutputMode
 }
 
+/**
+ * 根据当前 provider 分发非流式文本生成请求。
+ *
+ * @param settings - 应用配置
+ * @param prompt - 系统提示词与用户提示词
+ * @param maxTokens - 最大输出 token 数
+ * @param structured - 结构化输出选项
+ * @param signal - 中止信号
+ * @returns 生成的文本内容
+ */
 export async function requestAiText(
   settings: AppSettings,
   prompt: PromptPair,
@@ -23,6 +35,16 @@ export async function requestAiText(
     : requestOpenAiCompatible(settings, prompt, maxTokens, structured, signal)
 }
 
+/**
+ * 根据当前 provider 分发流式文本生成请求。
+ *
+ * @param settings - 应用配置
+ * @param prompt - 系统提示词与用户提示词
+ * @param handlers - 流式回调，接收每个文本增量
+ * @param signal - 中止信号
+ * @param maxTokens - 最大输出 token 数
+ * @returns 完整的拼接文本
+ */
 export async function requestAiTextStream(
   settings: AppSettings,
   prompt: PromptPair,

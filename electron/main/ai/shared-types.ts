@@ -5,6 +5,7 @@
 
 import type { SpiralSeedResult, SpiralExpandResult, SpiralValidateResult } from './spiral/types'
 
+/** AI 供应商标识。支持预设值或自定义字符串。 */
 export type ProviderName =
   | 'openai'
   | 'deepseek'
@@ -18,17 +19,26 @@ export type ProviderName =
   | 'one-api'
   | string
 
+/**
+ * AI 模块的全局设置。
+ * 聊天和图片生成共用同一组 provider/model/key，embedding 和图片可单独配置。
+ */
 export type AppSettings = {
   provider: string
   model: string
   apiKey: string
   baseUrl: string
+  /** 可选：embedding 专用模型，为空时从 model 推断 */
   embeddingModel: string
+  /** 可选：图片生成模型 */
   imageModel: string
+  /** 可选：图片生成独立 API Key */
   imageApiKey: string
+  /** 可选：图片生成独立 Base URL */
   imageBaseUrl: string
 }
 
+/** 所有 AI 任务类型的联合字面量类型。每个值对应 tasks/ 下的一个 TaskHandler。 */
 export type AiTaskName =
   | 'worldview-entry'
   | 'character-card'
@@ -56,6 +66,10 @@ export type AiTaskName =
   | 'inspiration-pack'
   | 'story-deep-audit'
 
+/**
+ * AI 运行时注入 prompt 的知识条目。
+ * 来自关键词检索模块的输出，随 AiRunMeta 一起记录。
+ */
 export type AiRunKnowledgeItem = {
   documentId: string
   title: string
@@ -94,6 +108,7 @@ export type AiRunMeta = {
   producedKnowledgeDocuments?: AiKnowledgeDocumentDraft[]
 }
 
+/** Agent loop 中单次工具调用的追踪记录 */
 export type ToolCallTrace = {
   tool: string
   args: Record<string, unknown>
@@ -116,10 +131,15 @@ export type AiKnowledgeDocumentDraft = {
   metadata?: Record<string, unknown>
 }
 
+/** 注入任务的知识上下文 */
 export type AiTaskKnowledgeContext = {
   usedKnowledge: AiRunKnowledgeItem[]
 }
 
+/**
+ * 从前端通过 IPC 传入的 AI 任务请求体。
+ * 包含任务类型、设置、上下文数据及可选的客户端追踪字段。
+ */
 export type AiTaskPayload = {
   task: AiTaskName
   settings: AppSettings
@@ -138,12 +158,14 @@ export type AiTaskPayload = {
   clientTaskId?: string
 }
 
+/** 世界观条目生成结果 */
 export type WorldviewResult = {
   type: string
   title: string
   content: string
 }
 
+/** 角色卡片生成结果 */
 export type CharacterResult = {
   name: string
   role: string
@@ -151,6 +173,7 @@ export type CharacterResult = {
   tags: string[]
 }
 
+/** 单条大纲条目生成结果 */
 export type OutlineResult = {
   title: string
   wordTarget: string
@@ -158,19 +181,23 @@ export type OutlineResult = {
   summary: string
 }
 
+/** 批量大纲生成结果 */
 export type OutlineBatchResult = {
   entries: OutlineResult[]
 }
 
+/** 章节助手（对话）的回复结果 */
 export type ChapterAssistantResult = {
   content: string
 }
 
+/** 助手意图识别结果：普通聊天或操作提案 */
 export type AssistantIntentResult = {
   intent: 'chat' | 'proposal'
   reason: string
 }
 
+/** 助手操作提案详情：包含命令类型、目标、变更预览和确认要求 */
 export type AssistantActionProposalResult = {
   commandType:
     | 'insert-into-chapter'
@@ -197,11 +224,16 @@ export type AssistantActionProposalResult = {
   payload: Record<string, unknown>
 }
 
+/** 项目初始化（一键生成世界观 + 大纲）的结果 */
 export type ProjectBootstrapResult = {
   worldviewEntries: WorldviewResult[]
   outlineItems: OutlineResult[]
 }
 
+/**
+ * 工作流文档集合生成结果。
+ * 每个 key 对应一种工作流文档（任务计划、发现、进度等）。
+ */
 export type WorkflowDocumentsResult = {
   task_plan: string
   findings: string
@@ -213,8 +245,10 @@ export type WorkflowDocumentsResult = {
   resource_ledger: string
 }
 
+/** 工作流阶段文档的部分更新结果 */
 export type WorkflowStageDocumentsResult = Partial<WorkflowDocumentsResult>
 
+/** 章节分析结果：概览、节奏、张力、连续性、亮点、风险和修改建议 */
 export type ChapterAnalysisResult = {
   overview: string
   pacing: string
@@ -225,6 +259,7 @@ export type ChapterAnalysisResult = {
   revisionActions: string[]
 }
 
+/** 参考小说整体风格分析结果 */
 export type ReferenceStyleAnalysisResult = {
   overview: string
   sentenceStyle: string
@@ -238,6 +273,7 @@ export type ReferenceStyleAnalysisResult = {
   avoidRules: string[]
 }
 
+/** 参考小说片段风格分析结果 */
 export type ReferenceStyleChunkResult = {
   overview: string
   sentenceStyle: string
@@ -252,6 +288,7 @@ export type ReferenceStyleChunkResult = {
   styleRules: string[]
 }
 
+/** 单条灵感条目 */
 export type InspirationResult = {
   type: string
   title: string
@@ -259,24 +296,29 @@ export type InspirationResult = {
   tags: string[]
 }
 
+/** 灵感包生成结果（多条灵感条目） */
 export type InspirationPackResult = {
   entries: InspirationResult[]
 }
 
+/** 章节场景规划结果 */
 export type ChapterScenePlanResult = {
   scenes: Array<{ focus: string }>
 }
 
+/** 单条情节线索检测结果 */
 export type PlotThreadDetectEntry = {
   title: string
   description: string
   tags: string[]
 }
 
+/** 情节线索检测结果（多条线索） */
 export type PlotThreadDetectResult = {
   entries: PlotThreadDetectEntry[]
 }
 
+/** 所有 AI 任务结果类型的联合类型 */
 export type AiTaskResult =
   | WorldviewResult
   | CharacterResult
@@ -298,20 +340,24 @@ export type AiTaskResult =
   | SpiralExpandResult
   | SpiralValidateResult
 
+/** AI 任务的完整响应：结果 + 运行元数据 */
 export type AiTaskResponse = {
   result: AiTaskResult
   meta: AiRunMeta
 }
 
+/** System + User 的 prompt 对 */
 export type PromptPair = {
   system: string
   user: string
 }
 
+/** 流式 AI 生成的回调处理器 */
 export type AiStreamHandlers = {
   onTextDelta: (delta: string) => void
 }
 
+/** Agent 流式生成的回调处理器（含工具调用和编辑事件） */
 export type AiAgentStreamHandlers = {
   onTextDelta: (delta: string) => void
   onToolUseStart: (toolUseId: string, toolName: string, args: Record<string, unknown>) => void

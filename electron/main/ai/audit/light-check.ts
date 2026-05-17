@@ -1,17 +1,26 @@
 import type { StoryStateContext, CharacterState } from '../../story-state-store'
 import type { StateDelta } from '../../story-state-store'
 
+/** 轻量检查发现的单条违规记录 */
 export interface LightCheckViolation {
   type: 'location_mismatch' | 'item_not_owned' | 'timeline_break' | 'rule_violation' | 'state_conflict'
   severity: 'error' | 'warning'
   message: string
 }
 
+/** 轻量检查的汇总结果 */
 export interface LightCheckResult {
   passed: boolean
   violations: LightCheckViolation[]
 }
 
+/**
+ * 执行轻量一致性检查，扫描章节内容与状态 delta 中的潜在问题
+ * @param chapterContent - 章节正文文本
+ * @param stateBefore - 执行 delta 前的完整故事状态
+ * @param delta - 本章产生的状态变更（null 表示无变更）
+ * @returns 检查结果，包含是否通过及违规列表
+ */
 export function runLightCheck(
   chapterContent: string,
   stateBefore: StoryStateContext,
@@ -34,6 +43,7 @@ export function runLightCheck(
   }
 }
 
+/** 检查物品移除是否与角色库存一致 */
 function checkItemConsistency(
   content: string,
   characterStates: CharacterState[],
@@ -59,6 +69,7 @@ function checkItemConsistency(
   }
 }
 
+/** 检查角色位置变更的 from 值是否与状态库一致 */
 function checkLocationConsistency(
   characterStates: CharacterState[],
   delta: StateDelta,
@@ -81,6 +92,7 @@ function checkLocationConsistency(
   }
 }
 
+/** 通过关键词匹配检测正文是否可能违反强制世界规则 */
 function checkWorldRuleViolations(
   content: string,
   worldRules: StoryStateContext['worldRules'],
@@ -108,6 +120,7 @@ function checkWorldRuleViolations(
   }
 }
 
+/** 检测昏迷/死亡角色被报告有主动行为变更但未恢复状态的冲突 */
 function checkStateConflicts(
   characterStates: CharacterState[],
   delta: StateDelta,
@@ -132,6 +145,7 @@ function checkStateConflicts(
   }
 }
 
+/** 从规则文本中提取有意义的关键词（去除虚词和标点，最多 8 个） */
 function extractRuleKeywords(ruleContent: string): string[] {
   return ruleContent
     .replace(/[，。、；：""''（）【】！？…—·「」『』]/g, ' ')

@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { normalizeAssistantText } from './base'
 import type { AiTaskResult, ChapterAssistantResult } from '../shared-types'
 
+/** 长篇一致性审计任务：对项目进行伏笔、角色出场、节奏、设定等七大维度全面审计 */
 const handler: TaskHandler = {
   name: 'story-deep-audit',
   outputType: 'text',

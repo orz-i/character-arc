@@ -7,19 +7,31 @@ import { parseSkillFrontmatter } from './frontmatter'
 import { validateManifest } from './manifest'
 import { inferSkillMeta, buildFullManifest } from './heuristics'
 
+/** 将 projectId 标准化为 registry key，空值时返回 '_shared' */
 function resolveProjectSkillsScope(projectId?: string): string {
   const normalizedProjectId = String(projectId ?? '').trim()
   return normalizedProjectId || '_shared'
 }
 
+/** 获取内置 skill 目录的绝对路径 */
 export function getBuiltinSkillsDirPath(): string {
   return join(app.getAppPath(), 'resources', 'skills')
 }
 
+/**
+ * 获取项目级 skill 目录的绝对路径
+ * @param projectId - 项目标识，为空时使用共享目录
+ * @returns 项目 skill 目录路径
+ */
 export function getProjectSkillsDirPath(projectId?: string): string {
   return join(app.getPath('userData'), 'project-skills', resolveProjectSkillsScope(projectId))
 }
 
+/**
+ * 扫描磁盘上的内置和项目 skill，合并后按名称排序返回
+ * @param projectId - 项目标识
+ * @returns 合并后的 skill 定义列表
+ */
 export async function scanSkillsFromDisk(projectId?: string): Promise<SkillDefinition[]> {
   const builtinSkills = await scanSkillsUnderRoot(getBuiltinSkillsDirPath(), 'builtin')
   const projectSkills = await scanSkillsUnderRoot(getProjectSkillsDirPath(projectId), 'project')
@@ -31,6 +43,7 @@ export async function scanSkillsFromDisk(projectId?: string): Promise<SkillDefin
   return Array.from(mergedMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 }
 
+/** 扫描指定根目录下所有子目录，将每个目录解析为 SkillDefinition */
 async function scanSkillsUnderRoot(root: string, scope: 'builtin' | 'project'): Promise<SkillDefinition[]> {
   if (!existsSync(root)) return []
 
@@ -46,6 +59,7 @@ async function scanSkillsUnderRoot(root: string, scope: 'builtin' | 'project'): 
   return skills
 }
 
+/** 从单个 skill 目录加载完整定义，解析失败时返回 null */
 async function loadSkillDefinition(root: string, dirName: string, scope: 'builtin' | 'project'): Promise<SkillDefinition | null> {
   const skillDir = join(root, dirName)
   const skillPath = join(skillDir, 'SKILL.md')
@@ -81,6 +95,7 @@ async function loadSkillDefinition(root: string, dirName: string, scope: 'builti
   }
 }
 
+/** 递归统计目录下的文件数量 */
 async function countFilesRecursive(root: string): Promise<number> {
   const entries = await readdir(root, { withFileTypes: true })
   let total = 0

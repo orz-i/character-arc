@@ -3,9 +3,12 @@ import { join } from 'node:path'
 import type { AppSettings, AiRunKnowledgeItem, PromptPair } from '../shared-types'
 import type { SkillSelection } from '../skills/types'
 
+/** 日志存放目录 */
 const AI_PROMPT_LOG_DIR = join(process.cwd(), '.logs')
+/** AI 提示词日志文件路径 */
 const AI_PROMPT_LOG_FILE = join(AI_PROMPT_LOG_DIR, 'ai-prompts.log')
 
+/** 将内容追加写入提示词日志文件，写入失败时仅打印错误不抛出 */
 async function writePromptLogFile(content: string): Promise<void> {
   try {
     await mkdir(AI_PROMPT_LOG_DIR, { recursive: true })
@@ -15,6 +18,14 @@ async function writePromptLogFile(content: string): Promise<void> {
   }
 }
 
+/**
+ * 记录 AI 提示词请求日志（系统提示词 + 用户提示词）
+ * @param label - 日志标签，如 REQUEST、REPAIR_1
+ * @param settings - 应用设置
+ * @param prompt - 系统/用户提示词对
+ * @param taskName - 任务名称
+ * @param usedSkills - 可选的已使用技能 ID 列表
+ */
 export function logPrompt(
   label: string,
   settings: AppSettings,

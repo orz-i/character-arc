@@ -1,11 +1,15 @@
 import type { AiTaskName } from '../shared-types'
 
+/** Skill 分类：市场调研、文本分析、写作、润色、封面、工具 */
 export type SkillCategory = 'market' | 'analysis' | 'writing' | 'polish' | 'cover' | 'tool'
 
+/** Skill 兼容性：原生支持、部分支持、仅外部使用 */
 export type SkillCompatibility = 'native' | 'partial' | 'external-only'
 
+/** 写作阶段标识 */
 export type SkillStageId = 'reference' | 'premise' | 'setting' | 'outline' | 'draft'
 
+/** Skill 参考文件加载规则 */
 export type SkillReferenceRule = {
   file: string
   loadWhen?: {
@@ -14,6 +18,7 @@ export type SkillReferenceRule = {
   }
 }
 
+/** Skill 清单：描述 skill 的分类、适用任务、阶段、触发词等元数据 */
 export type SkillManifest = {
   category: SkillCategory
   tasks: AiTaskName[]
@@ -29,6 +34,7 @@ export type SkillManifest = {
   required?: boolean
 }
 
+/** Skill 完整定义：包含 id、元数据、manifest、文件内容等全部信息 */
 export type SkillDefinition = {
   id: string
   name: string
@@ -46,6 +52,7 @@ export type SkillDefinition = {
   content: string
 }
 
+/** Skill 选中结果：匹配后用于注入 prompt 的 skill 数据 */
 export type SkillSelection = {
   id: string
   name: string
@@ -54,6 +61,7 @@ export type SkillSelection = {
   score: number
 }
 
+/** Skill 扫描摘要条目：用于前端展示 skill 列表 */
 export type SkillScanEntry = {
   id: string
   name: string

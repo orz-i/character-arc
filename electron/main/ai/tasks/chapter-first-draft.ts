@@ -10,15 +10,24 @@ import {
 
 // max_tokens 给得宽松，确保情节能写完整、不在中间断句。
 // 中文模型 1 token ≈ 1.0-1.5 字，按 0.8 字/token 给上限留出 25-50% 头部空间。
+/** 每字对应 token 数的宽松系数 */
 const TOKEN_PER_CHAR_GENEROUS = 0.8
+/** 最大 token 数下限 */
 const MAX_TOKENS_FLOOR = 4000
+/** 最大 token 数上限 */
 const MAX_TOKENS_CEIL = 8000
 
+/**
+ * 从上下文中解析目标字数
+ * @param context - 任务上下文对象
+ * @returns 目标字数，无效时返回 0
+ */
 function resolveTargetWords(context: Record<string, unknown>): number {
   const raw = Number(context.sceneWordTarget ?? context.targetWordCount ?? context.chapterWordTarget ?? 0)
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 0
 }
 
+/** 章节初稿生成任务：基于项目设定生成完整的第一版章节正文 */
 const handler: TaskHandler = {
   name: 'chapter-first-draft',
   outputType: 'text',

@@ -4,6 +4,7 @@ import type { AiTaskResult, CharacterResult } from '../shared-types'
 import { resolveWritingStyleInstruction } from '../prompts/shared'
 import { formatOrganizations, formatCharacterRelationships, formatOrganizationMemberships } from '../prompts/format-helpers'
 
+/** 角色卡片生成任务：为小说项目生成一名新角色（名称/定位/描述/标签） */
 const handler: TaskHandler = {
   name: 'character-card',
   outputType: 'json',

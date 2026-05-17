@@ -3,6 +3,7 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult } from '../shared-types'
 import type { SpiralValidateResult, SpiralSeedResult, SpiralExpandResult } from '../spiral/types'
 
+/** 螺旋校验任务：检查角色弧线、情节因果链和世界设定之间的一致性 */
 const handler: TaskHandler = {
   name: 'spiral-validate',
   outputType: 'json',

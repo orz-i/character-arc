@@ -4,8 +4,15 @@ import { getEnabledSkills } from './registry'
 import { loadSkillReferences } from './loader'
 import { getTaskHandler } from '../tasks'
 
+/** 默认最大匹配 skill 数量 */
 const DEFAULT_MAX_SKILLS = 4
 
+/**
+ * 为指定 AI 任务匹配最合适的 skill 列表
+ * @param task - AI 任务负载
+ * @param enabledOverrides - 可选的 skill 启用/禁用覆盖表
+ * @returns 按匹配分数降序排列的 skill 选中结果
+ */
 export async function pickSkillsFor(
   task: AiTaskPayload,
   enabledOverrides?: Map<string, boolean>
@@ -52,6 +59,7 @@ export async function pickSkillsFor(
   return results
 }
 
+/** 计算单个 skill 对指定任务的匹配分数 */
 function computeScore(
   skill: SkillDefinition,
   task: AiTaskPayload,

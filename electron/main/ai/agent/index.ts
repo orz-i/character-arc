@@ -179,6 +179,13 @@ export async function runAgentTask(
   }
 }
 
+/**
+ * 根据任务上下文中的 projectSkills 构建 skill 启用/禁用覆盖映射。
+ *
+ * @param task - AI 任务载荷
+ * @param projectId - 项目 ID
+ * @returns skill ID 到启用状态的映射，若无覆盖则返回 undefined
+ */
 function resolveEnabledSkillOverrides(
   task: AiTaskPayload,
   projectId: string

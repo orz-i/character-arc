@@ -33,6 +33,9 @@ export type AgentLoopResult = {
   iterations: number
 }
 
+/**
+ * Agent 循环达到最大迭代次数时抛出的错误。
+ */
 export class AgentIterationLimitError extends Error {
   constructor(public readonly iterations: number) {
     super(`agent loop 达到工具调用上限 ${iterations}，可能存在死循环或工具失败循环`)
@@ -119,6 +122,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
   throw new AgentIterationLimitError(maxIterations)
 }
 
+/** 从 assistant 内容块中提取所有文本并拼接为纯文本。 */
 function extractText(blocks: AssistantContentBlock[]): string {
   return blocks
     .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
@@ -127,5 +131,5 @@ function extractText(blocks: AssistantContentBlock[]): string {
     .trim()
 }
 
-// re-export so callers don't need to dig into ./tools/types
+/** 重新导出，调用方无需深入 ./tools/types 引用此类型。 */
 export type { AssistantToolUseBlock }

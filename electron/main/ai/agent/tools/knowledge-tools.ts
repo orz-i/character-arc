@@ -1,6 +1,7 @@
 import type { AiKnowledgeDocumentDraft } from '../../shared-types'
 import type { Tool, ToolHandlerResult } from './types'
 
+/** 合法的知识文档来源类型集合 */
 const VALID_SOURCE_TYPES = new Set<AiKnowledgeDocumentDraft['sourceType']>([
   'reference-summary',
   'reference-chunk',
@@ -22,17 +23,26 @@ export type KnowledgeToolFactoryOptions = {
   maxDocuments?: number
 }
 
+/** 单文档内容默认上限字符数 */
 const DEFAULT_MAX_CONTENT_CHARS = 12_000
+/** 单次 loop 默认最多落库文档数 */
 const DEFAULT_MAX_DOCUMENTS = 30
 
+/** 构造成功的工具返回 */
 function ok(content: string): ToolHandlerResult {
   return { content }
 }
 
+/** 构造失败的工具返回 */
 function err(message: string): ToolHandlerResult {
   return { content: message, isError: true }
 }
 
+/**
+ * 创建知识文档相关的工具
+ * @param opts - 工厂配置选项
+ * @returns 包含 knowledge_save_document 的工具数组
+ */
 export function createKnowledgeTools(opts: KnowledgeToolFactoryOptions): Tool[] {
   const maxContent = opts.maxContentChars ?? DEFAULT_MAX_CONTENT_CHARS
   const maxDocuments = opts.maxDocuments ?? DEFAULT_MAX_DOCUMENTS

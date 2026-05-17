@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { extractJsonObject } from './base'
 import type { AiTaskResult, ChapterScenePlanResult } from '../shared-types'
 
+/** 章节场景规划任务：将章节拆分为 2-4 个连续场景段落 */
 const handler: TaskHandler = {
   name: 'chapter-scene-plan',
   outputType: 'json',

@@ -2,6 +2,7 @@ import type { TaskHandler, PromptBuildInput } from './base'
 import { extractJsonObject } from './base'
 import type { AiTaskResult, PlotThreadDetectResult, PlotThreadDetectEntry } from '../shared-types'
 
+/** 伏笔检测任务：从章节正文中识别伏笔、悬念和潜在剧情线索 */
 const handler: TaskHandler = {
   name: 'plot-thread-detect',
   outputType: 'json',

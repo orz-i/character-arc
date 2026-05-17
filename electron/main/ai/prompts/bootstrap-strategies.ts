@@ -1,5 +1,7 @@
+/** 小说篇幅类型 */
 type NovelLength = 'short' | 'long'
 
+/** 题材启动策略各维度的引导语 */
 interface BootstrapStrategy {
   storyFocus: string
   worldviewBias: string
@@ -8,6 +10,7 @@ interface BootstrapStrategy {
   toneConstraints: string
 }
 
+/** 未匹配到具体题材时的默认启动策略 */
 const DEFAULT_STRATEGY: BootstrapStrategy = {
   storyFocus: '先锁定主角最明确的欲望、最现实的阻力和最有辨识度的切入场景。',
   worldviewBias: '世界观只保留最支撑剧情推进的 3 条骨架信息，避免泛泛堆设定。',
@@ -16,6 +19,7 @@ const DEFAULT_STRATEGY: BootstrapStrategy = {
   toneConstraints: '语言保持中文网文可读性，重视画面感、目标感和悬念。'
 }
 
+/** 各题材对应的启动策略 */
 const GENRE_STRATEGIES: Record<string, BootstrapStrategy> = {
   科幻: { storyFocus: '优先明确核心科技设定、社会秩序变化，以及主角如何被卷入其中。', worldviewBias: '多写技术规则、资源分配、城市生态或文明断层，不写空洞名词。', conflictStyle: '冲突以技术代价、认知差异、制度压迫或生存抉择为主。', outlineShape: '先抛异常，再暴露系统性问题，最后给出更大阴影或实验真相。', toneConstraints: '兼顾冷感想象与人性压力，避免纯说明书式设定堆砌。' },
   奇幻: { storyFocus: '先确定主角进入异世界秩序后的生存目标和力量诱因。', worldviewBias: '多写地域风貌、超凡规则、族群差异和古老禁忌。', conflictStyle: '冲突以试炼、阵营纷争、宿命牵引和代价交换为主。', outlineShape: '以异象或事件开局，逐步引出更大的势力棋局。', toneConstraints: '要有冒险感和奇观感，但核心仍围绕人物选择。' },
@@ -46,6 +50,7 @@ const GENRE_STRATEGIES: Record<string, BootstrapStrategy> = {
   同人: { storyFocus: '主角切入原作世界的独特位置和对原有剧情的改变潜力必须明确。', worldviewBias: '世界观优先沿用原作核心规则，再补足主角的新变量。', conflictStyle: '冲突围绕熟悉角色、原有事件偏转和新旧命运冲撞展开。', outlineShape: '先借熟悉场景落地，再快速偏转剧情期待。', toneConstraints: '要有原作识别度，但不能只是照着走流程。' }
 }
 
+/** 短篇/长篇在大纲、世界观和节奏上的差异化要求 */
 const LENGTH_ADJUSTMENTS: Record<NovelLength, { outline: string; world: string; pacing: string }> = {
   long: {
     outline: '三条大纲可偏向长线铺垫：先立局、再升级、最后抛出更大的局势或人物关系钩子。',
@@ -59,6 +64,12 @@ const LENGTH_ADJUSTMENTS: Record<NovelLength, { outline: string; world: string; 
   }
 }
 
+/**
+ * 根据项目题材和篇幅，生成启动 prompt 所需的题材标签、篇幅标签和策略文本块。
+ *
+ * @param context 项目上下文，需包含 projectGenre 和 projectNovelLength 字段
+ * @returns 包含 genreLabel、lengthLabel 和 strategyBlock 的对象
+ */
 export function resolveProjectBootstrapPromptParts(context: Record<string, unknown>): {
   genreLabel: string
   lengthLabel: string

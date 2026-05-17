@@ -3,12 +3,19 @@ import { extractJsonObject } from './base'
 import type { AiTaskResult, ReferenceStyleAnalysisResult } from '../shared-types'
 import { formatProjectSkillsContext } from '../prompts/shared'
 
+/**
+ * 将未知值标准化为字符串数组，最多取前 6 项
+ * @param value - 待标准化的值
+ * @param fallback - 值无效时的默认数组
+ * @returns 字符串数组
+ */
 function toList(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback
   const normalized = value.map((item) => String(item).trim()).filter(Boolean).slice(0, 6)
   return normalized.length ? normalized : fallback
 }
 
+/** 参考作品风格汇总任务：跨分块汇总稳定成立的风格骨架和仿写规则 */
 const handler: TaskHandler = {
   name: 'reference-style-analysis',
   outputType: 'json',
