@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Minimize } from 'lucide-vue-next'
-import { NDrawer, NDrawerContent } from 'naive-ui'
 import ChapterTreeSidebar from './ChapterTreeSidebar.vue'
 import ChapterEditorPane from './ChapterEditorPane.vue'
 import ChapterAiPanel from './ChapterAiPanel.vue'
 
 const COMPACT_BREAKPOINT = 1180
+const COMPACT_BREAKPOINT_AI_OPEN = 1440
 
 const aiOpen = ref(true)
 const focusMode = ref(false)
 const sidebarDrawerVisible = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
-const isCompact = computed(() => viewportWidth.value <= COMPACT_BREAKPOINT)
+const isCompact = computed(() => {
+  const threshold = aiOpen.value ? COMPACT_BREAKPOINT_AI_OPEN : COMPACT_BREAKPOINT
+  return viewportWidth.value <= threshold
+})
 const aiPanelRef = ref<InstanceType<typeof ChapterAiPanel> | null>(null)
 
 function toggleAi(): void {
@@ -83,21 +86,20 @@ onBeforeUnmount(() => {
       <span>退出专注 (Esc)</span>
     </button>
 
-    <n-drawer
-      v-model:show="sidebarDrawerVisible"
-      :width="300"
-      placement="left"
-      :auto-focus="false"
-    >
-      <n-drawer-content body-content-style="padding: 0;" :native-scrollbar="false">
-        <ChapterTreeSidebar @navigate="sidebarDrawerVisible = false" />
-      </n-drawer-content>
-    </n-drawer>
+    <Transition name="sidebar-slide">
+      <div v-if="isCompact && sidebarDrawerVisible && !focusMode" class="sidebar-overlay">
+        <div class="sidebar-backdrop" @click="sidebarDrawerVisible = false" />
+        <div class="sidebar-panel">
+          <ChapterTreeSidebar @navigate="sidebarDrawerVisible = false" />
+        </div>
+      </div>
+    </Transition>
   </section>
 </template>
 
 <style scoped>
 .chapter-workspace {
+  position: relative;
   display: grid;
   grid-template-columns: 280px 1fr;
   height: 100%;
@@ -155,5 +157,46 @@ onBeforeUnmount(() => {
 
 .focus-exit:hover {
   color: var(--arc-text-primary);
+}
+
+.sidebar-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+}
+
+.sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.sidebar-panel {
+  position: relative;
+  width: 300px;
+  height: 100%;
+  box-shadow: var(--arc-shadow-lg);
+  z-index: 1;
+}
+
+.sidebar-slide-enter-active,
+.sidebar-slide-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-slide-enter-active .sidebar-panel,
+.sidebar-slide-leave-active .sidebar-panel {
+  transition: transform 0.2s ease;
+}
+
+.sidebar-slide-enter-from,
+.sidebar-slide-leave-to {
+  opacity: 0;
+}
+
+.sidebar-slide-enter-from .sidebar-panel,
+.sidebar-slide-leave-to .sidebar-panel {
+  transform: translateX(-100%);
 }
 </style>
