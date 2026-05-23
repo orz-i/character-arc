@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { Lightbulb, MoreVertical, Plus, Send, Sparkles, WandSparkles } from 'lucide-vue-next'
+import { Lightbulb, MoreVertical, Plus, Sparkles, WandSparkles } from 'lucide-vue-next'
 import { NButton, NDropdown, NDynamicTags, NForm, NFormItem, NInput, NModal, NTag, useDialog, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { buildProjectWritingStyleContext } from '@/features/writingStyles/presets'
@@ -42,7 +42,6 @@ const form = reactive({
 
 const focusTypes = ['标题灵感', '开篇钩子', '场景火花', '剧情转折', '设定补完', '人物动机'] // 灵感焦点类型列表
 const menuOptions: DropdownOption[] = [ // 灵感卡片的下拉菜单选项
-  { key: 'expand', label: '发送给 AI 助手' },
   { key: 'edit', label: '编辑灵感' },
   { key: 'delete', label: '删除灵感' }
 ]
@@ -194,22 +193,8 @@ function submitEntry(): void {
   editorVisible.value = false
 }
 
-// 将灵感卡片发送给 AI 助手进行扩写，构建包含灵感内容和当前章节上下文的 prompt
-function expandEntryToAssistant(entry: InspirationEntry): void {
-  appStore.queueAssistantPrompt(
-    `请基于这张灵感卡片，为当前章节工作台继续展开成可直接使用的创作内容。优先给出贴合当前章节的桥段、台词、推进动作或场景描写。\n\n灵感类型：${entry.type}\n灵感标题：${entry.title}\n灵感内容：${entry.content}\n灵感标签：${entry.tags.join('、') || '暂无'}\n当前章节：${appStore.selectedChapter?.title ?? '暂无'}\n当前章节摘要：${appStore.selectedChapter?.summary ?? '暂无'}`,
-    '灵感扩写'
-  )
-  message.success('灵感卡片已发送给 AI 助手继续扩写')
-}
-
-// 处理灵感卡片的下拉菜单操作：发送给 AI 助手、编辑或删除（删除前弹出二次确认）
+// 处理灵感卡片的下拉菜单操作：编辑或删除（删除前弹出二次确认）
 function handleMenuSelect(action: string | number, entry: InspirationEntry): void {
-  if (action === 'expand') {
-    expandEntryToAssistant(entry)
-    return
-  }
-
   if (action === 'edit') {
     openEditor(entry)
     return
@@ -316,10 +301,6 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
 
         <div class="card-footer">
           <span>更新于 {{ formatEntryMetaTime(entry.updatedAt) }}</span>
-          <button class="link-button" @click.stop="expandEntryToAssistant(entry)">
-            <Send :size="14" />
-            <span>发给 AI 助手</span>
-          </button>
         </div>
       </article>
 
@@ -692,8 +673,7 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
   color: var(--arc-text-secondary);
 }
 
-.more-button,
-.link-button {
+.more-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -743,20 +723,6 @@ function handleMenuSelect(action: string | number, entry: InspirationEntry): voi
   gap: 12px;
   color: var(--arc-text-hint);
   font-size: 12px;
-}
-
-.link-button {
-  gap: 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--arc-primary) 8%, var(--arc-bg-mix));
-  color: var(--arc-primary);
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.link-button:hover {
-  background: rgba(219, 234, 254, 0.98);
 }
 
 .empty-card {
