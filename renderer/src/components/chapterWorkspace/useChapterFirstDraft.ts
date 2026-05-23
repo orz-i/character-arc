@@ -150,6 +150,10 @@ export function useChapterFirstDraft(): {
     return previewContent.value
   }
 
+  function shouldRenderStreamPreview(task: StreamTaskName | null): boolean {
+    return task === 'chapter-first-draft' || task === 'chapter-memo'
+  }
+
   function getActiveTaskErrorMessage(): string {
     if (currentStreamTask.value === 'chapter-memo') return 'AI 写作备忘生成失败'
     if (currentStreamTask.value === 'chapter-audit') return 'AI 章节审计失败'
@@ -183,7 +187,7 @@ export function useChapterFirstDraft(): {
         streamingContent.value += payload.delta
         previewContent.value = streamingContent.value
         if (payload.charCount != null) streamingCharCount.value = payload.charCount
-      } else {
+      } else if (shouldRenderStreamPreview(currentStreamTask.value)) {
         previewContent.value += payload.delta
       }
       recompute()
@@ -230,7 +234,7 @@ export function useChapterFirstDraft(): {
       previewTitle.value = '写作备忘实时输出'
       previewContent.value = ''
     } else {
-      previewTitle.value = '章节审计实时输出'
+      previewTitle.value = '章节审计进行中'
       previewContent.value = ''
     }
 

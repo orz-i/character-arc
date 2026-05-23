@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ChevronDown, ChevronsDownUp, FilePlus, FileText, FolderPlus, MoreVertical, Plus, Search, Settings } from 'lucide-vue-next'
-import { NDropdown, NTag, NTooltip, useDialog } from 'naive-ui'
+import { NDropdown, NTag, NTooltip, useDialog, useMessage } from 'naive-ui'
 import ChapterMetaDialog from './ChapterMetaDialog.vue'
 import { useAppStore } from '@/stores/app'
 import { formatVolumeLabel } from '@/features/workspace/outlineVolumes'
-import { getChapterCharacterCount } from '@/features/chapters/editorContent'
+import { getChapterCharacterCount, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import type { ChapterDraft } from '@/types/app'
 import type { DropdownOption } from 'naive-ui'
+import { toIpcPayload } from '@/utils/ipcPayload'
 
 const emit = defineEmits<{
   navigate: []
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 
 const appStore = useAppStore()
 const dialog = useDialog()
+const message = useMessage()
 
 const keyword = ref('')
 const collapsed = reactive<Record<string, boolean>>({})
@@ -24,6 +26,7 @@ const metaDialogChapter = ref<ChapterDraft | null>(null)
 
 const chapterMenuOptions: DropdownOption[] = [
   { key: 'edit', label: '编辑章节信息' },
+  { key: 'export-txt', label: '导出 TXT' },
   { key: 'delete', label: '删除章节' }
 ]
 
@@ -79,10 +82,38 @@ function statusType(status: ChapterDraft['status']): 'default' | 'info' | 'succe
   }
 }
 
+function buildChapterExportFileName(chapter: ChapterDraft): string {
+  const safeTitle = (chapter.title?.trim() || '未命名章节')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+  return `${safeTitle}.txt`
+}
+
+async function handleExportChapterTxt(chapter: ChapterDraft): Promise<void> {
+  const result = await window.characterArc.exportChapterTxt(toIpcPayload({
+    title: chapter.title,
+    content: getPlainTextFromEditorContent(chapter.content ?? ''),
+    defaultFileName: buildChapterExportFileName(chapter)
+  }))
+
+  if (result.success) {
+    message.success(`已导出《${chapter.title || '未命名章节'}》TXT`)
+    return
+  }
+
+  if (!result.canceled) {
+    message.error(result.error ?? '导出章节 TXT 失败')
+  }
+}
+
 function handleMenuSelect(key: string | number, chapter: ChapterDraft): void {
   if (key === 'edit') {
     metaDialogChapter.value = chapter
     metaDialogVisible.value = true
+    return
+  }
+  if (key === 'export-txt') {
+    void handleExportChapterTxt(chapter)
     return
   }
   if (key === 'delete') {

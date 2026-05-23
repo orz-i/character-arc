@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, NSpin, darkTheme } from 'naive-ui'
+import { createDiscreteApi, NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, NSpin, darkTheme } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { createNaiveThemeOverrides, getDarkModePreset } from '@/theme/presets'
 import ProjectCenter from '@/pages/ProjectCenter.vue'
@@ -20,6 +20,7 @@ const appStore = useAppStore()
 const platform = window.characterArc?.platform ?? 'unknown'
 const appName = '弧光'
 const appVersion = window.characterArc?.version ?? ''
+const { message } = createDiscreteApi(['message'])
 
 // 根据当前选中主题生成 Naive UI 主题覆盖变量
 const themeOverrides = computed(() =>
@@ -92,11 +93,24 @@ watch(
   { immediate: true }
 )
 
+function shouldShowManualSaveToast(): boolean {
+  return appStore.currentView === 'chapter-studio' || appStore.activePanel === 'chapters'
+}
+
 // Ctrl+S 全局保存快捷键
-function handleGlobalKeydown(e: KeyboardEvent) {
+async function handleGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault()
-    void appStore.persistWorkspace()
+    await appStore.persistWorkspace()
+    if (appStore.persistenceError) {
+      if (shouldShowManualSaveToast()) {
+        message.error(appStore.persistenceError)
+      }
+      return
+    }
+    if (shouldShowManualSaveToast()) {
+      message.success('当前章节已保存')
+    }
   }
 }
 

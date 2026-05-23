@@ -4,6 +4,18 @@ import type { AiTaskResult, ChapterAuditResult } from '../shared-types'
 
 const VALID_SEVERITIES = new Set(['critical', 'warning', 'hint'])
 
+function normalizeChinesePunctuation(value: string): string {
+  return value
+    .replace(/「\s+/g, '「')
+    .replace(/\s+」/g, '」')
+    .replace(/『\s+/g, '『')
+    .replace(/\s+』/g, '』')
+    .replace(/\s+([，。！？；：、])/g, '$1')
+    .replace(/([（【《])\s+/g, '$1')
+    .replace(/\s+([）】》])/g, '$1')
+    .trim()
+}
+
 const handler: TaskHandler = {
   name: 'chapter-audit',
   outputType: 'json',
@@ -53,9 +65,9 @@ pass 判定：所有 critical issue 数 == 0 且 warning issue 数 <= 2 即 pass
         if (!VALID_SEVERITIES.has(severity)) return null
         return {
           severity: severity as 'critical' | 'warning' | 'hint',
-          category: String(r.category ?? '').trim(),
-          ref: String(r.ref ?? '').trim(),
-          hint: String(r.hint ?? '').trim()
+          category: normalizeChinesePunctuation(String(r.category ?? '')),
+          ref: normalizeChinesePunctuation(String(r.ref ?? '')),
+          hint: normalizeChinesePunctuation(String(r.hint ?? ''))
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)

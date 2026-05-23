@@ -209,6 +209,10 @@ export function normalizeAssistantText(text: string): { content: string } {
   const cleaned = text
     .replace(/```[\w-]*\n?/g, '')
     .replace(/```/g, '')
+    .replace(/「/g, '“')
+    .replace(/」/g, '”')
+    .replace(/『/g, '‘')
+    .replace(/』/g, '’')
     .trim()
   return { content: cleaned }
 }
