@@ -9,7 +9,7 @@ node_modules/
 .env.local
 .env.*.local
 
-# Build outputs (source repo)
+# Build outputs
 dist/
 build/
 out/
@@ -43,8 +43,9 @@ temp/
 tmp/
 .embed_cache
 dist_embed/
+.tmp-*
 
-# IDE / local tooling
+# IDE / editor / AI tools
 .vscode/
 .idea/
 .kilocode/
@@ -52,10 +53,18 @@ dist_embed/
 .roo/
 .junie/
 .claude/
+.agents/
+.project-skills/
+skills-lock.json
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Design / prototype artifacts (not part of source)
+prototypeDesign/
+design-preview/
+docs/
 
 # Optional Python helpers / notebooks
 __pycache__/
@@ -69,7 +78,3 @@ ENV/
 .mypy_cache/
 .coverage
 htmlcov/
-
-# Project-specific local/generated assets
-prototypeDesign/AI Novel Creation App/*
-.tmp-ui-ux-pro-max-skill/
