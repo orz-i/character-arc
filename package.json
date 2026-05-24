@@ -10,7 +10,7 @@
     "dev": "set ELECTRON_RUN_AS_NODE=&& electron-vite dev",
     "build": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build",
     "preview": "set ELECTRON_RUN_AS_NODE=&& electron-vite preview",
-    "dist": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build && electron-builder"
+    "dist": "set ELECTRON_RUN_AS_NODE=&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& vue-tsc --noEmit && electron-vite build && electron-builder"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
@@ -69,6 +69,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
