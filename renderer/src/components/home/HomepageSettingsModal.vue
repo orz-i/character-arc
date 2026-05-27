@@ -501,10 +501,10 @@ async function saveSettings(): Promise<void> {
               </div>
             </button>
           </div>
-          <div class="storage-note">
-            <Save :size="16" />
-            <span>{{ appStore.persistenceError || '当前工作区内容已接入本地 SQLite 持久化。' }}</span>
-          </div>
+<!--          <div class="storage-note">-->
+<!--            <Save :size="16" />-->
+<!--            <span>{{ appStore.persistenceError || '当前工作区内容已接入本地 SQLite 持久化。' }}</span>-->
+<!--          </div>-->
         </section>
       </div>
     </div>
