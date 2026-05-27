@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
@@ -36,6 +36,16 @@ type ReferenceImportProgressPayload = {
   total: number
   percent: number
   sourceTitle?: string
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
 }
 
 type RegisterMainIpcHandlersDeps = {
@@ -757,6 +767,59 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       return { success: true, skills: skillContextEntries(resolvedProjectId) }
     } catch {
       return { success: true, skills: [] }
+    }
+  })
+
+  // ── 检查更新（GitHub Release API） ──
+  ipcMain.handle('characterarc:check-update', async () => {
+    try {
+      const { app } = await import('electron')
+      const currentVersion = app.getVersion()
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 15_000)
+      const response = await fetch('https://api.github.com/repos/uu201/character-arc/releases/latest', {
+        headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'CharacterArc-Desktop' },
+        signal: controller.signal
+      })
+      clearTimeout(timer)
+      if (!response.ok) {
+        return { success: false, error: `GitHub API 请求失败 (${response.status})` }
+      }
+      const release = await response.json() as {
+        tag_name?: string
+        name?: string
+        body?: string
+        html_url?: string
+        published_at?: string
+        assets?: Array<{ name?: string; browser_download_url?: string; size?: number }>
+      }
+      const latestTag = (release.tag_name ?? '').replace(/^v/, '')
+      const hasUpdate = latestTag && latestTag !== currentVersion && compareVersions(latestTag, currentVersion) > 0
+      return {
+        success: true,
+        result: {
+          hasUpdate,
+          currentVersion,
+          latestVersion: latestTag,
+          releaseTitle: release.name ?? '',
+          releaseNotes: release.body ?? '',
+          releaseUrl: release.html_url ?? '',
+          publishedAt: release.published_at ?? '',
+          assets: (release.assets ?? []).map(a => ({
+            name: a.name ?? '',
+            downloadUrl: a.browser_download_url ?? '',
+            size: a.size ?? 0
+          }))
+        }
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '检查更新失败' }
+    }
+  })
+
+  ipcMain.handle('characterarc:open-external-url', (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+      shell.openExternal(url)
     }
   })
 }

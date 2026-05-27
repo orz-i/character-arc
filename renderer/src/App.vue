@@ -36,7 +36,7 @@ const appStyleVars = computed(() => {
   const dark = appStore.appSettings.darkMode
   const darkPreset = getDarkModePreset(appStore.appSettings.darkModeStyle)
   return {
-    '--arc-bg-body': dark ? darkPreset.bgBody : '#f6f6f7',
+    '--arc-bg-body': dark ? darkPreset.bgBody : '#f8f8f9',
     '--arc-bg-weak': dark ? darkPreset.bgWeak : '#fafafb',
     '--arc-bg-surface': dark ? darkPreset.bgSurface : '#ffffff',
     '--arc-bg-surface-hover': dark ? darkPreset.bgSurfaceHover : '#eef0f3',

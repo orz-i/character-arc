@@ -158,5 +158,9 @@ contextBridge.exposeInMainWorld('characterArc', {
     return () => {
       ipcRenderer.removeListener('characterarc:reference-import-progress', listener)
     }
-  }
+  },
+
+  // ── 检查更新 & 公告 ──
+  checkUpdate: () => ipcRenderer.invoke('characterarc:check-update'),
+  openExternalUrl: (url: string) => ipcRenderer.invoke('characterarc:open-external-url', url)
 })

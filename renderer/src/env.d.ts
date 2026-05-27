@@ -385,6 +385,21 @@ declare global {
       }>
       onWorkspaceSync: (callback: (payload: unknown) => void) => () => void
       onReferenceImportProgress: (callback: (payload: CharacterArcReferenceImportProgressPayload) => void) => () => void
+      checkUpdate: () => Promise<{
+        success: boolean
+        result?: {
+          hasUpdate: boolean
+          currentVersion: string
+          latestVersion: string
+          releaseTitle: string
+          releaseNotes: string
+          releaseUrl: string
+          publishedAt: string
+          assets: Array<{ name: string; downloadUrl: string; size: number }>
+        }
+        error?: string
+      }>
+      openExternalUrl: (url: string) => Promise<void>
     }
   }
 }
