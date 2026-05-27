@@ -11,6 +11,7 @@ import DeconstructionLibraryPage from '@/pages/DeconstructionLibraryPage.vue'
 import SkillsPage from '@/pages/SkillsPage.vue'
 import CoverWorkbenchPage from '@/pages/CoverWorkbenchPage.vue'
 import AiTaskProgressDock from '@/components/AiTaskProgressDock.vue'
+import TitlebarModelSwitcher from '@/components/TitlebarModelSwitcher.vue'
 
 // 全局应用状态
 const appStore = useAppStore()
@@ -137,6 +138,7 @@ onBeforeUnmount(() => {
               {{ appName }}
               <span v-if="appVersion" class="app-titlebar__version">v{{ appVersion }}</span>
             </span>
+            <TitlebarModelSwitcher />
           </div>
           <div class="app-content">
             <div v-if="appStore.persistenceError" class="app-error-banner">
