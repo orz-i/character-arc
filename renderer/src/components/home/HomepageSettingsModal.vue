@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Cpu, Download, Image, MonitorCog, Moon, Palette, PlugZap, RefreshCw, Save } from 'lucide-vue-next'
+import { Copy, Cpu, Download, Image, MonitorCog, Moon, Palette, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
 import { NButton, NFormItem, NInput, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { getProviderPreset, providerOptions, resolveProviderDefaults } from '@/features/settings/providerPresets'
@@ -8,7 +8,7 @@ import { imageProviderOptions, resolveImageProviderDefaults } from '@/features/s
 import { useAppStore } from '@/stores/app'
 import { darkModePresets, themePresets } from '@/theme/presets'
 import { toIpcPayload } from '@/utils/ipcPayload'
-import type { AppSettings, DarkModeStyle, ThemeName } from '@/types/app'
+import type { AiProfile, AppSettings, DarkModeStyle, ThemeName } from '@/types/app'
 
 const props = defineProps<{
   show: boolean
@@ -53,6 +53,14 @@ const draftSettings = reactive<AppSettings>({
   darkModeStyle: 'nord'
 })
 const draftTheme = ref<ThemeName>('ocean')
+const editingProfileId = ref<string>('')
+
+const editingProfile = computed<AiProfile | undefined>(() =>
+  draftSettings.aiProfiles.find((p) => p.id === editingProfileId.value)
+)
+const isEditingActiveProfile = computed(
+  () => editingProfileId.value === draftSettings.activeAiProfileId
+)
 
 const scrollContainer = ref<HTMLElement | null>(null)
 const activeNav = ref('sec-ai')
@@ -82,7 +90,7 @@ function handleScroll(): void {
   }
 }
 
-const activeProviderPreset = computed(() => getProviderPreset(draftSettings.provider))
+const activeProviderPreset = computed(() => getProviderPreset(editingProfile.value?.provider ?? draftSettings.provider))
 const currentVersion = window.characterArc.version
 const modelSelectOptions = computed(() =>
   fetchedModels.value.map((m) => ({ label: m.id, value: m.id }))
@@ -92,10 +100,7 @@ const imageModelSelectOptions = computed(() =>
 )
 const hasPendingChanges = computed(() =>
   draftTheme.value !== appStore.theme
-  || draftSettings.provider !== appStore.appSettings.provider
-  || draftSettings.model !== appStore.appSettings.model
-  || draftSettings.apiKey !== appStore.appSettings.apiKey
-  || draftSettings.baseUrl !== appStore.appSettings.baseUrl
+  || JSON.stringify(draftSettings.aiProfiles) !== JSON.stringify(appStore.appSettings.aiProfiles)
   || draftSettings.imageProvider !== appStore.appSettings.imageProvider
   || draftSettings.imageModel !== appStore.appSettings.imageModel
   || draftSettings.imageApiKey !== appStore.appSettings.imageApiKey
@@ -129,6 +134,8 @@ watch(
   (show) => {
     if (show) {
       syncDraftFromStore()
+      editingProfileId.value = draftSettings.activeAiProfileId || draftSettings.aiProfiles[0]?.id || ''
+      fetchedModels.value = []
     }
   },
   { immediate: true }
@@ -139,11 +146,90 @@ function closeModal(): void {
   emit('update:show', false)
 }
 
+function selectProfile(profileId: string): void {
+  editingProfileId.value = profileId
+  fetchedModels.value = []
+}
+
+function generateProfileId(): string {
+  return `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function generateUniqueName(base: string): string {
+  const existing = new Set(draftSettings.aiProfiles.map((p) => p.name))
+  if (!existing.has(base)) return base
+  let i = 2
+  while (existing.has(`${base} ${i}`)) i++
+  return `${base} ${i}`
+}
+
+function handleAddProfile(): void {
+  const id = generateProfileId()
+  const newProfile: AiProfile = {
+    id,
+    name: generateUniqueName('新接口配置'),
+    provider: 'openai-compatible',
+    baseUrl: '',
+    apiKey: '',
+    model: ''
+  }
+  draftSettings.aiProfiles.push(newProfile)
+  editingProfileId.value = id
+  fetchedModels.value = []
+}
+
+function handleCopyProfile(): void {
+  if (!editingProfile.value) return
+  const source = editingProfile.value
+  const id = generateProfileId()
+  const copy: AiProfile = {
+    id,
+    name: generateUniqueName(`${source.name} 副本`),
+    provider: source.provider,
+    baseUrl: source.baseUrl,
+    apiKey: source.apiKey,
+    model: source.model
+  }
+  draftSettings.aiProfiles.push(copy)
+  editingProfileId.value = id
+  fetchedModels.value = []
+}
+
+function handleDeleteProfile(): void {
+  if (!editingProfile.value) return
+  if (isEditingActiveProfile.value) {
+    message.warning('当前激活的接口不能删除，请先在标题栏切换到其他接口')
+    return
+  }
+  if (draftSettings.aiProfiles.length <= 1) {
+    message.warning('至少保留一个接口配置')
+    return
+  }
+  const removingId = editingProfileId.value
+  draftSettings.aiProfiles = draftSettings.aiProfiles.filter((p) => p.id !== removingId)
+  editingProfileId.value = draftSettings.activeAiProfileId || draftSettings.aiProfiles[0]?.id || ''
+  fetchedModels.value = []
+}
+
+function updateEditingProfile(updates: Partial<AiProfile>): void {
+  const profile = editingProfile.value
+  if (!profile) return
+  Object.assign(profile, updates)
+  if (isEditingActiveProfile.value) {
+    if (updates.provider !== undefined) draftSettings.provider = updates.provider
+    if (updates.model !== undefined) draftSettings.model = updates.model
+    if (updates.apiKey !== undefined) draftSettings.apiKey = updates.apiKey
+    if (updates.baseUrl !== undefined) draftSettings.baseUrl = updates.baseUrl
+  }
+}
+
 function handleProviderChange(provider: string): void {
   const defaults = resolveProviderDefaults(provider)
-  draftSettings.provider = provider
-  draftSettings.model = defaults.model
-  draftSettings.baseUrl = defaults.baseUrl
+  updateEditingProfile({
+    provider,
+    model: defaults.model,
+    baseUrl: defaults.baseUrl
+  })
   fetchedModels.value = []
 }
 
@@ -175,11 +261,23 @@ async function handleFetchImageModels(): Promise<void> {
   }
 }
 
+function buildProfilePayload(): AppSettings {
+  const profile = editingProfile.value
+  if (!profile) return { ...draftSettings }
+  return {
+    ...draftSettings,
+    provider: profile.provider,
+    model: profile.model,
+    apiKey: profile.apiKey,
+    baseUrl: profile.baseUrl
+  }
+}
+
 async function handleFetchModels(): Promise<void> {
   if (isFetchingModels.value) return
   isFetchingModels.value = true
   try {
-    const result = await window.characterArc.fetchModels(toIpcPayload({ ...draftSettings }))
+    const result = await window.characterArc.fetchModels(toIpcPayload(buildProfilePayload()))
     if (!result.success) throw new Error(result.error ?? '获取模型列表失败')
     fetchedModels.value = result.result ?? []
     if (fetchedModels.value.length === 0) {
@@ -199,10 +297,11 @@ async function handleTestAiConnection(): Promise<void> {
   if (isTestingAiConnection.value) return
   isTestingAiConnection.value = true
   try {
-    const result = await window.characterArc.testAiConnection(toIpcPayload({ ...draftSettings }))
+    const payload = buildProfilePayload()
+    const result = await window.characterArc.testAiConnection(toIpcPayload(payload))
     if (!result.success) throw new Error(result.error ?? '模型连接测试失败')
-    const payload = result.result as { provider?: string; model?: string } | undefined
-    message.success(`模型连接成功：${payload?.provider ?? draftSettings.provider} / ${payload?.model ?? draftSettings.model}`)
+    const res = result.result as { provider?: string; model?: string } | undefined
+    message.success(`模型连接成功：${res?.provider ?? payload.provider} / ${res?.model ?? payload.model}`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '模型连接测试失败')
   } finally {
@@ -211,10 +310,17 @@ async function handleTestAiConnection(): Promise<void> {
 }
 
 async function saveSettings(): Promise<void> {
-  appStore.updateAppSetting('provider', draftSettings.provider)
-  appStore.updateAppSetting('model', draftSettings.model)
-  appStore.updateAppSetting('apiKey', draftSettings.apiKey)
-  appStore.updateAppSetting('baseUrl', draftSettings.baseUrl)
+  appStore.updateAppSetting('aiProfiles', [...draftSettings.aiProfiles])
+  appStore.updateAppSetting('activeAiProfileId', draftSettings.activeAiProfileId)
+
+  const activeProfile = draftSettings.aiProfiles.find(p => p.id === draftSettings.activeAiProfileId)
+  if (activeProfile) {
+    appStore.updateAppSetting('provider', activeProfile.provider)
+    appStore.updateAppSetting('model', activeProfile.model)
+    appStore.updateAppSetting('apiKey', activeProfile.apiKey)
+    appStore.updateAppSetting('baseUrl', activeProfile.baseUrl)
+  }
+
   appStore.updateAppSetting('imageProvider', draftSettings.imageProvider)
   appStore.updateAppSetting('imageModel', draftSettings.imageModel)
   appStore.updateAppSetting('imageApiKey', draftSettings.imageApiKey)
@@ -269,77 +375,123 @@ async function saveSettings(): Promise<void> {
             <Cpu :size="18" />
             <div>
               <strong>AI 接口配置</strong>
-              <p>选择协议类型，填写接口地址和密钥，然后拉取或手动输入模型名称。</p>
+              <p>管理多个接口配置，可在标题栏快速切换。</p>
             </div>
           </div>
-          <div class="settings-grid">
-            <n-form-item label="协议类型">
-              <n-select
-                :options="providerOptions"
-                :value="draftSettings.provider"
-                @update:value="(value) => handleProviderChange(value ?? 'openai-compatible')"
-              />
-            </n-form-item>
-            <n-form-item label="Base URL">
-              <n-input
-                :value="draftSettings.baseUrl"
-                :placeholder="draftSettings.provider === 'anthropic' ? '例如：https://api.anthropic.com（自动补 /v1）' : '例如：https://api.deepseek.com/v1'"
-                @update:value="(value) => { draftSettings.baseUrl = value }"
-              />
-            </n-form-item>
+
+          <div class="profile-tabs">
+            <div class="profile-tab-list">
+              <button
+                v-for="profile in draftSettings.aiProfiles"
+                :key="profile.id"
+                class="profile-tab"
+                :class="{
+                  active: editingProfileId === profile.id,
+                  'is-active-profile': profile.id === draftSettings.activeAiProfileId
+                }"
+                @click="selectProfile(profile.id)"
+              >
+                <span class="profile-tab-name">{{ profile.name }}</span>
+                <span v-if="profile.id === draftSettings.activeAiProfileId" class="profile-tab-badge">当前</span>
+              </button>
+            </div>
+            <div class="profile-tab-actions">
+              <button class="profile-action-btn" title="新建配置" @click="handleAddProfile">
+                <Plus :size="14" />
+              </button>
+              <button class="profile-action-btn" title="复制当前配置" :disabled="!editingProfile" @click="handleCopyProfile">
+                <Copy :size="14" />
+              </button>
+              <button
+                class="profile-action-btn profile-action-btn--danger"
+                title="删除当前配置"
+                :disabled="!editingProfile || isEditingActiveProfile || draftSettings.aiProfiles.length <= 1"
+                @click="handleDeleteProfile"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
           </div>
-          <div class="settings-grid">
-            <n-form-item label="API Key">
-              <n-input
-                type="password"
-                show-password-on="click"
-                :value="draftSettings.apiKey"
-                placeholder="填写接口对应的 API Key / Token"
-                @update:value="(value) => { draftSettings.apiKey = value }"
-              />
-            </n-form-item>
-            <n-form-item label="模型名称">
-              <div class="model-input-row">
-                <n-select
-                  v-if="fetchedModels.length > 0"
-                  :options="modelSelectOptions"
-                  :value="draftSettings.model"
-                  filterable
-                  tag
-                  placeholder="选择或输入模型名称"
-                  @update:value="(value: string) => { draftSettings.model = value }"
-                />
+
+          <template v-if="editingProfile">
+            <div class="profile-name-row">
+              <n-form-item label="配置名称">
                 <n-input
-                  v-else
-                  :value="draftSettings.model"
-                  placeholder="填写 URL 和 Key 后可点右侧按钮拉取"
-                  @update:value="(value) => { draftSettings.model = value }"
+                  :value="editingProfile.name"
+                  placeholder="为这个接口配置起个名字"
+                  @update:value="(value) => updateEditingProfile({ name: value })"
                 />
-                <n-button
-                  quaternary
-                  class="model-fetch-btn"
-                  :disabled="isFetchingModels || !draftSettings.baseUrl.trim()"
-                  @click="handleFetchModels"
-                >
-                  <template #icon>
-                    <RefreshCw v-if="fetchedModels.length > 0" :size="16" :class="{ 'spin-icon': isFetchingModels }" />
-                    <Download v-else :size="16" :class="{ 'spin-icon': isFetchingModels }" />
-                  </template>
-                </n-button>
-              </div>
-            </n-form-item>
-          </div>
-          <div class="provider-hint-block">
-            <p>{{ activeProviderPreset.hint }}</p>
-          </div>
-          <div class="section-actions">
-            <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
-              <template #icon>
-                <PlugZap :size="16" />
-              </template>
-              {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
-            </n-button>
-          </div>
+              </n-form-item>
+            </div>
+            <div class="settings-grid">
+              <n-form-item label="协议类型">
+                <n-select
+                  :options="providerOptions"
+                  :value="editingProfile.provider"
+                  @update:value="(value) => handleProviderChange(value ?? 'openai-compatible')"
+                />
+              </n-form-item>
+              <n-form-item label="Base URL">
+                <n-input
+                  :value="editingProfile.baseUrl"
+                  :placeholder="editingProfile.provider === 'anthropic' ? '例如：https://api.anthropic.com（自动补 /v1）' : '例如：https://api.deepseek.com/v1'"
+                  @update:value="(value) => updateEditingProfile({ baseUrl: value })"
+                />
+              </n-form-item>
+            </div>
+            <div class="settings-grid">
+              <n-form-item label="API Key">
+                <n-input
+                  type="password"
+                  show-password-on="click"
+                  :value="editingProfile.apiKey"
+                  placeholder="填写接口对应的 API Key / Token"
+                  @update:value="(value) => updateEditingProfile({ apiKey: value })"
+                />
+              </n-form-item>
+              <n-form-item label="模型名称">
+                <div class="model-input-row">
+                  <n-select
+                    v-if="fetchedModels.length > 0"
+                    :options="modelSelectOptions"
+                    :value="editingProfile.model"
+                    filterable
+                    tag
+                    placeholder="选择或输入模型名称"
+                    @update:value="(value: string) => updateEditingProfile({ model: value })"
+                  />
+                  <n-input
+                    v-else
+                    :value="editingProfile.model"
+                    placeholder="填写 URL 和 Key 后可点右侧按钮拉取"
+                    @update:value="(value) => updateEditingProfile({ model: value })"
+                  />
+                  <n-button
+                    quaternary
+                    class="model-fetch-btn"
+                    :disabled="isFetchingModels || !editingProfile.baseUrl.trim()"
+                    @click="handleFetchModels"
+                  >
+                    <template #icon>
+                      <RefreshCw v-if="fetchedModels.length > 0" :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                      <Download v-else :size="16" :class="{ 'spin-icon': isFetchingModels }" />
+                    </template>
+                  </n-button>
+                </div>
+              </n-form-item>
+            </div>
+            <div class="provider-hint-block">
+              <p>{{ activeProviderPreset.hint }}</p>
+            </div>
+            <div class="section-actions">
+              <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
+                <template #icon>
+                  <PlugZap :size="16" />
+                </template>
+                {{ isTestingAiConnection ? '测试中...' : '测试模型连接' }}
+              </n-button>
+            </div>
+          </template>
         </section>
 
         <section id="sec-image" class="settings-section">
@@ -654,6 +806,114 @@ async function saveSettings(): Promise<void> {
   display: flex;
   gap: 12px;
   margin-top: 4px;
+}
+
+/* ── Profile Tabs ── */
+.profile-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--arc-border);
+}
+
+.profile-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.profile-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--arc-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--arc-text-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.profile-tab:hover {
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-primary);
+}
+
+.profile-tab.active {
+  background: color-mix(in srgb, var(--arc-primary) 8%, var(--arc-bg-surface));
+  border-color: color-mix(in srgb, var(--arc-primary) 30%, var(--arc-border));
+  color: var(--arc-primary);
+}
+
+.profile-tab-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-tab-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--arc-primary) 12%, transparent);
+  color: var(--arc-primary);
+}
+
+.profile-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.profile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--arc-border);
+  border-radius: 6px;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-hint);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.profile-action-btn:hover {
+  border-color: var(--arc-border-strong);
+  color: var(--arc-text-primary);
+  background: var(--arc-bg-weak);
+}
+
+.profile-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.profile-action-btn--danger:hover:not(:disabled) {
+  border-color: #fca5a5;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.profile-name-row {
+  margin-bottom: 4px;
+}
+
+.profile-name-row .n-form-item {
+  max-width: 320px;
 }
 
 .model-input-row {
