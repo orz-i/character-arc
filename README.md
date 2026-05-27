@@ -373,6 +373,7 @@ CharacterArc/
 ## 🙏 鸣谢
 
 - [oh-story-claudecode](https://github.com/worldwonderer/oh-story-claudecode) — 提供了核心写作 Skills 的方法论与 prompt 工程基础
+- [dama-cyber/Distilled-Novel-Toolbox](https://github.com/dama-cyber/Distilled-Novel-Toolbox) — 提供了小说工作流与创作辅助方向的参考
 
 ## 🔗 友情链接
 
