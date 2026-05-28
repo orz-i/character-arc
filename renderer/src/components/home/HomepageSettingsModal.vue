@@ -126,7 +126,7 @@ function syncDraftFromStore(): void {
   draftSettings.model = appStore.appSettings.model
   draftSettings.apiKey = appStore.appSettings.apiKey
   draftSettings.baseUrl = appStore.appSettings.baseUrl
-  draftSettings.aiProfiles = [...appStore.appSettings.aiProfiles]
+  draftSettings.aiProfiles = appStore.appSettings.aiProfiles.map((profile) => ({ ...profile }))
   draftSettings.activeAiProfileId = appStore.appSettings.activeAiProfileId
   draftSettings.imageProvider = appStore.appSettings.imageProvider
   draftSettings.imageModel = appStore.appSettings.imageModel
@@ -321,7 +321,7 @@ async function handleTestAiConnection(): Promise<void> {
 }
 
 async function saveSettings(): Promise<void> {
-  appStore.updateAppSetting('aiProfiles', [...draftSettings.aiProfiles])
+  appStore.updateAppSetting('aiProfiles', draftSettings.aiProfiles.map((profile) => ({ ...profile })))
   appStore.updateAppSetting('activeAiProfileId', draftSettings.activeAiProfileId)
 
   const activeProfile = draftSettings.aiProfiles.find(p => p.id === draftSettings.activeAiProfileId)
