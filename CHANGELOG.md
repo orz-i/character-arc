@@ -4,6 +4,17 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.5.1] - 2026-05-28
+
+### Fixed
+
+- **检查更新版本解析错误**：修复 GitHub Release tag 格式为 `v.x.x.x` 时，版本号解析异常导致始终显示"已是最新版本"的问题
+- **公告远程拉取被 CSP 拦截**：将远程公告请求从渲染进程迁移至主进程 IPC，避免 Content-Security-Policy 阻止外部连接
+- **公告弹窗内容溢出**：限制公告弹窗最大高度为 60vh，内容过多时支持滚动查看
+- **公告内容不完整**：完善 v1.5.0 本地公告与远程公告，补充全部新功能、优化和修复条目
+
+[1.5.1]: https://github.com/uu201/character-arc/releases/tag/v1.5.1
+
 ## [1.5.0] - 2026-05-28
 
 ### Added

@@ -19,14 +19,37 @@ type AnnouncementItem = {
 
 const LOCAL_ANNOUNCEMENTS: AnnouncementItem[] = [
   {
+    title: '弧光 v1.5.1 发布',
+    date: '2026-05-28',
+    type: 'success',
+    items: [
+      '【修复】检查更新始终显示"已是最新版本"，原因是 GitHub Release tag 格式解析异常',
+      '【修复】公告远程拉取被 CSP 拦截，已迁移至主进程 IPC 请求',
+      '【修复】公告弹窗内容过多时溢出窗口，现已限制高度并支持滚动',
+      '【修复】v1.5.0 公告内容不完整，补充全部新功能与优化条目'
+    ]
+  },
+  {
     title: '弧光 v1.5.0 发布',
     date: '2026-05-28',
     type: 'success',
     items: [
-      '修复 AI 助手历史会话保存后重启丢失的问题',
-      '补全多套 AI 接口配置持久化，重启后不再只剩一个配置',
-      '修复设置界面修改“配置名称”后保存按钮无法点击的问题',
-      '优化设置与工作区保存链路，降低静默保存失败概率'
+      '【新功能】AI 助手支持历史会话保存、加载、删除与继续对话',
+      '【新功能】设置页改为 Tab 式多接口配置管理，支持维护多套 AI 接口并切换',
+      '【新功能】标题栏新增全局模型切换器，快速切换当前启用的接口配置',
+      '【新功能】知识中心支持批量导入参考小说，多选并发处理、进度展示与单本取消',
+      '【新功能】首页新增公告弹窗与 GitHub Release 检查更新',
+      '【新功能】设置页新增 AI 请求超时时间配置',
+      '【新功能】内置 Distilled-Novel-Toolbox 技能包，skills 按来源分组整理',
+      '【优化】AI 助手改为”索引摘要 + 按需检索”模式，减少无效上下文灌入',
+      '【优化】章节助手支持按模块开关大纲、角色、世界观、剧情线等上下文来源',
+      '【优化】设置弹窗改为左侧导航布局，分区更清晰',
+      '【优化】Skills 页面改为按分组折叠展示',
+      '【优化】主页、大纲、世界观、灵感等模块卡片样式与信息层次优化',
+      '【修复】AI 助手历史会话保存后重启丢失的问题',
+      '【修复】多套 AI 接口配置重启后只剩一个的问题',
+      '【修复】修改”配置名称”后保存按钮无法点击的问题',
+      '【修复】macOS 平台标题栏兼容性问题'
     ]
   },
   {
@@ -52,8 +75,6 @@ const LOCAL_ANNOUNCEMENTS: AnnouncementItem[] = [
   }
 ]
 
-const REMOTE_URL = 'https://raw.githubusercontent.com/uu201/character-arc/main/announcements.json'
-
 const currentVersion = computed(() => window.characterArc.version)
 const announcements = ref<AnnouncementItem[]>(LOCAL_ANNOUNCEMENTS)
 const loading = ref(false)
@@ -62,14 +83,9 @@ const isRemote = ref(false)
 async function fetchRemote(): Promise<void> {
   loading.value = true
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(REMOTE_URL, { signal: controller.signal })
-    clearTimeout(timer)
-    if (!res.ok) return
-    const data = await res.json() as AnnouncementItem[]
-    if (Array.isArray(data) && data.length > 0) {
-      announcements.value = data
+    const res = await window.characterArc.fetchAnnouncements()
+    if (res.success && res.data) {
+      announcements.value = res.data as AnnouncementItem[]
       isRemote.value = true
     }
   } catch {
@@ -128,6 +144,8 @@ function handleAfterEnter(): void {
 <style scoped>
 .announcement-body {
   min-height: 100px;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .announcement-version {

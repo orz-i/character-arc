@@ -175,5 +175,6 @@ contextBridge.exposeInMainWorld('characterArc', {
 
   // ── 检查更新 & 公告 ──
   checkUpdate: () => ipcRenderer.invoke('characterarc:check-update'),
+  fetchAnnouncements: () => ipcRenderer.invoke('characterarc:fetch-announcements'),
   openExternalUrl: (url: string) => ipcRenderer.invoke('characterarc:open-external-url', url)
 })

@@ -1134,7 +1134,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         published_at?: string
         assets?: Array<{ name?: string; browser_download_url?: string; size?: number }>
       }
-      const latestTag = (release.tag_name ?? '').replace(/^v/, '')
+      const latestTag = (release.tag_name ?? '').replace(/^v\.?/, '')
       const hasUpdate = latestTag && latestTag !== currentVersion && compareVersions(latestTag, currentVersion) > 0
       return {
         success: true,
@@ -1155,6 +1155,24 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '检查更新失败' }
+    }
+  })
+
+  ipcMain.handle('characterarc:fetch-announcements', async () => {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 8000)
+      const response = await fetch('https://raw.githubusercontent.com/uu201/character-arc/main/announcements.json', {
+        headers: { 'User-Agent': 'CharacterArc-Desktop' },
+        signal: controller.signal
+      })
+      clearTimeout(timer)
+      if (!response.ok) return { success: false }
+      const data = await response.json()
+      if (Array.isArray(data) && data.length > 0) return { success: true, data }
+      return { success: false }
+    } catch {
+      return { success: false }
     }
   })
 

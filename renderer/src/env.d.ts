@@ -428,6 +428,10 @@ declare global {
         error?: string
       }>
       openExternalUrl: (url: string) => Promise<void>
+      fetchAnnouncements: () => Promise<{
+        success: boolean
+        data?: Array<{ title: string; date: string; type: string; items: string[] }>
+      }>
       listSessions: (projectId: string) => Promise<{
         success: boolean
         result?: Array<{ id: string; title: string; created_at: string; updated_at: string }>
