@@ -273,16 +273,24 @@ export function useChapterAi(): {
             recentMessages: messages.value
               .slice(-8, -2)
               .map((item) => ({ role: item.role, content: item.content })),
-            worldviewEntries: hasModule('worldview') ? appStore.worldviewEntries : [],
-            characters: hasModule('characters') ? appStore.characters : [],
+            worldviewEntries: hasModule('worldview')
+              ? appStore.worldviewEntries.map((e) => ({ ...e, content: '' }))
+              : [],
+            characters: hasModule('characters')
+              ? appStore.characters.map((c) => ({ ...c, description: '' }))
+              : [],
             organizations: hasModule('characters') ? appStore.organizations : [],
             characterRelationships: hasModule('characters') ? appStore.characterRelationships : [],
             organizationMemberships: hasModule('characters') ? appStore.organizationMemberships : [],
             inspirationEntries: appStore.inspirationEntries,
-            outlineItems: hasModule('outline') ? appStore.outlineItems : [],
+            outlineItems: hasModule('outline')
+              ? appStore.outlineItems.map((o) => ({ ...o, summary: '' }))
+              : [],
             plotThreads: hasModule('plotThreads') ? appStore.plotThreads : [],
             workflowDocuments: hasModule('outline') ? appStore.workflowDocuments : [],
-            knowledgeDocuments: hasModule('knowledge') ? appStore.knowledgeDocuments : [],
+            knowledgeDocuments: hasModule('knowledge')
+              ? appStore.knowledgeDocuments.slice(0, 8)
+              : [],
             selectedText: selectedText.value,
             responseMode: 'freeform',
             responseLength: 'medium',
