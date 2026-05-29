@@ -1,10 +1,7 @@
-import { streamText, stepCountIs, tool, dynamicTool } from 'ai'
-import { z } from 'zod'
+import { streamText, stepCountIs, tool, dynamicTool, jsonSchema } from 'ai'
 import { buildSystemPrompt, createModel } from '../provider'
 import type { AiRunUsage, AppSettings, AiAgentStreamHandlers, ToolCallTrace } from '../shared-types'
 import type { Tool, ToolContext } from './tools/types'
-
-const ANY_INPUT_SCHEMA = z.record(z.string(), z.unknown())
 
 export type RunAgentParams = {
   settings: AppSettings
@@ -34,7 +31,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
   for (const t of params.tools) {
     sdkTools[t.definition.name] = dynamicTool({
       description: t.definition.description,
-      inputSchema: ANY_INPUT_SCHEMA,
+      inputSchema: jsonSchema(t.definition.inputSchema as Parameters<typeof jsonSchema>[0]),
       execute: async (input) => {
         const result = await t.handler(input as Record<string, unknown>, params.ctx)
         if (result.isError) {

@@ -39,6 +39,13 @@ function handleSelectionAction(action: string, text: string): void {
   })
 }
 
+function handleGenerateDraft(): void {
+  aiOpen.value = true
+  nextTick(() => {
+    aiPanelRef.value?.triggerDraft()
+  })
+}
+
 function syncViewport(): void {
   viewportWidth.value = window.innerWidth
 }
@@ -79,6 +86,7 @@ onBeforeUnmount(() => {
       @toggle-focus="toggleFocus"
       @toggle-sidebar="toggleSidebar"
       @selection-action="handleSelectionAction"
+      @generate-draft="handleGenerateDraft"
     />
     <ChapterAiPanel v-if="aiOpen" ref="aiPanelRef" class="ws-ai" @close="aiOpen = false" />
     <button v-if="focusMode" class="focus-exit" @click="toggleFocus">

@@ -1,7 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { buildChapterAssistantContext } from '@/features/ai/chapterAssistantContext'
-import { getChapterPreviewText, getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type { ChapterInsertionMode } from '@/types/app'
@@ -43,16 +42,9 @@ function nextMessageId(): string {
   return `cwm-${Date.now().toString(36)}-${messageSeq}`
 }
 
-function providerSupportsTools(provider: string): boolean {
-  if (provider === 'anthropic') return true
-  if (provider === 'deepseek') return false
-  if (provider === 'ollama') return false
-  return true
-}
+export type ContextModule = 'chapter' | 'outline' | 'characters' | 'worldview' | 'plotThreads' | 'knowledge' | 'deconstructionLibrary'
 
-export type ContextModule = 'chapter' | 'outline' | 'characters' | 'worldview' | 'plotThreads' | 'knowledge'
-
-const ALL_CONTEXT_MODULES: ContextModule[] = ['chapter', 'outline', 'characters', 'worldview', 'plotThreads', 'knowledge']
+const ALL_CONTEXT_MODULES: ContextModule[] = ['chapter', 'outline', 'characters', 'worldview', 'plotThreads', 'knowledge', 'deconstructionLibrary']
 
 export interface SessionSummary {
   id: string
@@ -319,7 +311,7 @@ export function useChapterAi(): {
     const assistantMsg = pushMessage('assistant', '')
     streamingMsgId = assistantMsg.id
 
-    const useAgentMode = providerSupportsTools(appStore.appSettings.provider)
+    const useAgentMode = true
 
     try {
       await appStore.runTrackedAiTask(
@@ -332,57 +324,31 @@ export function useChapterAi(): {
           timeoutMs: 0
         },
         async () => {
-          const sameVolume = appStore.chapters.filter((item) => item.volumeId === chapter.volumeId)
-          const hasModule = (mod: ContextModule) => enabledContextModules.has(mod)
           const context = buildChapterAssistantContext({
             project: appStore.currentProject,
-            chapter: hasModule('chapter') ? chapter : undefined,
-            chapterVolume: hasModule('chapter') ? appStore.selectedChapterVolume : undefined,
-            relatedChapters: hasModule('chapter')
-              ? sameVolume
-                  .filter((item) => item.id !== chapter.id)
-                  .slice(0, 2)
-                  .map((item) => ({
-                    title: item.title,
-                    summary: item.summary,
-                    preview: getChapterPreviewText(item.content, '该章节暂无正文')
-                  }))
-              : [],
-            volumeChapterSummaries: hasModule('chapter')
-              ? sameVolume
-                  .filter((item) => item.id !== chapter.id)
-                  .map((item) => ({ title: item.title, summary: item.summary }))
-              : [],
-            novelOpenerSummary:
-              hasModule('chapter') && appStore.chapters[0] && appStore.chapters[0].id !== chapter.id
-                ? { title: appStore.chapters[0].title, summary: appStore.chapters[0].summary }
-                : undefined,
+            chapter: chapter,
+            chapterVolume: appStore.selectedChapterVolume,
+            relatedChapters: [],
+            volumeChapterSummaries: [],
+            novelOpenerSummary: undefined,
             recentMessages: messages.value
               .slice(-8, -2)
               .map((item) => ({ role: item.role, content: item.content })),
-            worldviewEntries: hasModule('worldview')
-              ? appStore.worldviewEntries.map((e) => ({ ...e, content: '' }))
-              : [],
-            characters: hasModule('characters')
-              ? appStore.characters.map((c) => ({ ...c, description: '' }))
-              : [],
-            organizations: hasModule('characters') ? appStore.organizations : [],
-            characterRelationships: hasModule('characters') ? appStore.characterRelationships : [],
-            organizationMemberships: hasModule('characters') ? appStore.organizationMemberships : [],
-            inspirationEntries: appStore.inspirationEntries,
-            outlineItems: hasModule('outline')
-              ? appStore.outlineItems.map((o) => ({ ...o, summary: '' }))
-              : [],
-            plotThreads: hasModule('plotThreads') ? appStore.plotThreads : [],
-            workflowDocuments: hasModule('outline') ? appStore.workflowDocuments : [],
-            knowledgeDocuments: hasModule('knowledge')
-              ? appStore.knowledgeDocuments.slice(0, 8)
-              : [],
+            worldviewEntries: [],
+            characters: [],
+            organizations: [],
+            characterRelationships: [],
+            organizationMemberships: [],
+            inspirationEntries: [],
+            outlineItems: [],
+            plotThreads: [],
+            workflowDocuments: [],
+            knowledgeDocuments: [],
             selectedText: selectedText.value,
             responseMode: 'freeform',
             responseLength: 'medium',
             userPrompt: trimmed,
-            chapterContent: hasModule('chapter') ? getPlainTextFromEditorContent(chapter.content ?? '') : ''
+            chapterContent: ''
           })
 
           const startFn = useAgentMode
@@ -392,7 +358,7 @@ export function useChapterAi(): {
           const result = await startFn(toIpcPayload({
             task: 'chapter-assistant',
             settings: appStore.appSettings,
-            context: { ...context, chapterId: chapter.id }
+            context: { ...context, chapterId: chapter.id, enabledContextModules: Array.from(enabledContextModules) }
           }))
 
           const sid = (result.result as { streamId?: string } | undefined)?.streamId

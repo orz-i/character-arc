@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { BookOpen, Edit3, Loader2, Search, List, CheckCircle2, XCircle } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { BookOpen, ChevronDown, Edit3, Loader2, Search, List, CheckCircle2, XCircle } from 'lucide-vue-next'
 import type { ChapterAiToolCall } from './useChapterAi'
 
 const props = defineProps<{
   toolCall: ChapterAiToolCall
 }>()
+
+const expanded = ref(false)
 
 const toolLabel = computed(() => {
   switch (props.toolCall.toolName) {
@@ -13,6 +15,12 @@ const toolLabel = computed(() => {
     case 'edit_chapter': return '编辑章节'
     case 'search_project': return '搜索项目'
     case 'list_chapters': return '章节列表'
+    case 'read_project_data': return '读取项目数据'
+    case 'skill_load': return '加载写作技能'
+    case 'skill_read_reference': return '读取技能参考'
+    case 'skill_glob': return '浏览技能文件'
+    case 'skill_run_script': return '执行技能脚本'
+    case 'save_knowledge_document': return '保存知识文档'
     default: return props.toolCall.toolName
   }
 })
@@ -29,16 +37,17 @@ const toolIcon = computed(() => {
 </script>
 
 <template>
-  <div class="tool-card" :class="toolCall.status">
-    <div class="tool-header">
+  <div class="tool-card" :class="[toolCall.status, { expanded }]">
+    <div class="tool-header" @click="expanded = !expanded">
       <component :is="toolIcon" :size="12" />
       <span class="tool-label">{{ toolLabel }}</span>
       <Loader2 v-if="toolCall.status === 'running'" :size="12" class="spinner" />
       <CheckCircle2 v-else-if="toolCall.status === 'done'" :size="12" class="icon-done" />
       <XCircle v-else-if="toolCall.status === 'error'" :size="12" class="icon-error" />
-      <span v-if="toolCall.durationMs" class="tool-duration">{{ toolCall.durationMs }}ms</span>
+      <span v-if="toolCall.durationMs" class="tool-duration">{{ (toolCall.durationMs / 1000).toFixed(2) }}s</span>
+      <ChevronDown v-if="toolCall.result && toolCall.status !== 'running'" :size="12" class="tool-chevron" />
     </div>
-    <div v-if="toolCall.result && toolCall.status !== 'running'" class="tool-result">
+    <div v-if="expanded && toolCall.result && toolCall.status !== 'running'" class="tool-result">
       {{ toolCall.result }}
     </div>
   </div>
@@ -46,12 +55,13 @@ const toolIcon = computed(() => {
 
 <style scoped>
 .tool-card {
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 0;
+  border-radius: var(--arc-radius-md, 8px);
   background: var(--arc-bg-weak);
   border: 1px solid var(--arc-border);
   font-size: 12px;
   margin: 4px 0;
+  overflow: hidden;
 }
 
 .tool-card.error {
@@ -63,7 +73,14 @@ const toolIcon = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 12px;
   color: var(--arc-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-header:hover {
+  background: var(--arc-bg-surface-hover);
 }
 
 .tool-label {
@@ -86,16 +103,25 @@ const toolIcon = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
+.tool-chevron {
+  color: var(--arc-text-hint);
+  transition: transform 0.2s;
+}
+
+.tool-card.expanded .tool-chevron {
+  transform: rotate(180deg);
+}
+
 .tool-result {
-  margin-top: 6px;
-  padding-top: 6px;
+  padding: 8px 12px;
   border-top: 1px solid var(--arc-border);
   color: var(--arc-text-secondary);
   font-size: 11px;
   line-height: 1.5;
-  max-height: 60px;
+  max-height: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: var(--arc-bg-surface);
 }
 
 @keyframes spin {

@@ -20,6 +20,7 @@ const emit = defineEmits<{
   toggleFocus: []
   toggleSidebar: []
   selectionAction: [action: string, text: string]
+  generateDraft: []
 }>()
 
 const appStore = useAppStore()
@@ -183,6 +184,10 @@ onBeforeUnmount(() => {
           </template>
           历史版本
         </n-tooltip>
+        <button class="toolbtn" :disabled="!currentChapter" @click="emit('generateDraft')">
+          <Wand2 :size="13" />
+          <span>生成初稿</span>
+        </button>
         <button class="toolbtn primary" @click="emit('toggleAi')">
           <Sparkles :size="13" />
           <span>AI 助理</span>

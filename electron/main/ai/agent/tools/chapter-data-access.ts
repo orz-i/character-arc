@@ -47,6 +47,10 @@ function stripHtmlTags(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim()
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 /**
  * 统计 HTML 正文的纯文本字数（不含空白）
  * @param html - HTML 字符串
@@ -335,7 +339,8 @@ function replaceInHtml(html: string, searchPlain: string, replacePlain: string):
 
   const startPos = mapPlainIndexToHtml(html, idx)
   const endPos = mapPlainIndexToHtml(html, idx + searchPlain.length)
-  const replaceHtml = textToHtmlParagraphs(replacePlain)
+  const isMultiParagraph = /\n{2,}/.test(replacePlain.trim())
+  const replaceHtml = isMultiParagraph ? textToHtmlParagraphs(replacePlain) : escapeHtml(replacePlain)
   return html.slice(0, startPos) + replaceHtml + html.slice(endPos)
 }
 

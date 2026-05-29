@@ -90,36 +90,36 @@ async function copyMessage(content: string): Promise<void> {
         <span v-if="isStreaming(msg) && msg.content" class="cursor" />
       </div>
 
-      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.content" class="actions">
-        <button
-          v-if="hasSelection"
-          class="mini primary"
-          title="替换当前选区"
-          @click="emit('apply', msg.content, 'replace-selection')"
-        >
-          <Replace :size="11" /> 替换选区
-        </button>
-        <button
-          class="mini"
-          title="插入到光标处"
-          @click="emit('apply', msg.content, 'cursor')"
-        >
-          <ArrowDown :size="11" /> 插入光标
-        </button>
-        <button class="mini" title="复制" @click="copyMessage(msg.content)">
-          <Copy :size="11" />
-        </button>
-        <button
-          class="mini"
-          title="重新生成"
-          :disabled="isResponding"
-          @click="() => { const p = findUserPromptBefore(msg.id); if (p) emit('regenerate', p) }"
-        >
-          <RotateCw :size="11" /> 重生成
-        </button>
-      </div>
-      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.createdAt" class="msg-meta">
-        {{ formatTime(msg.createdAt) }}
+      <div v-if="msg.role === 'assistant' && !isStreaming(msg) && msg.content" class="msg-footer">
+        <span v-if="msg.createdAt" class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+        <div class="actions">
+          <button
+            v-if="hasSelection"
+            class="mini primary"
+            title="替换当前选区"
+            @click="emit('apply', msg.content, 'replace-selection')"
+          >
+            <Replace :size="11" /> 替换选区
+          </button>
+          <button
+            class="mini"
+            title="插入到光标处"
+            @click="emit('apply', msg.content, 'cursor')"
+          >
+            <ArrowDown :size="11" /> 插入光标
+          </button>
+          <button class="mini" title="复制" @click="copyMessage(msg.content)">
+            <Copy :size="11" />
+          </button>
+          <button
+            class="mini"
+            title="重新生成"
+            :disabled="isResponding"
+            @click="() => { const p = findUserPromptBefore(msg.id); if (p) emit('regenerate', p) }"
+          >
+            <RotateCw :size="11" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -132,7 +132,7 @@ async function copyMessage(content: string): Promise<void> {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .empty {
@@ -148,7 +148,7 @@ async function copyMessage(content: string): Promise<void> {
 .msg {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   user-select: text;
 }
 
@@ -157,9 +157,8 @@ async function copyMessage(content: string): Promise<void> {
 
 .bubble {
   max-width: 92%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 13.5px;
+  padding: 10px 14px;
+  font-size: 13px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -168,14 +167,15 @@ async function copyMessage(content: string): Promise<void> {
 .msg.user .bubble {
   background: var(--arc-primary);
   color: white;
-  border-bottom-right-radius: 4px;
+  border-radius: 14px 14px 2px 14px;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--arc-primary) 20%, transparent);
 }
 
 .msg.assistant .bubble {
-  background: var(--arc-bg-surface-hover);
+  background: var(--arc-bg-weak);
+  border: 1px solid var(--arc-border);
   color: var(--arc-text-primary);
-  border-bottom-left-radius: 4px;
+  border-radius: 14px 14px 14px 2px;
 }
 
 .bubble.streaming {
@@ -217,25 +217,38 @@ async function copyMessage(content: string): Promise<void> {
   30% { opacity: 1; transform: translateY(-3px); }
 }
 
+.msg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 0;
+  align-self: stretch;
+  max-width: 92%;
+}
+
+.msg-time {
+  font-size: 10.5px;
+  color: var(--arc-text-hint);
+}
+
 .actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  padding-top: 2px;
 }
 
 .mini {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 10px;
   border: 1px solid var(--arc-border);
-  border-radius: 14px;
+  border-radius: 6px;
   background: var(--arc-bg-surface);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--arc-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .mini:hover:not(:disabled) {
@@ -261,13 +274,6 @@ async function copyMessage(content: string): Promise<void> {
   color: white;
 }
 
-.msg-meta {
-  font-size: 11px;
-  color: var(--arc-text-hint);
-  padding: 0 4px;
-  letter-spacing: 0.01em;
-}
-
 .tool-calls {
   display: flex;
   flex-direction: column;
@@ -288,15 +294,15 @@ async function copyMessage(content: string): Promise<void> {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--arc-success) 10%, var(--arc-bg-surface));
-  border: 1px solid color-mix(in srgb, var(--arc-success) 30%, var(--arc-border));
+  background: color-mix(in srgb, var(--arc-success) 8%, var(--arc-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--arc-success) 18%, var(--arc-border));
   font-size: 12px;
   color: var(--arc-success);
 }
 
 .edit-card .mini {
   margin-left: auto;
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 3px 8px;
+  font-size: 10.5px;
 }
 </style>

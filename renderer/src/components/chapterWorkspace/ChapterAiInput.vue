@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ArrowUp, Square } from 'lucide-vue-next'
+import { ArrowUp, ChevronDown, Info, Pen, Square, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   disabled: boolean
+  hasSelection: boolean
+  selectionPreview: string
+  enabledContextCount: number
 }>()
 
 const emit = defineEmits<{
   send: [value: string]
   stop: []
+  'open-commands': []
+  'open-context': []
+  'clear-selection': []
 }>()
 
 const text = ref('')
@@ -40,30 +46,50 @@ function handleKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="ai-input">
-    <div class="wrap" :class="{ disabled }">
+  <div class="ai-composer">
+    <div class="composer-toolbar">
+      <button class="composer-btn" @click="emit('open-commands')">
+        <ChevronDown :size="12" />
+        指令面板
+      </button>
+      <button class="composer-btn active" @click="emit('open-context')">
+        <Info :size="11" />
+        上下文
+        <span class="composer-ctx-count">{{ enabledContextCount }}</span>
+      </button>
+    </div>
+
+    <div v-if="hasSelection" class="composer-selection">
+      <Pen :size="12" class="selection-icon" />
+      <span class="composer-selection-text">{{ selectionPreview }}</span>
+      <button class="composer-selection-close" @click="emit('clear-selection')">
+        <X :size="10" />
+      </button>
+    </div>
+
+    <div class="composer-input-wrap" :class="{ disabled }">
+      <div class="composer-mode-tabs">
+        <button
+          v-for="mode in modes"
+          :key="mode"
+          class="composer-mode-tab"
+          :class="{ active: activeMode === mode }"
+          @click="activeMode = mode"
+        >
+          {{ mode }}
+        </button>
+      </div>
       <textarea
         v-model="text"
         :placeholder="disabled ? 'AI 正在生成...' : placeholders[activeMode]"
         :disabled="disabled"
         @keydown="handleKey"
       />
-      <div class="input-toolbar">
-        <div class="mode-toggle">
-          <button
-            v-for="mode in modes"
-            :key="mode"
-            class="mode-opt"
-            :class="{ active: activeMode === mode }"
-            @click="activeMode = mode"
-          >
-            {{ mode }}
-          </button>
-        </div>
-        <button v-if="disabled" class="send stop" @click="$emit('stop')">
+      <div class="composer-input-footer">
+        <button v-if="disabled" class="composer-send stop" @click="$emit('stop')">
           <Square :size="12" />
         </button>
-        <button v-else class="send" :disabled="!text.trim()" @click="handleSend">
+        <button v-else class="composer-send" :disabled="!text.trim()" @click="handleSend">
           <ArrowUp :size="14" />
         </button>
       </div>
@@ -72,86 +98,180 @@ function handleKey(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-.ai-input {
-  padding: 12px;
+.ai-composer {
   border-top: 1px solid var(--arc-border);
   background: var(--arc-bg-surface);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.wrap {
-  position: relative;
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
   border: 1px solid var(--arc-border);
-  border-radius: var(--arc-radius-md);
-  background: var(--arc-bg-weak);
-  transition: 0.15s;
+  border-radius: 8px;
+  background: var(--arc-bg-surface);
+  color: var(--arc-text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
-.wrap:focus-within {
+.composer-btn:hover {
+  border-color: var(--arc-border-strong);
+  color: var(--arc-text-primary);
+}
+
+.composer-btn.active {
+  background: var(--arc-primary-soft);
+  color: var(--arc-primary);
+  border-color: color-mix(in srgb, var(--arc-primary) 15%, var(--arc-border));
+}
+
+.composer-ctx-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: var(--arc-primary);
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.composer-selection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--arc-primary) 5%, var(--arc-bg-weak));
+  border: 1px solid color-mix(in srgb, var(--arc-primary) 12%, var(--arc-border));
+  font-size: 11px;
+}
+
+.selection-icon {
+  color: var(--arc-primary);
+  flex-shrink: 0;
+}
+
+.composer-selection-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--arc-text-secondary);
+}
+
+.composer-selection-close {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--arc-text-hint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.composer-selection-close:hover {
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-primary);
+}
+
+.composer-input-wrap {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--arc-border);
+  border-radius: 12px;
+  background: var(--arc-bg-weak);
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.composer-input-wrap:focus-within {
   border-color: var(--arc-primary);
   background: var(--arc-bg-surface);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc-primary) 12%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc-primary) 8%, transparent);
 }
 
-.wrap.disabled {
+.composer-input-wrap.disabled {
   opacity: 0.6;
 }
 
-.wrap textarea {
+.composer-mode-tabs {
+  display: flex;
+  padding: 6px 8px 0;
+  gap: 2px;
+}
+
+.composer-mode-tab {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--arc-text-hint);
+  cursor: pointer;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.composer-mode-tab:hover {
+  color: var(--arc-text-secondary);
+}
+
+.composer-mode-tab.active {
+  color: var(--arc-text-primary);
+  background: var(--arc-bg-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.composer-input-wrap textarea {
   width: 100%;
   border: none;
   outline: none;
   background: transparent;
-  padding: 10px 12px 36px;
+  padding: 8px 12px;
   font-size: 13px;
   line-height: 1.55;
   resize: none;
   font-family: inherit;
   color: var(--arc-text-primary);
   user-select: text;
-  min-height: 72px;
-  max-height: 160px;
+  min-height: 48px;
+  max-height: 140px;
 }
 
-.input-toolbar {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  right: 6px;
+.composer-input-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  padding: 4px 6px 6px;
 }
 
-.mode-toggle {
-  display: inline-flex;
-  background: var(--arc-bg-surface-hover);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
-}
-
-.mode-opt {
-  padding: 3px 10px;
-  font-size: 11px;
-  color: var(--arc-text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  border: none;
-  background: transparent;
-  transition: 0.15s;
-}
-
-.mode-opt.active {
-  background: var(--arc-bg-surface);
-  color: var(--arc-text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  font-weight: 500;
-}
-
-.send {
+.composer-send {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 50%;
   border: none;
   background: var(--arc-primary);
   color: white;
@@ -159,23 +279,24 @@ function handleKey(event: KeyboardEvent): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s;
 }
 
-.send:hover:not(:disabled) {
+.composer-send:hover:not(:disabled) {
   background: var(--arc-primary-hover);
 }
 
-.send:disabled {
-  background: color-mix(in srgb, var(--arc-text-hint) 60%, transparent);
+.composer-send:disabled {
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
-.send.stop {
+.composer-send.stop {
   background: #ef4444;
   animation: pulse-stop 1.5s ease-in-out infinite;
 }
 
-.send.stop:hover {
+.composer-send.stop:hover {
   background: #dc2626;
 }
 

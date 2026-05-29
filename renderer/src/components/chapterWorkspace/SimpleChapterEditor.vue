@@ -17,6 +17,7 @@ const emit = defineEmits<{
 
 const editorRef = ref<HTMLDivElement | null>(null)
 let savedRange: Range | null = null
+let editorFocused = false
 
 const EMIT_DEBOUNCE_MS = 600
 let emitTimer: number | null = null
@@ -49,17 +50,20 @@ function handleSelection(): void {
   if (!editorRef.value) return
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-    emit('selection-change', null)
+    if (editorFocused) {
+      emit('selection-change', null)
+    }
     return
   }
   const range = sel.getRangeAt(0)
   if (!editorRef.value.contains(range.commonAncestorContainer)) {
-    emit('selection-change', null)
     return
   }
   const text = sel.toString().trim()
   if (!text) {
-    emit('selection-change', null)
+    if (editorFocused) {
+      emit('selection-change', null)
+    }
     return
   }
   savedRange = range.cloneRange()
@@ -145,6 +149,8 @@ onMounted(() => {
   }
   nextTick(syncContent)
   document.addEventListener('selectionchange', handleSelection)
+  editorRef.value?.addEventListener('focus', () => { editorFocused = true })
+  editorRef.value?.addEventListener('blur', () => { editorFocused = false })
 })
 
 onBeforeUnmount(() => {

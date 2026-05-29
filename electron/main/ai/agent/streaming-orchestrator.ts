@@ -85,19 +85,51 @@ export async function runStreamingAgentTask(
     ? await getRecentSkillUsage(projectId).then(formatSkillUsageHint).catch(() => '')
     : ''
 
+  const enabledModules: string[] = Array.isArray(task.context.enabledContextModules) ? task.context.enabledContextModules : []
+  const moduleLabels: Record<string, string> = {
+    chapter: '当前章节正文（使用 read_chapter）',
+    outline: '章节大纲（使用 read_project_data entity_type=outline）',
+    characters: '角色设定卡（使用 read_project_data entity_type=characters）',
+    worldview: '世界观设定（使用 read_project_data entity_type=worldview）',
+    plotThreads: '剧情线索（使用 read_project_data entity_type=plot_threads）',
+    knowledge: '项目知识库（使用 read_project_data entity_type=knowledge）',
+    deconstructionLibrary: '拆书知识库（使用 read_project_data entity_type=deconstruction_library）'
+  }
+  const enabledModulesList = enabledModules
+    .filter((m) => moduleLabels[m])
+    .map((m) => `- ${moduleLabels[m]}`)
+    .join('\n')
+
+  const contextModulesBlock = enabledModulesList
+    ? [
+        '',
+        '## 用户已启用的上下文模块',
+        '',
+        '以下模块已启用，你可以按需通过工具读取：',
+        enabledModulesList,
+        '',
+        '根据用户的具体请求，自行判断需要读取哪些模块。不必每次都全部读取，只读取与当前任务相关的即可。'
+      ].join('\n')
+    : ''
+
   const chapterToolsBlock = [
     '',
     '## 可用工具',
     '',
     '你可以使用以下工具访问项目数据和操作章节：',
-    '- `read_project_data`: 读取项目完整设定（世界观、角色、组织、关系、大纲、剧情线索、灵感、知识文档）',
+    '- `read_project_data`: 读取项目完整设定（世界观、角色、组织、关系、大纲、剧情线索、灵感、知识文档/拆书知识库）',
     '- `read_chapter`: 读取章节内容和元数据',
     '- `edit_chapter`: 直接编辑章节正文（替换/插入/追加）',
     '- `search_project`: 搜索项目中的世界观、角色、大纲等资料',
     '- `list_chapters`: 获取所有章节列表',
     '',
-    '当用户要求修改正文时，优先使用 edit_chapter 工具直接修改，而不是只给出建议文本。',
-    '修改前可以先用 read_chapter 读取当前内容，确认要修改的位置。'
+    '## 工具使用规则',
+    '',
+    '- 每次对话开始时，先用 `read_chapter` 读取当前章节内容，了解正文现状。',
+    '- 涉及创作、改写、续写时，先用 `read_project_data` 读取相关设定（角色、世界观、大纲、知识文档等），确保内容一致性。',
+    '- 知识文档（拆书知识库）包含写作技法、风格参考等重要资料，创作和改写时应主动查阅：先调用 `read_project_data({ entity_type: "knowledge" })` 获取列表，再按需读取具体文档。',
+    '- 当用户要求修改正文时，优先使用 `edit_chapter` 工具直接修改，而不是只给出建议文本。',
+    '- 修改前先用 `read_chapter` 读取当前内容，确认要修改的位置。'
   ].join('\n')
 
   const chapterDraftRules = task.task === 'chapter-first-draft'
@@ -113,7 +145,7 @@ export async function runStreamingAgentTask(
       ].join('\n')
     : ''
 
-  const systemPrompt = `${prompt.system}${requiredSkillBlock}${chapterToolsBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}${chapterDraftRules}${skillUsageHints}`
+  const systemPrompt = `${prompt.system}${requiredSkillBlock}${chapterToolsBlock}${contextModulesBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}${chapterDraftRules}${skillUsageHints}`
 
   const skillTools = createSkillTools({
     resolveSkill: (id) => getSkillById(id, projectId || undefined),

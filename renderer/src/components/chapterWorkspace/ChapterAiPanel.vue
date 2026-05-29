@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { BookOpen, FileText, GitMerge, Globe, History, Plus, Route, Sparkles, Trash2, Users, X } from 'lucide-vue-next'
+import { History, Plus, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { NTooltip, useMessage } from 'naive-ui'
 import ChapterAiMessages from './ChapterAiMessages.vue'
 import ChapterAiInput from './ChapterAiInput.vue'
-import ChapterAiQuickActions from './ChapterAiQuickActions.vue'
 import ChapterFirstDraftDialog from './ChapterFirstDraftDialog.vue'
 import ChapterThreadDetectDialog from './ChapterThreadDetectDialog.vue'
 import { useChapterAi } from './useChapterAi'
@@ -14,7 +13,9 @@ import { useChapterSummary } from './useChapterSummary'
 import { useChapterInspiration, type ChapterInspirationFocus } from './useChapterInspiration'
 import { useChapterHumanize } from './useChapterHumanize'
 import { useAppStore } from '@/stores/app'
+import { getResolvedChapterAssistantTemplates, chapterAssistantQuickActionGroups } from '@/features/ai/chapterAssistantOptions'
 import type { ChapterInsertionMode } from '@/types/app'
+import type { ContextModule } from './useChapterAi'
 
 defineEmits<{
   close: []
@@ -22,8 +23,74 @@ defineEmits<{
 
 const message = useMessage()
 const appStore = useAppStore()
+
 const showSessionList = ref(false)
-const { messages, isResponding, agentStatus, hasSelection, enabledContextModules, toggleContextModule, currentSessionId, sessions, send, stop, resetMessages, newSession, saveCurrentSession, loadSession, deleteSession, refreshSessions, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+const showCommandPanel = ref(false)
+const showContextPanel = ref(false)
+
+const { messages, isResponding, agentStatus, hasSelection, selectedText, enabledContextModules, toggleContextModule, currentSessionId, sessions, send, stop, resetMessages, newSession, saveCurrentSession, loadSession, deleteSession, refreshSessions, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+
+const draft = useChapterFirstDraft()
+const detect = useChapterThreadDetect()
+const summary = useChapterSummary()
+const inspiration = useChapterInspiration()
+const humanize = useChapterHumanize()
+
+const enabledContextCount = computed(() => enabledContextModules.size)
+
+const selectionPreview = computed(() => {
+  const text = selectedText.value
+  if (!text) return ''
+  const snippet = text.length > 20 ? text.slice(0, 20) + '...' : text
+  return `已选「${snippet}」(${text.length}字)`
+})
+
+const commandTemplates = computed(() => {
+  return getResolvedChapterAssistantTemplates(appStore.currentProject)
+})
+
+const groupedCommands = computed(() => {
+  const templates = commandTemplates.value
+  return chapterAssistantQuickActionGroups.map((group) => ({
+    ...group,
+    items: templates.filter((t) => t.group === group.key)
+  })).filter((g) => g.items.length > 0)
+})
+
+const contextModules: { module: ContextModule; label: string }[] = [
+  { module: 'chapter', label: '当前章节' },
+  { module: 'outline', label: '章节大纲' },
+  { module: 'characters', label: '角色卡' },
+  { module: 'worldview', label: '世界观' },
+  { module: 'plotThreads', label: '剧情线索' },
+  { module: 'knowledge', label: '项目知识库' },
+  { module: 'deconstructionLibrary', label: '拆书知识库' }
+]
+
+function closeAllPanels(): void {
+  showCommandPanel.value = false
+  showContextPanel.value = false
+  showSessionList.value = false
+}
+
+function toggleCommands(): void {
+  const next = !showCommandPanel.value
+  closeAllPanels()
+  showCommandPanel.value = next
+}
+
+function toggleContext(): void {
+  const next = !showContextPanel.value
+  closeAllPanels()
+  showContextPanel.value = next
+}
+
+function toggleSessions(): void {
+  const next = !showSessionList.value
+  closeAllPanels()
+  showSessionList.value = next
+  if (next) void refreshSessions()
+}
 
 function handleNewSession(): void {
   if (messages.value.length > 0) {
@@ -61,30 +128,6 @@ async function handleDeleteSession(sessionId: string): Promise<void> {
   }
 }
 
-function toggleSessionList(): void {
-  if (!showSessionList.value) {
-    void refreshSessions()
-  }
-  showSessionList.value = !showSessionList.value
-}
-const draft = useChapterFirstDraft()
-const detect = useChapterThreadDetect()
-const summary = useChapterSummary()
-const inspiration = useChapterInspiration()
-const humanize = useChapterHumanize()
-
-const contextChips = computed(() => {
-  const chapter = appStore.selectedChapter
-  const chips: { label: string; icon: string; module: import('./useChapterAi').ContextModule; available: boolean }[] = []
-  chips.push({ label: '当前章节', icon: 'file-text', module: 'chapter', available: !!chapter })
-  chips.push({ label: '章节大纲', icon: 'git-merge', module: 'outline', available: appStore.outlineItems.length > 0 })
-  chips.push({ label: '角色卡', icon: 'users', module: 'characters', available: appStore.characters.length > 0 })
-  chips.push({ label: '世界观', icon: 'globe', module: 'worldview', available: appStore.worldviewEntries.length > 0 })
-  chips.push({ label: '剧情线索', icon: 'route', module: 'plotThreads', available: appStore.plotThreads.length > 0 })
-  chips.push({ label: '知识文档', icon: 'book-open', module: 'knowledge', available: appStore.knowledgeDocuments.length > 0 })
-  return chips
-})
-
 function handleApply(content: string, mode: ChapterInsertionMode): void {
   const ok = applyToChapter(content, mode)
   if (!ok) {
@@ -94,48 +137,38 @@ function handleApply(content: string, mode: ChapterInsertionMode): void {
   message.success(mode === 'replace-selection' ? '已替换选中内容' : '已插入到正文')
 }
 
+function handleCommandSelect(prompt: string): void {
+  closeAllPanels()
+  void send(prompt)
+}
+
 async function handleDraft(): Promise<void> {
-  try {
-    await draft.start()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : 'AI 初稿生成失败')
-  }
+  closeAllPanels()
+  try { await draft.start() } catch (error) { message.error(error instanceof Error ? error.message : 'AI 初稿生成失败') }
 }
 
 async function handleDetect(): Promise<void> {
+  closeAllPanels()
   const result = await detect.start()
-  if (!result.ok) {
-    message.warning(result.reason ?? '识别失败')
-  }
-}
-
-async function handleStopDraft(): Promise<void> {
-  try {
-    await draft.stop()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '停止失败')
-  }
-}
-
-function handleConfirmThreads(): void {
-  const count = detect.confirmAdd()
-  if (count === 0) message.warning('请至少选择一条线索')
-  else message.success(`已添加 ${count} 条剧情线索`)
+  if (!result.ok) message.warning(result.reason ?? '识别失败')
 }
 
 async function handleSummary(): Promise<void> {
+  closeAllPanels()
   const result = await summary.generate()
   if (!result.ok) message.warning(result.reason ?? '生成摘要失败')
   else message.success('已生成章节摘要')
 }
 
 async function handleInspiration(focus: ChapterInspirationFocus): Promise<void> {
+  closeAllPanels()
   const result = await inspiration.generate(focus)
   if (!result.ok) message.warning(result.reason ?? '本章灵感生成失败')
   else message.success(`已为当前章节生成 ${result.count} 张${focus}灵感卡`)
 }
 
 async function handleHumanize(): Promise<void> {
+  closeAllPanels()
   const result = await humanize.run()
   if (!result.ok) message.warning(result.reason ?? '降低 AI 感失败')
   else message.success('已使用降低 AI 感结果替换选区')
@@ -151,7 +184,11 @@ function sendPrompt(prompt: string): void {
   void send(prompt)
 }
 
-defineExpose({ sendPrompt })
+function triggerDraft(): void {
+  void handleDraft()
+}
+
+defineExpose({ sendPrompt, triggerDraft })
 
 onMounted(() => {
   registerChatStream()
@@ -182,7 +219,7 @@ onBeforeUnmount(() => {
         </n-tooltip>
         <n-tooltip placement="bottom">
           <template #trigger>
-            <button class="icon-btn" :class="{ active: showSessionList }" @click="toggleSessionList">
+            <button class="icon-btn" :class="{ active: showSessionList }" @click="toggleSessions">
               <History :size="13" />
             </button>
           </template>
@@ -197,6 +234,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <!-- 会话列表 popover -->
     <div v-if="showSessionList" class="session-list">
       <div v-if="sessions.length === 0" class="session-empty">暂无历史会话</div>
       <div
@@ -213,43 +251,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="context-strip">
-      <span class="context-label">上下文</span>
-      <span
-        v-for="chip in contextChips"
-        :key="chip.module"
-        class="ctx-chip"
-        :class="{ active: chip.available && enabledContextModules.has(chip.module), inactive: !chip.available || !enabledContextModules.has(chip.module) }"
-        @click="chip.available && toggleContextModule(chip.module)"
-      >
-        <FileText v-if="chip.icon === 'file-text'" :size="11" />
-        <GitMerge v-if="chip.icon === 'git-merge'" :size="11" />
-        <Users v-if="chip.icon === 'users'" :size="11" />
-        <Globe v-if="chip.icon === 'globe'" :size="11" />
-        <Route v-if="chip.icon === 'route'" :size="11" />
-        <BookOpen v-if="chip.icon === 'book-open'" :size="11" />
-        {{ chip.label }}
-      </span>
-    </div>
-
-    <ChapterAiQuickActions
-      :is-draft-running="draft.isGenerating.value"
-      :is-detect-running="detect.isDetecting.value"
-      :is-summary-running="summary.isGenerating.value"
-      :is-inspiration-running="inspiration.isGenerating.value"
-      :is-humanize-running="humanize.isRunning.value"
-      :has-selection="humanize.hasSelection.value"
-      @draft="handleDraft"
-      @detect="handleDetect"
-      @summary="handleSummary"
-      @inspiration="handleInspiration"
-      @humanize="handleHumanize"
-    />
-
-    <div v-if="hasSelection" class="selection-hint">
-      已选中正文片段，回复将带「替换选区」按钮
-    </div>
-
+    <!-- 消息区域 -->
     <ChapterAiMessages
       :messages="messages"
       :is-responding="isResponding"
@@ -259,13 +261,80 @@ onBeforeUnmount(() => {
       @undo="handleUndoEdit"
     />
 
+    <!-- Agent 状态条 -->
     <div v-if="agentStatus" class="agent-status">
       <span class="agent-pulse" />
       <span>{{ agentStatus }}</span>
     </div>
 
-    <ChapterAiInput :disabled="isResponding" @send="send" @stop="stop" />
+    <!-- Composer 输入区 -->
+    <ChapterAiInput
+      :disabled="isResponding"
+      :has-selection="hasSelection"
+      :selection-preview="selectionPreview"
+      :enabled-context-count="enabledContextCount"
+      @send="send"
+      @stop="stop"
+      @open-commands="toggleCommands"
+      @open-context="toggleContext"
+      @clear-selection="appStore.currentChapterSelection = null"
+    />
 
+    <!-- 指令面板 popover -->
+    <Teleport to="body">
+      <div v-if="showCommandPanel" class="popover-overlay" @click.self="closeAllPanels">
+        <div class="popover-card command-popover">
+          <div class="popover-header">
+            <span class="popover-title">快捷指令</span>
+            <span class="popover-hint">基于上下文快速执行</span>
+          </div>
+          <div class="popover-scroll">
+            <div v-for="group in groupedCommands" :key="group.key" class="command-group">
+              <div class="command-group-label">{{ group.label }}</div>
+              <button
+                v-for="item in group.items"
+                :key="item.id"
+                class="command-item"
+                :disabled="item.requiresSelection && !hasSelection"
+                @click="handleCommandSelect(item.prompt)"
+              >
+                <component :is="item.icon" :size="14" class="command-item-icon" />
+                <div class="command-item-body">
+                  <span class="command-item-title">{{ item.label }}</span>
+                </div>
+                <span v-if="item.requiresSelection" class="command-item-badge">需选区</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 上下文面板 popover -->
+    <Teleport to="body">
+      <div v-if="showContextPanel" class="popover-overlay" @click.self="closeAllPanels">
+        <div class="popover-card context-popover">
+          <div class="popover-header">
+            <span class="popover-title">上下文模块</span>
+            <span class="popover-hint">启用后作为背景发送</span>
+          </div>
+          <div class="ctx-list">
+            <div
+              v-for="mod in contextModules"
+              :key="mod.module"
+              class="ctx-item"
+              :class="{ active: enabledContextModules.has(mod.module) }"
+              @click="toggleContextModule(mod.module)"
+            >
+              <span class="ctx-item-label">{{ mod.label }}</span>
+              <div class="ctx-item-toggle" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 对话框 -->
     <ChapterFirstDraftDialog
       :show="draft.modalVisible.value"
       :is-generating="draft.isGenerating.value"
@@ -279,7 +348,7 @@ onBeforeUnmount(() => {
       :progress-text="draft.progressText.value"
       :audit-result="draft.auditResult.value"
       :elapsed-seconds="draft.elapsedSeconds.value"
-      @stop="handleStopDraft"
+      @stop="async () => { try { await draft.stop() } catch (e) { message.error(e instanceof Error ? e.message : '停止失败') } }"
       @close="draft.closeModal()"
     />
 
@@ -287,7 +356,7 @@ onBeforeUnmount(() => {
       :show="detect.modalVisible.value"
       :detected="detect.detected.value"
       @update:show="(v) => (detect.modalVisible.value = v)"
-      @confirm="handleConfirmThreads"
+      @confirm="() => { const count = detect.confirmAdd(); if (count === 0) message.warning('请至少选择一条线索'); else message.success(`已添加 ${count} 条剧情线索`) }"
     />
   </aside>
 </template>
@@ -299,7 +368,8 @@ onBeforeUnmount(() => {
   height: 100%;
   background: var(--arc-bg-surface);
   border-left: 1px solid var(--arc-border);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
 }
 
 .ai-header {
@@ -319,9 +389,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.ai-title svg {
-  color: var(--arc-primary);
-}
+.ai-title svg { color: var(--arc-primary); }
 
 .ai-header-actions {
   display: flex;
@@ -347,15 +415,8 @@ onBeforeUnmount(() => {
   color: var(--arc-text-primary);
 }
 
-.icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.icon-btn.active {
-  background: var(--arc-primary-soft);
-  color: var(--arc-primary);
-}
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.icon-btn.active { background: var(--arc-primary-soft); color: var(--arc-primary); }
 
 /* ── Session List ── */
 .session-list {
@@ -387,13 +448,8 @@ onBeforeUnmount(() => {
   transition: background 0.12s;
 }
 
-.session-item:hover {
-  background: var(--arc-bg-surface-hover);
-}
-
-.session-item.active {
-  background: var(--arc-primary-soft);
-}
+.session-item:hover { background: var(--arc-bg-surface-hover); }
+.session-item.active { background: var(--arc-primary-soft); }
 
 .session-item-title {
   flex: 1;
@@ -406,9 +462,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.session-item.active .session-item-title {
-  color: var(--arc-primary);
-}
+.session-item.active .session-item-title { color: var(--arc-primary); }
 
 .session-item-delete {
   display: none;
@@ -424,81 +478,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-.session-item:hover .session-item-delete {
-  display: inline-flex;
-}
+.session-item:hover .session-item-delete { display: inline-flex; }
+.session-item-delete:hover { color: #dc2626; background: #fef2f2; }
 
-.session-item-delete:hover {
-  color: #dc2626;
-  background: #fef2f2;
-}
-
-.context-strip {
-  padding: 8px 12px;
-  background: var(--arc-bg-weak);
-  border-bottom: 1px solid var(--arc-border);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.context-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--arc-text-hint);
-  margin-right: 2px;
-  user-select: none;
-}
-
-.ctx-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 550;
-  cursor: pointer;
-  user-select: none;
-  border: 1px solid transparent;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ctx-chip.active {
-  background: var(--arc-primary-soft);
-  border-color: color-mix(in srgb, var(--arc-primary) 18%, transparent);
-  color: var(--arc-primary);
-}
-
-.ctx-chip.active:hover {
-  background: color-mix(in srgb, var(--arc-primary) 12%, var(--arc-bg-surface));
-  border-color: color-mix(in srgb, var(--arc-primary) 28%, transparent);
-}
-
-.ctx-chip.inactive {
-  background: var(--arc-bg-surface);
-  color: var(--arc-text-hint);
-  border-color: var(--arc-border);
-  text-decoration: line-through;
-  text-decoration-color: var(--arc-border-strong);
-}
-
-.ctx-chip.inactive:hover {
-  background: var(--arc-bg-surface-hover);
-  color: var(--arc-text-secondary);
-  border-color: var(--arc-border-strong);
-  text-decoration: none;
-}
-
-.selection-hint {
-  padding: 6px 16px;
-  background: var(--arc-primary-soft);
-  color: var(--arc-primary);
-  font-size: 11px;
-  border-bottom: 1px solid var(--arc-border);
-}
-
+/* ── Agent Status ── */
 .agent-status {
   display: flex;
   align-items: center;
@@ -521,5 +504,185 @@ onBeforeUnmount(() => {
 @keyframes agent-pulse-ring {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.4); }
+}
+</style>
+
+<style>
+.popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 12px 180px 0;
+}
+
+.popover-card {
+  width: 340px;
+  max-height: 400px;
+  border-radius: 14px;
+  border: 1px solid var(--arc-border);
+  background: var(--arc-bg-surface);
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: popover-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.popover-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--arc-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--arc-text-primary);
+}
+
+.popover-hint {
+  font-size: 11px;
+  color: var(--arc-text-hint);
+}
+
+.popover-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--arc-border) transparent;
+}
+
+/* ── Command Panel ── */
+.command-group {
+  margin-bottom: 8px;
+}
+
+.command-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--arc-text-hint);
+  padding: 6px 8px 4px;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--arc-text-primary);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.command-item:hover:not(:disabled) {
+  background: var(--arc-bg-surface-hover);
+}
+
+.command-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.command-item-icon {
+  color: var(--arc-primary);
+  flex-shrink: 0;
+}
+
+.command-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-item-title {
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.command-item-badge {
+  font-size: 9.5px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--arc-bg-surface-hover);
+  color: var(--arc-text-hint);
+  flex-shrink: 0;
+}
+
+/* ── Context Panel ── */
+.ctx-list {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.ctx-item:hover {
+  background: var(--arc-bg-surface-hover);
+}
+
+.ctx-item-label {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--arc-text-primary);
+}
+
+.ctx-item-toggle {
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--arc-border-strong);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.ctx-item.active .ctx-item-toggle {
+  background: var(--arc-primary);
+}
+
+.ctx-item-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.ctx-item.active .ctx-item-toggle::after {
+  transform: translateX(14px);
 }
 </style>

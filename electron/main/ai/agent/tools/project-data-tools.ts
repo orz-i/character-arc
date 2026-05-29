@@ -9,18 +9,18 @@ function err(message: string): ToolHandlerResult {
   return { content: message, isError: true }
 }
 
-type EntityType = 'worldview' | 'characters' | 'organizations' | 'relationships' | 'outline' | 'plot_threads' | 'inspiration' | 'knowledge'
+type EntityType = 'worldview' | 'characters' | 'organizations' | 'relationships' | 'outline' | 'plot_threads' | 'inspiration' | 'knowledge' | 'deconstruction_library'
 
 const ENTITY_TYPES: ReadonlySet<string> = new Set<EntityType>([
   'worldview', 'characters', 'organizations', 'relationships',
-  'outline', 'plot_threads', 'inspiration', 'knowledge'
+  'outline', 'plot_threads', 'inspiration', 'knowledge', 'deconstruction_library'
 ])
 
 export function createProjectDataTools(): Tool[] {
   const readProjectData: Tool = {
     definition: {
       name: 'read_project_data',
-      description: '读取当前项目的完整设定数据。可按类型读取：worldview（世界观）、characters（角色）、organizations（组织）、relationships（角色关系）、outline（大纲）、plot_threads（剧情线索）、inspiration（灵感）、knowledge（知识文档）。不传 entity_type 则返回所有类型的摘要索引。',
+      description: '读取当前项目的完整设定数据。可按类型读取：worldview（世界观）、characters（角色）、organizations（组织）、relationships（角色关系）、outline（大纲）、plot_threads（剧情线索）、inspiration（灵感）、knowledge（项目知识库）、deconstruction_library（拆书知识库，全局共享的写作技法和风格参考）。不传 entity_type 则返回所有类型的摘要索引。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -88,7 +88,10 @@ async function buildIndex(projectId: string): Promise<string> {
   if (inspiration.length) sections.push(`## 灵感 (${inspiration.length})\n${inspiration.map((i) => `- [${i.id}] ${i.title}`).join('\n')}`)
 
   const knowledge = db.prepare('SELECT id, title FROM knowledge_documents WHERE project_id = ?').all(projectId) as { id: string; title: string }[]
-  if (knowledge.length) sections.push(`## 知识文档 (${knowledge.length})\n${knowledge.map((k) => `- [${k.id}] ${k.title}`).join('\n')}`)
+  if (knowledge.length) sections.push(`## 项目知识库 (${knowledge.length})\n${knowledge.map((k) => `- [${k.id}] ${k.title}`).join('\n')}`)
+
+  const deconstructionDocs = db.prepare("SELECT id, title FROM knowledge_documents WHERE project_id = '' OR project_id IS NULL").all() as { id: string; title: string }[]
+  if (deconstructionDocs.length) sections.push(`## 拆书知识库 (${deconstructionDocs.length})\n${deconstructionDocs.map((k) => `- [${k.id}] ${k.title}`).join('\n')}`)
 
   return sections.length ? sections.join('\n\n') : '当前项目暂无设定数据。'
 }
@@ -165,7 +168,16 @@ async function readEntities(projectId: string, type: EntityType, entityId: strin
         return `# ${row.title}\n\n${row.content}`
       }
       const rows = db.prepare('SELECT id, title, summary FROM knowledge_documents WHERE project_id = ?').all(projectId) as Record<string, string>[]
-      return rows.map((r) => `- [${r.id}] ${r.title}: ${r.summary || '(无摘要)'}`).join('\n') || '暂无知识文档。'
+      return rows.map((r) => `- [${r.id}] ${r.title}: ${r.summary || '(无摘要)'}`).join('\n') || '暂无项目知识库文档。'
+    }
+    case 'deconstruction_library': {
+      if (entityId) {
+        const row = db.prepare("SELECT title, content, summary FROM knowledge_documents WHERE id = ? AND (project_id = '' OR project_id IS NULL)").get(entityId) as Record<string, string> | undefined
+        if (!row) return `未找到拆书知识库文档: ${entityId}`
+        return `# ${row.title}\n\n${row.content}`
+      }
+      const rows = db.prepare("SELECT id, title, summary, source_type FROM knowledge_documents WHERE project_id = '' OR project_id IS NULL").all() as Record<string, string>[]
+      return rows.map((r) => `- [${r.id}] ${r.title}（${r.source_type}）: ${r.summary || '(无摘要)'}`).join('\n') || '暂无拆书知识库文档。'
     }
   }
 }
