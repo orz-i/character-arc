@@ -4,6 +4,23 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.6.1] - 2026-05-30
+
+### Added
+
+- **主页启动检测**：项目中心首页的公告与检查更新按钮支持启动后自动检测，并增加状态指示器，便于快速确认最新公告和版本状态
+
+### Changed
+
+- **更新说明展示**：更新说明弹窗改为 Markdown 渲染，版本日志的标题、列表与段落层级展示更清晰
+- **项目首页落点**：打开项目后默认跳转至作品概览界面，减少进入工作区后的额外点击
+
+### Fixed
+
+- **公告内容修正**：修复软件内公告文案与展示异常问题，确保版本公告内容与实际发布信息一致
+
+[1.6.1]: https://github.com/uu201/character-arc/releases/tag/v1.6.1
+
 ## [1.6.0] - 2026-05-29
 
 ### Added
