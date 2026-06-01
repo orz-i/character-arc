@@ -39,6 +39,8 @@ export interface ChapterAiMessage {
   toolCalls?: ChapterAiToolCall[]  // 保留用于向后兼容
   editEvents?: ChapterAiEditEvent[]  // 保留用于向后兼容
   turns?: ChapterAiTurn[]  // 新增：多轮推理结构
+  isError?: boolean  // 新增：标记是否为错误消息
+  isCanceled?: boolean  // 新增：标记是否被取消
 }
 
 const TASK_KEY = 'chapter-workspace-chat'
@@ -354,7 +356,52 @@ export function useChapterAi(): {
     }
 
     if (payload.type === 'canceled') {
+      console.log('[useChapterAi] canceled event received, streamingMsgId:', streamingMsgId)
       finalizeStreamingMsg()
+      const msg = messages.value.find((m) => m.id === streamingMsgId)
+      console.log('[useChapterAi] found message:', msg ? { id: msg.id, content: msg.content, turns: msg.turns } : null)
+
+      // 添加取消提示到消息中
+      if (msg) {
+        // 向后兼容：更新 content
+        if (!msg.content.trim()) {
+          msg.content = '已停止生成'
+        }
+
+        // 新结构：确保 turns 存在并添加取消消息
+        if (!msg.turns) {
+          msg.turns = []
+          console.log('[useChapterAi] created empty turns array')
+        }
+
+        if (msg.turns.length === 0) {
+          // 没有任何 turn，创建一个显示取消消息
+          msg.turns.push({ text: '已停止生成', toolCalls: [], editEvents: [] })
+          console.log('[useChapterAi] added cancel message to new turn')
+        } else {
+          const lastTurn = msg.turns[msg.turns.length - 1]
+          console.log('[useChapterAi] last turn:', { text: lastTurn.text, toolCallsCount: lastTurn.toolCalls.length })
+
+          // 如果最后一个 turn 有工具调用但没有文本，创建新 turn 显示取消消息
+          if (lastTurn.toolCalls.length > 0 && !lastTurn.text.trim()) {
+            msg.turns.push({ text: '已停止生成', toolCalls: [], editEvents: [] })
+            console.log('[useChapterAi] added cancel message to new turn after tool calls')
+          } else if (!lastTurn.text.trim()) {
+            // 如果最后一个 turn 没有内容，直接设置文本
+            lastTurn.text = '已停止生成'
+            console.log('[useChapterAi] set cancel message to last turn')
+          } else {
+            console.log('[useChapterAi] last turn already has text, not adding cancel message')
+          }
+        }
+
+        // 标记为取消状态
+        msg.isCanceled = true
+        console.log('[useChapterAi] marked message as canceled, final turns:', msg.turns)
+      } else {
+        console.log('[useChapterAi] ERROR: message not found!')
+      }
+
       const reject = rejectStream
       resolveStream = null
       rejectStream = null
@@ -366,6 +413,42 @@ export function useChapterAi(): {
     }
     if (payload.type === 'error') {
       finalizeStreamingMsg()
+      const msg = messages.value.find((m) => m.id === streamingMsgId)
+
+      // 添加错误提示到消息中
+      if (msg) {
+        const errorMsg = payload.error || 'AI 对话生成失败'
+
+        // 向后兼容：更新 content
+        if (!msg.content.trim()) {
+          msg.content = `生成失败：${errorMsg}`
+        }
+
+        // 新结构：确保 turns 存在并添加错误消息
+        if (!msg.turns) {
+          msg.turns = []
+        }
+
+        if (msg.turns.length === 0) {
+          // 没有任何 turn，创建一个显示错误消息
+          msg.turns.push({ text: `生成失败：${errorMsg}`, toolCalls: [], editEvents: [] })
+        } else {
+          const lastTurn = msg.turns[msg.turns.length - 1]
+
+          // 如果最后一个 turn 有工具调用但没有文本，创建新 turn 显示错误消息
+          if (lastTurn.toolCalls.length > 0 && !lastTurn.text.trim()) {
+            msg.turns.push({ text: `生成失败：${errorMsg}`, toolCalls: [], editEvents: [] })
+          } else if (!lastTurn.text.trim()) {
+            // 如果最后一个 turn 没有内容，直接设置文本
+            lastTurn.text = `生成失败：${errorMsg}`
+          }
+          // 如果最后一个 turn 已经有文本，不添加新的错误消息
+        }
+
+        // 标记为错误状态
+        msg.isError = true
+      }
+
       const reject = rejectStream
       resolveStream = null
       rejectStream = null
@@ -481,13 +564,40 @@ export function useChapterAi(): {
       }
     } catch (error) {
       const isCanceled = error instanceof Error && error.message === 'canceled'
+
+      // 向后兼容：更新 content
       if (isCanceled) {
         if (!assistantMsg.content.trim()) {
-          assistantMsg.content = '（已取消）'
+          assistantMsg.content = '已停止生成'
         }
       } else {
-        assistantMsg.content = `生成失败：${error instanceof Error ? error.message : '未知错误'}`
+        const errorMsg = error instanceof Error ? error.message : '未知错误'
+        assistantMsg.content = `生成失败：${errorMsg}`
       }
+
+      // 新结构：添加到 turns
+      if (assistantMsg.turns) {
+        if (assistantMsg.turns.length === 0) {
+          assistantMsg.turns.push({ text: '', toolCalls: [], editEvents: [] })
+        }
+        const lastTurn = assistantMsg.turns[assistantMsg.turns.length - 1]
+
+        // 如果最后一个 turn 有工具调用但没有文本，创建新 turn 显示错误
+        if (lastTurn.toolCalls.length > 0 && !lastTurn.text.trim()) {
+          assistantMsg.turns.push({
+            text: isCanceled ? '已停止生成' : `生成失败：${error instanceof Error ? error.message : '未知错误'}`,
+            toolCalls: [],
+            editEvents: []
+          })
+        } else if (!lastTurn.text.trim()) {
+          // 如果最后一个 turn 没有内容，直接设置文本
+          lastTurn.text = isCanceled ? '已停止生成' : `生成失败：${error instanceof Error ? error.message : '未知错误'}`
+        }
+      }
+
+      // 标记消息为错误状态
+      assistantMsg.isError = !isCanceled
+      assistantMsg.isCanceled = isCanceled
     }
 
     void saveCurrentSession().catch((error) => {

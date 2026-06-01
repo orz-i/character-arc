@@ -202,11 +202,17 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
   })
 
   // ── 停止流式任务 ──
-  ipcMain.handle('characterarc:ai-stream-stop', async (_event, streamId: unknown) => {
+  ipcMain.handle('characterarc:ai-stream-stop', async (event, streamId: unknown) => {
     const key = typeof streamId === 'string' ? streamId : ''
     const controller = activeAiStreams.get(key)
     if (!controller) return { success: false, error: '当前没有可停止的生成任务' }
     controller.abort()
+
+    // 发送 canceled 事件给前端，确保用户看到停止反馈
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('characterarc:ai-stream-event', { streamId: key, type: 'canceled', content: '' })
+    }
+
     return { success: true }
   })
 

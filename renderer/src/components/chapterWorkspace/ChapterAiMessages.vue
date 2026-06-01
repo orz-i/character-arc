@@ -196,7 +196,11 @@ onBeforeUnmount(() => {
               <div
                 v-if="turn.text || (isStreaming(msg) && idx === msg.turns.length - 1 && turn.toolCalls.length === 0)"
                 class="bubble ai"
-                :class="{ streaming: isStreaming(msg) && idx === msg.turns.length - 1 }"
+                :class="{
+                  streaming: isStreaming(msg) && idx === msg.turns.length - 1,
+                  error: msg.isError && idx === msg.turns.length - 1,
+                  canceled: msg.isCanceled && idx === msg.turns.length - 1
+                }"
               >
                 <template v-if="turn.text">
                   <div class="markdown-body" v-html="renderMarkdown(turn.text)" />
@@ -247,7 +251,7 @@ onBeforeUnmount(() => {
             <div
               v-if="msg.content || (isStreaming(msg) && (!msg.toolCalls || msg.toolCalls.length === 0))"
               class="bubble ai"
-              :class="{ streaming: isStreaming(msg) }"
+              :class="{ streaming: isStreaming(msg), error: msg.isError, canceled: msg.isCanceled }"
             >
               <template v-if="msg.content">
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
@@ -451,6 +455,19 @@ onBeforeUnmount(() => {
 
 .bubble.ai.streaming {
   border-left: 2px solid var(--arc-primary);
+}
+
+.bubble.ai.error {
+  background: color-mix(in srgb, #dc2626 8%, var(--arc-bg-weak));
+  border-color: color-mix(in srgb, #dc2626 30%, var(--arc-border));
+  border-left: 2px solid #dc2626;
+}
+
+.bubble.ai.canceled {
+  background: color-mix(in srgb, var(--arc-text-hint) 5%, var(--arc-bg-weak));
+  border-color: var(--arc-border-strong);
+  color: var(--arc-text-secondary);
+  font-style: italic;
 }
 
 /* ── Streaming indicators ── */
