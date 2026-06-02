@@ -140,9 +140,61 @@ export function formatOutlineItems(source: unknown): string {
   return Array.isArray(source)
     ? source
         .slice(0, 6)
-        .map((item) => `${String((item as Record<string, unknown>).title ?? '')}：${String((item as Record<string, unknown>).summary ?? '')}`)
+        .map((item) => {
+          const record = item as Record<string, unknown>
+          const marker = record.isCurrent ? '【当前】' : ''
+          const conflict = String(record.conflict ?? '').trim()
+          return `${marker}${String(record.title ?? '')}${conflict ? ` / 冲突：${conflict}` : ''}：${String(record.summary ?? '')}`
+        })
         .join('\n')
     : ''
+}
+
+/**
+ * 将当前章节绑定的大纲节点格式化为写作边界。
+ *
+ * @param source 当前大纲节点数据
+ * @returns 格式化后的当前大纲字符串，无数据时返回空串
+ */
+export function formatCurrentOutlineItem(source: unknown): string {
+  if (!source || typeof source !== 'object') return ''
+  const record = source as Record<string, unknown>
+  const title = String(record.title ?? '').trim()
+  const summary = String(record.summary ?? '').trim()
+  const conflict = String(record.conflict ?? '').trim()
+  const wordTarget = String(record.wordTarget ?? '').trim()
+  if (!title && !summary && !conflict) return ''
+  return [
+    title ? `标题：${title}` : '',
+    wordTarget ? `大纲预估：${wordTarget}` : '',
+    conflict ? `核心冲突：${conflict}` : '',
+    summary ? `剧情边界：${summary}` : ''
+  ].filter(Boolean).join('\n')
+}
+
+/**
+ * 将同一大纲拆章信息格式化，提醒模型续写当前拆分段落而非复写。
+ *
+ * @param source 拆章位置与前置同纲章节
+ * @returns 格式化后的拆章说明，无数据时返回空串
+ */
+export function formatOutlineChapterSplit(source: unknown): string {
+  if (!source || typeof source !== 'object') return ''
+  const record = source as Record<string, unknown>
+  const currentPart = Number(record.currentPart ?? 1)
+  const totalParts = Number(record.totalParts ?? 1)
+  const previousParts = Array.isArray(record.previousParts) ? record.previousParts : []
+  const header = `当前是同一大纲下的第 ${Number.isFinite(currentPart) ? currentPart : 1} / ${Number.isFinite(totalParts) ? Math.max(totalParts, 1) : 1} 章。`
+  if (previousParts.length === 0) {
+    return `${header}\n前面还没有同纲章节；本章从该大纲节点的起点展开。`
+  }
+  const previous = previousParts
+    .map((item, index) => {
+      const part = item as Record<string, unknown>
+      return `同纲前置章节${index + 1}：${String(part.title ?? '')}\n摘要：${String(part.summary ?? '') || '暂无摘要'}\n正文预览：${String(part.preview ?? '') || '暂无'}`
+    })
+    .join('\n\n')
+  return `${header}\n本章必须承接以下同纲前置章节，避免重复已经写过的事件，只展开后续/剩余部分：\n${previous}`
 }
 
 /**

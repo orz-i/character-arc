@@ -45,21 +45,14 @@ const volumeOptions = computed<SelectOption[]>(() =>
 const outlineBindingOptions = computed<SelectOption[]>(() => {
   const currentChapterId = props.chapter?.id
   const targetVolumeId = form.volumeId || props.chapter?.volumeId || ''
-  const linkedMap = new Map(
-    appStore.chapters
-      .filter((c) => c.outlineItemId)
-      .map((c) => [c.outlineItemId, c])
-  )
   const items = appStore.outlineItems.filter((item) => !targetVolumeId || item.volumeId === targetVolumeId)
   return [
     { label: '不绑定大纲节点', value: '' },
     ...items.map((item) => {
-      const linked = linkedMap.get(item.id)
-      const occupied = linked && linked.id !== currentChapterId
+      const linkedCount = appStore.chapters.filter((c) => c.outlineItemId === item.id && c.id !== currentChapterId).length
       return {
-        label: occupied ? `${item.title} · 已绑定到「${linked.title}」` : item.title,
-        value: item.id,
-        disabled: Boolean(occupied)
+        label: linkedCount > 0 ? `${item.title} · 已关联 ${linkedCount} 章，可继续绑定` : item.title,
+        value: item.id
       }
     })
   ]

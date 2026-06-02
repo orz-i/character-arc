@@ -47,6 +47,16 @@ type ChapterAssistantContextInput = {
   characterRelationships: CharacterRelationship[]       // 角色关系列表
   organizationMemberships: OrganizationMembership[]     // 组织成员关系列表
   inspirationEntries: InspirationEntry[]                // 灵感条目列表
+  currentOutlineItem?: OutlineItem | null               // 当前章节绑定的大纲节点
+  outlineChapterSplit?: {                               // 同一大纲拆成多章时的章节位置
+    currentPart: number
+    totalParts: number
+    previousParts: Array<{
+      title: string
+      summary: string
+      preview?: string
+    }>
+  } | null
   outlineItems: OutlineItem[]                           // 大纲条目列表
   plotThreads: PlotThread[]                             // 剧情线索（活跃伏笔）
   projectSkills?: Array<{                               // 当前项目启用的 skills 摘要
@@ -88,6 +98,16 @@ export type ChapterFirstDraftContextInput = {
   characterRelationships: CharacterRelationship[]
   organizationMemberships: OrganizationMembership[]
   inspirationEntries: InspirationEntry[]
+  currentOutlineItem?: OutlineItem | null               // 当前章节绑定的大纲节点
+  outlineChapterSplit?: {                               // 同一大纲拆成多章时的章节位置
+    currentPart: number
+    totalParts: number
+    previousParts: Array<{
+      title: string
+      summary: string
+      preview?: string
+    }>
+  } | null
   outlineItems: OutlineItem[]
   plotThreads: PlotThread[]                             // 剧情线索（活跃伏笔）
   projectSkills?: Array<{
@@ -289,8 +309,19 @@ export function buildChapterFirstDraftContext(input: ChapterFirstDraftContextInp
       content: entry.content,
       tags: entry.tags
     })),
+    currentOutlineItem: input.currentOutlineItem
+      ? {
+          title: input.currentOutlineItem.title,
+          wordTarget: input.currentOutlineItem.wordTarget,
+          conflict: input.currentOutlineItem.conflict,
+          summary: input.currentOutlineItem.summary
+        }
+      : null,
+    outlineChapterSplit: input.outlineChapterSplit ?? null,
     outlineItems: input.outlineItems.map((item) => ({
       title: item.title,
+      conflict: item.conflict,
+      isCurrent: input.currentOutlineItem ? item.id === input.currentOutlineItem.id : false,
       summary: item.summary
     })),
     projectSkills: input.projectSkills ?? [],

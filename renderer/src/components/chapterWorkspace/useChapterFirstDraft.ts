@@ -321,9 +321,37 @@ export function useChapterFirstDraft(): {
             })
             .filter((entry) => entry.endingLine)
 
-          const currentChapterOutlineIndex = appStore.outlineItems
-            .filter((item) => item.volumeId === chapter.volumeId)
-            .findIndex((item) => item.title === chapter.title)
+          const volumeOutlineItems = appStore.outlineItems.filter((item) => item.volumeId === chapter.volumeId)
+          const currentOutlineItem = chapter.outlineItemId
+            ? volumeOutlineItems.find((item) => item.id === chapter.outlineItemId)
+            : volumeOutlineItems.find((item) => item.title.trim() === chapter.title.trim())
+          const currentChapterOutlineIndex = currentOutlineItem
+            ? volumeOutlineItems.findIndex((item) => item.id === currentOutlineItem.id)
+            : -1
+          const outlineItemsForCurrentChapter = currentChapterOutlineIndex >= 0
+            ? volumeOutlineItems.slice(Math.max(0, currentChapterOutlineIndex - 3), currentChapterOutlineIndex + 1)
+            : volumeOutlineItems.slice(0, 6)
+          const sameOutlineChapters = currentOutlineItem
+            ? appStore.chapters.filter((c) =>
+                c.outlineItemId === currentOutlineItem.id
+                || (!c.outlineItemId && c.volumeId === currentOutlineItem.volumeId && c.title.trim() === currentOutlineItem.title.trim())
+              )
+            : []
+          const currentOutlineChapterIndex = sameOutlineChapters.findIndex((c) => c.id === chapter.id)
+          const previousSameOutlineChapters = currentOutlineChapterIndex >= 0
+            ? sameOutlineChapters.slice(0, currentOutlineChapterIndex)
+            : []
+          const outlineChapterSplit = currentOutlineItem
+            ? {
+                currentPart: currentOutlineChapterIndex >= 0 ? currentOutlineChapterIndex + 1 : 1,
+                totalParts: Math.max(sameOutlineChapters.length, 1),
+                previousParts: previousSameOutlineChapters.map((c) => ({
+                  title: c.title,
+                  summary: c.summary,
+                  preview: getChapterPreviewText(c.content ?? '').slice(0, 220)
+                }))
+              }
+            : null
 
           const memoBaseContext: Record<string, unknown> = {
             projectId: project.id,
@@ -348,13 +376,21 @@ export function useChapterFirstDraft(): {
               description: r.description,
               intensity: r.intensity
             })),
-            outlineItems: appStore.outlineItems
-              .filter((item) => item.volumeId === chapter.volumeId)
-              .slice(0, currentChapterOutlineIndex + 1)
-              .map((item, idx) => ({
+            currentOutlineItem: currentOutlineItem
+              ? {
+                  title: currentOutlineItem.title,
+                  wordTarget: currentOutlineItem.wordTarget,
+                  conflict: currentOutlineItem.conflict,
+                  summary: currentOutlineItem.summary
+                }
+              : null,
+            outlineChapterSplit,
+            outlineItems: outlineItemsForCurrentChapter
+              .map((item) => ({
                 title: item.title,
+                conflict: item.conflict,
                 summary: item.summary,
-                isCurrent: idx === currentChapterOutlineIndex
+                isCurrent: currentOutlineItem ? item.id === currentOutlineItem.id : false
               }))
           }
 
@@ -386,9 +422,9 @@ export function useChapterFirstDraft(): {
             characterRelationships: appStore.characterRelationships,
             organizationMemberships: appStore.organizationMemberships,
             inspirationEntries: appStore.inspirationEntries,
-            outlineItems: appStore.outlineItems
-              .filter((item) => item.volumeId === chapter.volumeId)
-              .slice(0, currentChapterOutlineIndex + 1),
+            currentOutlineItem,
+            outlineChapterSplit,
+            outlineItems: outlineItemsForCurrentChapter,
             plotThreads: appStore.plotThreads,
             chapterContent: '',
             targetWordCount,
