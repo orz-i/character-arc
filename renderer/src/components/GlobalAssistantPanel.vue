@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FileCheck2,
   Globe2,
+  GripHorizontal,
   History,
   Info,
   Network,
@@ -66,9 +67,16 @@ const PROPOSAL_TASK_KEY = 'global-assistant-proposal'
 const appStore = useAppStore()
 const message = useMessage()
 
+const GLOBAL_ASSISTANT_INPUT_HEIGHT_STORAGE_KEY = 'arc-global-assistant-input-height'
+const GLOBAL_ASSISTANT_INPUT_DEFAULT_HEIGHT = 96
+const GLOBAL_ASSISTANT_INPUT_MIN_HEIGHT = 64
+const GLOBAL_ASSISTANT_INPUT_MAX_VIEWPORT_RATIO = 0.48
+
 const composerValue = ref('')
 const activeMode = ref<AssistantMode>('ingest')
 const conversationRef = ref<HTMLDivElement | null>(null)
+const inputHeight = ref(GLOBAL_ASSISTANT_INPUT_DEFAULT_HEIGHT)
+const isDraggingInput = ref(false)
 const worldviewTargetMap = ref<Record<string, string>>({})
 const characterTargetMap = ref<Record<string, string>>({})
 const outlineTargetMap = ref<Record<string, string>>({})
@@ -109,6 +117,10 @@ const currentModeMeta = computed(() => modeOptions.find((item) => item.id === ac
 const isAuditMode = computed(() => activeMode.value === 'audit')
 const isSending = ref(false)
 const isProposalLoading = ref(false)
+const maxInputHeight = computed(() =>
+  Math.max(GLOBAL_ASSISTANT_INPUT_MIN_HEIGHT, Math.floor(window.innerHeight * GLOBAL_ASSISTANT_INPUT_MAX_VIEWPORT_RATIO))
+)
+const inputHeightStyle = computed(() => ({ height: `${inputHeight.value}px` }))
 const activeSessionId = computed(() => appStore.activeGlobalAssistantSessionId ?? '')
 const assistantStatus = computed(() => {
   if (isRunningAudit.value) return '正在执行项目审计并整理修正提案…'
@@ -183,6 +195,45 @@ function scrollToBottom(smooth = true): void {
     top: conversationRef.value.scrollHeight,
     behavior: smooth ? 'smooth' : 'auto'
   })
+}
+
+function clampInputHeight(height: number): number {
+  return Math.max(GLOBAL_ASSISTANT_INPUT_MIN_HEIGHT, Math.min(maxInputHeight.value, height))
+}
+
+function startInputResize(event: MouseEvent): void {
+  event.preventDefault()
+  isDraggingInput.value = true
+  const startY = event.clientY
+  const startHeight = inputHeight.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'row-resize'
+
+  function onMove(moveEvent: MouseEvent): void {
+    const delta = startY - moveEvent.clientY
+    inputHeight.value = clampInputHeight(startHeight + delta)
+  }
+
+  function onEnd(): void {
+    isDraggingInput.value = false
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    localStorage.setItem(GLOBAL_ASSISTANT_INPUT_HEIGHT_STORAGE_KEY, String(inputHeight.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+}
+
+function resetInputHeight(): void {
+  inputHeight.value = clampInputHeight(GLOBAL_ASSISTANT_INPUT_DEFAULT_HEIGHT)
+  localStorage.setItem(GLOBAL_ASSISTANT_INPUT_HEIGHT_STORAGE_KEY, String(inputHeight.value))
+}
+
+function syncInputHeightBounds(): void {
+  inputHeight.value = clampInputHeight(inputHeight.value)
 }
 
 function clearStreamState(): void {
@@ -459,8 +510,19 @@ function unregisterStreamListener(): void {
   removeStreamListener = null
 }
 
-onMounted(registerStreamListener)
-onBeforeUnmount(unregisterStreamListener)
+onMounted(() => {
+  const savedHeight = Number(localStorage.getItem(GLOBAL_ASSISTANT_INPUT_HEIGHT_STORAGE_KEY))
+  if (Number.isFinite(savedHeight)) {
+    inputHeight.value = clampInputHeight(savedHeight)
+  }
+  registerStreamListener()
+  window.addEventListener('resize', syncInputHeightBounds)
+})
+
+onBeforeUnmount(() => {
+  unregisterStreamListener()
+  window.removeEventListener('resize', syncInputHeightBounds)
+})
 
 watch(
   () => messages.value.length,
@@ -1528,6 +1590,16 @@ function handleNewSession(): void {
     </div>
 
     <div class="global-ai-composer">
+      <div
+        class="global-ai-input-resize-handle"
+        :class="{ dragging: isDraggingInput }"
+        title="拖拽调整输入栏高度，双击恢复默认"
+        @mousedown="startInputResize"
+        @dblclick="resetInputHeight"
+      >
+        <GripHorizontal :size="14" />
+      </div>
+
       <div class="global-ai-toolbar">
         <button
           v-for="item in modeOptions"
@@ -1545,6 +1617,7 @@ function handleNewSession(): void {
           v-model="composerValue"
           class="global-ai-input"
           rows="4"
+          :style="inputHeightStyle"
           :disabled="isSending || isRunningAudit || isProposalLoading"
           :placeholder="isRunningAudit ? '正在执行项目审计…' : `当前模式：${currentModeMeta.label}。告诉 AI 你的全局创作需求，按 Enter 发送，Shift + Enter 换行。`"
           @keydown="handleComposerKeydown"
@@ -2244,9 +2317,28 @@ function handleNewSession(): void {
   gap: 8px;
 }
 
+.global-ai-input-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 12px;
+  cursor: row-resize;
+  color: var(--arc-text-hint);
+  opacity: 0.42;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.global-ai-input-resize-handle:hover,
+.global-ai-input-resize-handle.dragging {
+  color: var(--arc-primary);
+  opacity: 1;
+}
+
 .global-ai-toolbar {
   display: flex;
-  padding-top: 8px;
   gap: 2px;
 }
 
@@ -2304,7 +2396,8 @@ function handleNewSession(): void {
   resize: none;
   font-family: inherit;
   color: var(--arc-text-primary);
-  min-height: 76px;
+  min-height: 64px;
+  max-height: 48vh;
 }
 
 .global-ai-input-footer {

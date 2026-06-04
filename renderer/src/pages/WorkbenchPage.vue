@@ -41,6 +41,12 @@ const isSidebarOpen = ref(true)
 // 当前视口宽度，用于响应式判断侧边栏模式
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const isGlobalAssistantOpen = ref(false)
+const GLOBAL_ASSISTANT_WIDTH_STORAGE_KEY = 'arc-global-assistant-width'
+const GLOBAL_ASSISTANT_DEFAULT_WIDTH = 420
+const GLOBAL_ASSISTANT_MIN_WIDTH = 320
+const GLOBAL_ASSISTANT_MAX_WIDTH = 760
+const globalAssistantWidth = ref(GLOBAL_ASSISTANT_DEFAULT_WIDTH)
+const isDraggingGlobalAssistant = ref(false)
 
 // 各面板独立的搜索关键词缓存，切换面板时保留搜索状态
 const panelSearch = reactive<Record<string, string>>({
@@ -134,6 +140,24 @@ const isCompactSidebar = computed(() => viewportWidth.value <= 1280)
 // 是否渲染侧边栏中的文字标签（非紧凑模式且侧边栏展开时显示）
 const shouldRenderSidebarLabels = computed(() => isSidebarOpen.value && !isCompactSidebar.value)
 const shouldOverlayAssistant = computed(() => viewportWidth.value <= 1320)
+const maxGlobalAssistantWidth = computed(() => {
+  const reservedWidth = shouldOverlayAssistant.value
+    ? 28
+    : (isCompactSidebar.value ? 180 : 320)
+  const viewportLimit = viewportWidth.value - reservedWidth
+  return Math.max(GLOBAL_ASSISTANT_MIN_WIDTH, Math.min(GLOBAL_ASSISTANT_MAX_WIDTH, viewportLimit))
+})
+const effectiveGlobalAssistantWidth = computed(() =>
+  Math.max(GLOBAL_ASSISTANT_MIN_WIDTH, Math.min(maxGlobalAssistantWidth.value, globalAssistantWidth.value))
+)
+const globalAssistantDockStyle = computed(() => ({
+  width: `${effectiveGlobalAssistantWidth.value}px`,
+  maxWidth: shouldOverlayAssistant.value ? 'calc(100vw - 20px)' : '100%'
+}))
+
+function clampGlobalAssistantWidth(width: number): number {
+  return Math.max(GLOBAL_ASSISTANT_MIN_WIDTH, Math.min(maxGlobalAssistantWidth.value, width))
+}
 
 /** 切换侧边栏展开/收起，紧凑模式下不允许切换 */
 function toggleSidebar(): void {
@@ -156,6 +180,37 @@ function closeGlobalAssistant(): void {
  * 清除指定面板的搜索缓存
  * @param panel - 面板名称
  */
+function startGlobalAssistantResize(event: MouseEvent): void {
+  event.preventDefault()
+  isDraggingGlobalAssistant.value = true
+  const startX = event.clientX
+  const startWidth = effectiveGlobalAssistantWidth.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  function onMove(moveEvent: MouseEvent): void {
+    const delta = startX - moveEvent.clientX
+    globalAssistantWidth.value = clampGlobalAssistantWidth(startWidth + delta)
+  }
+
+  function onEnd(): void {
+    isDraggingGlobalAssistant.value = false
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    localStorage.setItem(GLOBAL_ASSISTANT_WIDTH_STORAGE_KEY, String(globalAssistantWidth.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+}
+
+function resetGlobalAssistantWidth(): void {
+  globalAssistantWidth.value = clampGlobalAssistantWidth(GLOBAL_ASSISTANT_DEFAULT_WIDTH)
+  localStorage.setItem(GLOBAL_ASSISTANT_WIDTH_STORAGE_KEY, String(globalAssistantWidth.value))
+}
+
 function clearSearchForPanel(panel: PanelName): void {
   panelSearch[panel] = ''
 }
@@ -195,6 +250,10 @@ function syncViewportState(): void {
 
 onMounted(() => {
   syncViewportState()
+  const savedWidth = Number(localStorage.getItem(GLOBAL_ASSISTANT_WIDTH_STORAGE_KEY))
+  if (Number.isFinite(savedWidth) && savedWidth >= GLOBAL_ASSISTANT_MIN_WIDTH && savedWidth <= GLOBAL_ASSISTANT_MAX_WIDTH) {
+    globalAssistantWidth.value = savedWidth
+  }
   window.addEventListener('resize', syncViewportState)
 })
 
@@ -315,7 +374,7 @@ watch(searchKeyword, (value) => {
             class="assistant-toggle"
             @click="toggleGlobalAssistant"
           >
-            全局助手
+            AI助手
           </n-button>
         </div>
       </header>
@@ -356,13 +415,25 @@ watch(searchKeyword, (value) => {
           </Transition>
 
           <Transition name="assistant-dock">
-            <GlobalAssistantPanel
+            <div
               v-if="isGlobalAssistantOpen"
-              class="workspace-assistant-dock"
+              class="workspace-assistant-shell"
               :class="{ overlay: shouldOverlayAssistant }"
-              :active-view-label="activeViewLabel"
-              @close="closeGlobalAssistant"
-            />
+              :style="globalAssistantDockStyle"
+            >
+              <div
+                class="assistant-resize-handle"
+                :class="{ dragging: isDraggingGlobalAssistant }"
+                title="拖拽调整宽度，双击恢复默认"
+                @mousedown="startGlobalAssistantResize"
+                @dblclick="resetGlobalAssistantWidth"
+              />
+              <GlobalAssistantPanel
+                class="workspace-assistant-dock"
+                :active-view-label="activeViewLabel"
+                @close="closeGlobalAssistant"
+              />
+            </div>
           </Transition>
         </div>
       </div>
@@ -749,26 +820,72 @@ watch(searchKeyword, (value) => {
   cursor: pointer;
 }
 
-.workspace-assistant-dock {
-  width: min(420px, 100%);
+.workspace-assistant-shell {
+  position: relative;
+  display: flex;
   flex-shrink: 0;
   min-height: 0;
   border: 1px solid var(--arc-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--arc-shadow-md);
 }
 
-.workspace-assistant-dock.overlay {
+.workspace-assistant-shell.overlay {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   z-index: 12;
-  width: min(440px, calc(100vw - 28px));
   border-radius: 20px 0 0 20px;
   border-right: none;
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+}
+
+.workspace-assistant-dock {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.assistant-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 2;
+  width: 10px;
+  cursor: col-resize;
+}
+
+.assistant-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--arc-border-strong);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition:
+    height 0.18s ease,
+    opacity 0.18s ease,
+    background 0.18s ease;
+}
+
+.assistant-resize-handle:hover::after {
+  height: 42px;
+  opacity: 0.7;
+}
+
+.assistant-resize-handle.dragging::after {
+  height: 100%;
+  opacity: 1;
+  background: var(--arc-primary);
 }
 
 /* panel-switch transition */
@@ -923,7 +1040,7 @@ watch(searchKeyword, (value) => {
     padding: 14px;
   }
 
-  .workspace-assistant-dock.overlay {
+  .workspace-assistant-shell.overlay {
     width: min(100%, calc(100vw - 20px));
   }
 }
