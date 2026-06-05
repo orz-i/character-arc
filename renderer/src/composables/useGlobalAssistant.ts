@@ -402,7 +402,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     if (payload.type === 'done') {
       const finalText = String(payload.content ?? '').trim()
       if (finalText) {
-        appStore.updateAssistantMessageContent(sharedStreamingMessageId, () => finalText)
+        appStore.updateAssistantMessageContent(sharedStreamingMessageId, () => finalText, { persistMode: 'final' })
       }
       finalizeStreamingMessage()
       const resolve = sharedResolveStream
@@ -414,7 +414,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
     if (payload.type === 'canceled') {
       const fallbackText = String(payload.content ?? '').trim() || '已停止生成'
-      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : fallbackText)
+      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : fallbackText, { persistMode: 'final' })
       finalizeStreamingMessage({ isCanceled: true })
       const reject = sharedRejectStream
       clearStreamState()
@@ -425,7 +425,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
     if (payload.type === 'error') {
       const errorMessage = payload.error || '全局助手生成失败'
-      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : `处理失败：${errorMessage}`)
+      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : `处理失败：${errorMessage}`, { persistMode: 'final' })
       finalizeStreamingMessage({ isError: true })
       const reject = sharedRejectStream
       clearStreamState()
@@ -1046,7 +1046,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
         sharedRejectStream = reject
       })
       const normalizedAssistantText = assistantText.trim() || '我暂时没有整理出可靠结论，建议你补充更多上下文后重试。'
-      appStore.updateAssistantMessageContent(assistantMessageId, () => normalizedAssistantText)
+      appStore.updateAssistantMessageContent(assistantMessageId, () => normalizedAssistantText, { persistMode: 'final' })
       if (!isAuditMode.value) {
         const shouldCreateProposal = await shouldGenerateProposal(prompt, normalizedAssistantText)
         if (shouldCreateProposal) {
@@ -1061,7 +1061,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
         return
       }
       const errorMessage = error instanceof Error ? error.message : '全局助手请求失败'
-      appStore.updateAssistantMessageContent(assistantMessageId, () => `处理失败：${errorMessage}`)
+      appStore.updateAssistantMessageContent(assistantMessageId, () => `处理失败：${errorMessage}`, { persistMode: 'final' })
       message.error(errorMessage)
     } finally {
       isSending.value = false
