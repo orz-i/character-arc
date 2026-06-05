@@ -90,6 +90,28 @@ export type WorkspaceAiRunRecord = {
   responsePreview: string
 }
 
+export type WorkspaceChatMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  toolCalls?: unknown[]
+  editEvents?: unknown[]
+  turns?: unknown[]
+  isError?: boolean
+  isCanceled?: boolean
+}
+
+export type WorkspaceGlobalAssistantSession = {
+  id: string
+  title: string
+  messages: WorkspaceChatMessage[]
+  proposal: unknown | null
+  lastProposalPrompt: string
+  lastAssistantReply: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type WorkflowDocumentKey =
   | 'task_plan'
   | 'findings'
@@ -262,6 +284,8 @@ export type WorkspacePayload = {
         role: 'user' | 'assistant'
         content: string
       }>
+      globalAssistantSessions: WorkspaceGlobalAssistantSession[]
+      activeGlobalAssistantSessionId: string
       aiRuns: Array<Omit<WorkspaceAiRunRecord, 'projectId'>>
       workflowDocuments: Array<{
         key: WorkflowDocumentKey
@@ -619,6 +643,8 @@ export function normalizeWorkspacePayload(payload: WorkspacePayload | LegacyWork
             : [],
         chapterVersions: project.id === selectedProjectId ? legacyPayload.chapterVersions ?? [] : [],
         messages: project.id === selectedProjectId ? legacyPayload.messages ?? [] : [],
+        globalAssistantSessions: [],
+        activeGlobalAssistantSessionId: '',
         aiRuns: [],
         workflowDocuments: [],
         plotThreads: []

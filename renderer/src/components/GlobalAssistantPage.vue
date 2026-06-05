@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowUp,
   BookMarked,
@@ -31,9 +31,18 @@ const conversationRef = ref<HTMLElement | null>(null)
 const composerRef = ref<HTMLTextAreaElement | null>(null)
 const showModeMenu = ref(false)
 const railCollapsed = ref(false)
+const GA_RAIL_WIDTH_STORAGE_KEY = 'arc-global-assistant-page-rail-width'
+const GA_RAIL_DEFAULT_WIDTH = 240
+const GA_RAIL_MIN_WIDTH = 180
+const GA_RAIL_MAX_WIDTH = 420
+const GA_COMPOSER_MAX_HEIGHT = 180
+const railWidth = ref(GA_RAIL_DEFAULT_WIDTH)
+const isDraggingRail = ref(false)
 const collapsedGroups = reactive<Record<string, boolean>>({})
+let stopRailResize: (() => void) | null = null
 
 const hasThread = computed(() => Boolean(a.messages.value.length || a.isSending.value || a.isRunningAudit.value))
+const railStyle = computed(() => ({ width: `${railWidth.value}px` }))
 
 const modeDotClass = (mode: string): string =>
   mode === 'audit' ? 'audit' : mode === 'ingest' ? 'ingest' : 'correct'
@@ -85,12 +94,63 @@ function onSuggest(action: { label: string; prompt: string }): void {
   nextTick(() => composerRef.value?.focus())
 }
 
+function clampRailWidth(width: number): number {
+  return Math.max(GA_RAIL_MIN_WIDTH, Math.min(GA_RAIL_MAX_WIDTH, width))
+}
+
+function startRailResize(event: MouseEvent): void {
+  if (railCollapsed.value) return
+  event.preventDefault()
+  isDraggingRail.value = true
+  const startX = event.clientX
+  const startWidth = railWidth.value
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+
+  function onMove(moveEvent: MouseEvent): void {
+    railWidth.value = clampRailWidth(startWidth + moveEvent.clientX - startX)
+  }
+
+  function onEnd(): void {
+    isDraggingRail.value = false
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+    localStorage.setItem(GA_RAIL_WIDTH_STORAGE_KEY, String(railWidth.value))
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+    stopRailResize = null
+  }
+
+  stopRailResize = onEnd
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+}
+
+function resetRailWidth(): void {
+  railWidth.value = GA_RAIL_DEFAULT_WIDTH
+  localStorage.setItem(GA_RAIL_WIDTH_STORAGE_KEY, String(railWidth.value))
+}
+
 function autoResize(): void {
   const el = composerRef.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = `${el.scrollHeight}px`
+  const nextHeight = Math.min(el.scrollHeight, GA_COMPOSER_MAX_HEIGHT)
+  el.style.height = `${nextHeight}px`
+  el.style.overflowY = el.scrollHeight > GA_COMPOSER_MAX_HEIGHT ? 'auto' : 'hidden'
 }
+
+onMounted(() => {
+  const savedWidth = Number(localStorage.getItem(GA_RAIL_WIDTH_STORAGE_KEY))
+  if (Number.isFinite(savedWidth)) {
+    railWidth.value = clampRailWidth(savedWidth)
+  }
+  nextTick(() => autoResize())
+})
+
+onBeforeUnmount(() => {
+  stopRailResize?.()
+})
 
 watch(
   () => [a.messages.value.length, a.messages.value.at(-1)?.content],
@@ -110,7 +170,7 @@ watch(
 <template>
   <section class="ga-page">
     <!-- 会话（任务）历史栏 -->
-    <aside class="ga-rail" :class="{ 'ga-rail--collapsed': railCollapsed }">
+    <aside class="ga-rail" :class="{ 'ga-rail--collapsed': railCollapsed, 'ga-rail--dragging': isDraggingRail }" :style="railCollapsed ? undefined : railStyle">
       <template v-if="!railCollapsed">
         <div class="ga-rail__head">
           <strong>会话</strong>
@@ -142,6 +202,13 @@ watch(
           </button>
         </div>
       </template>
+      <div
+        v-if="!railCollapsed"
+        class="ga-rail__resize"
+        title="拖拽调整会话栏宽度，双击恢复默认"
+        @mousedown="startRailResize"
+        @dblclick="resetRailWidth"
+      />
       <div v-else class="ga-rail__collapsed">
         <button class="ga-rail__toggle" type="button" title="展开会话栏" @click="railCollapsed = false">
           <PanelLeftOpen :size="16" />
@@ -402,11 +469,13 @@ watch(
           <div class="ga-composer__inner">
             <div class="ga-composer__wrap" :class="{ disabled: a.isRunningAudit.value }">
               <textarea
+                ref="composerRef"
                 v-model="a.composerValue.value"
                 class="ga-composer__input"
                 rows="1"
                 :disabled="a.isSending.value || a.isRunningAudit.value || a.isProposalLoading.value"
                 :placeholder="a.isRunningAudit.value ? '正在执行项目审计…' : '继续追问，或交给助理执行下一步…'"
+                @input="autoResize"
                 @keydown="a.handleComposerKeydown"
               />
               <button
@@ -494,6 +563,7 @@ watch(
 
 /* 会话栏 */
 .ga-rail {
+  position: relative;
   display: flex;
   width: 240px;
   flex-shrink: 0;
@@ -502,8 +572,35 @@ watch(
   background: var(--arc-bg-weak, #f9fafb);
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
+.ga-rail--dragging {
+  transition: none;
+}
 .ga-rail--collapsed {
   width: 48px;
+}
+.ga-rail__resize {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 8;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+}
+.ga-rail__resize::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.18s;
+}
+.ga-rail__resize:hover::after,
+.ga-rail--dragging .ga-rail__resize::after {
+  background: color-mix(in srgb, var(--arc-primary, #2563eb) 45%, var(--arc-border, #e5e7eb));
 }
 .ga-rail__collapsed {
   display: flex;
@@ -755,8 +852,8 @@ watch(
   line-height: 1.5;
   resize: none;
   min-height: 24px;
-  max-height: 200px;
-  overflow-y: auto;
+  max-height: 180px;
+  overflow-y: hidden;
   padding: 6px 0;
 }
 .ga-prompt__input::placeholder {
@@ -1324,10 +1421,11 @@ watch(
 .ga-composer__input {
   flex: 1;
   min-height: 22px;
-  max-height: 120px;
+  max-height: 180px;
   border: none;
   outline: none;
   resize: none;
+  overflow-y: hidden;
   background: transparent;
   color: var(--arc-text-primary, #1f2937);
   font-size: 14px;

@@ -151,6 +151,5 @@ export const AGENT_TASK_WHITELIST: ReadonlySet<AiTaskName> = new Set([
   'outline-batch',
   'reference-deep-analyze',
   'style-fingerprint-extract',
-  'global-assistant',
-  'global-assistant-proposal'
+  'global-assistant'
 ])

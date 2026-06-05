@@ -126,22 +126,45 @@ export async function runAgentTask(
     logResponse('AGENT_REQUEST', settings, task.task, loopResult.finalText, Date.now() - requestStartedAt, { usedSkills: usedSkillIds })
 
     let rawText = loopResult.finalText
-    let result = handler.normalize(rawText)
+    let result: ReturnType<typeof handler.normalize>
+    let normalizeFailed = false
+    try {
+      result = handler.normalize(rawText)
+    } catch {
+      result = {} as ReturnType<typeof handler.normalize>
+      normalizeFailed = true
+    }
     let repairTriggered = false
 
-    if (handler.outputType === 'json' && !handler.validate(result)) {
-      const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText)
-      logPrompt('AGENT_REPAIR', settings, repairPromptPair, task.task, usedSkillIds)
-      const repairStartedAt = Date.now()
-      const repairResult = await aiGenerateTextWithUsage(settings, repairPromptPair, maxTokens)
-      totalUsage = addAiRunUsage(totalUsage, repairResult.usage)
-      rawText = repairResult.text
-      logResponse('AGENT_REPAIR', settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
-      result = handler.normalize(rawText)
-      repairTriggered = true
+    if (handler.outputType === 'json' && (normalizeFailed || !handler.validate(result))) {
+      const MAX_REPAIR_ATTEMPTS = 2
+      for (let attempt = 1; attempt <= MAX_REPAIR_ATTEMPTS; attempt += 1) {
+        const validationErrors = (!normalizeFailed && handler.describeValidationErrors)
+          ? handler.describeValidationErrors(result)
+          : ['JSON 解析失败或结构不完整']
+        const repairPromptPair = buildRepairPrompt(prompt.system, prompt.user, rawText, validationErrors)
+        logPrompt(`AGENT_REPAIR_${attempt}`, settings, repairPromptPair, task.task, usedSkillIds)
+        const repairStartedAt = Date.now()
+        const repairResult = await aiGenerateTextWithUsage(settings, repairPromptPair, maxTokens)
+        totalUsage = addAiRunUsage(totalUsage, repairResult.usage)
+        rawText = repairResult.text
+        logResponse(`AGENT_REPAIR_${attempt}`, settings, task.task, rawText, Date.now() - repairStartedAt, { usedSkills: usedSkillIds })
+        normalizeFailed = false
+        try {
+          result = handler.normalize(rawText)
+        } catch {
+          result = {} as ReturnType<typeof handler.normalize>
+          normalizeFailed = true
+        }
+        repairTriggered = true
 
-      if (!handler.validate(result)) {
-        throw new Error('AI 返回的结构化结果不完整，请稍后重试或调整提示词。')
+        if (!normalizeFailed && handler.validate(result)) {
+          break
+        }
+
+        if (attempt === MAX_REPAIR_ATTEMPTS) {
+          throw new Error('AI 返回的结构化结果经过 2 次修复仍不完整，请稍后重试或调整提示词。')
+        }
       }
     }
 

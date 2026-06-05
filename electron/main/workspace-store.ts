@@ -866,6 +866,35 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     ORDER BY project_id ASC, sort_order ASC
   `).all() as Array<WorkspacePayload['workspaces'][string]['messages'][number] & { projectId: string }>
 
+  const assistantSessions = db.prepare(`
+    SELECT project_id AS projectId, id, title, messages_json AS messagesJson, created_at AS createdAt, updated_at AS updatedAt
+    FROM assistant_sessions
+    ORDER BY project_id ASC, updated_at DESC
+  `).all().map((row) => {
+    const payload = parseJson(row.messagesJson as string, {} as {
+      messages?: WorkspacePayload['workspaces'][string]['globalAssistantSessions'][number]['messages']
+      proposal?: unknown | null
+      lastProposalPrompt?: string
+      lastAssistantReply?: string
+      active?: boolean
+    })
+    return {
+      projectId: row.projectId as string,
+      id: row.id as string,
+      title: row.title as string,
+      messages: Array.isArray(payload.messages) ? payload.messages : [],
+      proposal: payload.proposal ?? null,
+      lastProposalPrompt: String(payload.lastProposalPrompt ?? ''),
+      lastAssistantReply: String(payload.lastAssistantReply ?? ''),
+      active: Boolean(payload.active),
+      createdAt: row.createdAt as string,
+      updatedAt: row.updatedAt as string
+    }
+  }) as Array<WorkspacePayload['workspaces'][string]['globalAssistantSessions'][number] & {
+    projectId: string
+    active: boolean
+  }>
+
   const knowledgeDocuments = db.prepare(`
     SELECT id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
       keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
@@ -1029,6 +1058,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   const chaptersByProject = groupBy(chapters)
   const versionsByProject = groupBy(chapterVersions)
   const messagesByProject = groupBy(messages)
+  const assistantSessionsByProject = groupBy(assistantSessions)
   const aiRunsByProject = groupBy(aiRuns)
   const plotThreadsByProject = groupBy(plotThreads)
 
@@ -1074,6 +1104,12 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
           .map(({ projectId: _projectId, ...version }) => version),
         messages: (messagesByProject.get(project.id) ?? [])
           .map(({ projectId: _projectId, ...message }) => message),
+        globalAssistantSessions: (assistantSessionsByProject.get(project.id) ?? [])
+          .map(({ projectId: _projectId, active: _active, ...session }) => session),
+        activeGlobalAssistantSessionId:
+          (assistantSessionsByProject.get(project.id) ?? []).find((session) => session.active)?.id
+          ?? (assistantSessionsByProject.get(project.id) ?? [])[0]?.id
+          ?? '',
         aiRuns: (aiRunsByProject.get(project.id) ?? [])
           .map(({ projectId: _projectId, ...run }) => run),
         workflowDocuments: [],
@@ -1147,6 +1183,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       ai_runs: new Set(),
       workflow_documents: new Set(),
       plot_threads: new Set(),
+      assistant_sessions: new Set(),
       cover_workbench_history: new Set()
     }
 
@@ -1244,6 +1281,11 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       VALUES (?, ?, ?, ?, ?)
     `)
 
+    const insertAssistantSession = db.prepare(`
+      INSERT OR REPLACE INTO assistant_sessions (id, project_id, title, messages_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+
     const insertKnowledgeDocument = db.prepare(`
       INSERT OR REPLACE INTO knowledge_documents (id, project_id, title, source_type, source_label, content, summary, keywords_json, metadata_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1282,6 +1324,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
         chapters: [],
         chapterVersions: [],
         messages: [],
+        globalAssistantSessions: [],
+        activeGlobalAssistantSessionId: '',
         knowledgeDocuments: [],
         aiRuns: [],
         workflowDocuments: [],
@@ -1430,6 +1474,39 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       workspace.messages.forEach((message, index) => {
         allIds.ai_messages.add(message.id)
         insertMessage.run(message.id, project.id, message.role, message.content, index)
+      })
+
+      const assistantSessionSources = (workspace.globalAssistantSessions ?? []).length
+        ? workspace.globalAssistantSessions
+        : workspace.messages.length
+          ? [{
+              id: `${project.id}-global-assistant-session-legacy`,
+              title: '历史会话',
+              messages: workspace.messages,
+              proposal: null,
+              lastProposalPrompt: '',
+              lastAssistantReply: '',
+              createdAt: project.lastEdited,
+              updatedAt: project.lastEdited
+            }]
+          : []
+
+      assistantSessionSources.forEach((session) => {
+        allIds.assistant_sessions.add(session.id)
+        insertAssistantSession.run(
+          session.id,
+          project.id,
+          session.title,
+          JSON.stringify({
+            messages: session.messages ?? [],
+            proposal: session.proposal ?? null,
+            lastProposalPrompt: session.lastProposalPrompt ?? '',
+            lastAssistantReply: session.lastAssistantReply ?? '',
+            active: session.id === workspace.activeGlobalAssistantSessionId
+          }),
+          session.createdAt,
+          session.updatedAt
+        )
       })
 
       workspace.aiRuns.forEach((run, index) => {

@@ -271,6 +271,9 @@ onBeforeUnmount(() => {
 watch(
   () => appStore.activePanel,
   (panel) => {
+    if (panel === 'global-assistant') {
+      closeGlobalAssistant()
+    }
     searchKeyword.value = panelSearch[panel] ?? ''
   },
   { immediate: true }

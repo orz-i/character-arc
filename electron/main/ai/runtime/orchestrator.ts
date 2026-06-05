@@ -52,9 +52,6 @@ export async function runAiTask(
     if (task.task === 'reference-deep-analyze') {
       throw new Error('深度拆书需要模型支持 tool_use（工具调用）。当前供应商不支持此功能，请切换到通义千问、OpenAI 或 Anthropic 等支持工具调用的供应商后重试。')
     }
-    if (task.task === 'global-assistant-proposal') {
-      throw new Error('全局提案生成要求模型支持 tool_use（工具调用），这样 AI 才能自主选择并调用 skills。请切换到支持工具调用的供应商后重试。')
-    }
   }
 
   const settings = settingsForRouting

@@ -44,6 +44,17 @@ const MARKDOWN_ALLOWED_ATTR = ['class', 'href', 'target', 'rel']
 const AI_TASK_KEY = 'global-assistant-chat'
 const PROPOSAL_TASK_KEY = 'global-assistant-proposal'
 
+// 全局助手可以同时以整页和悬浮 dock 两种形态挂载。
+// 流式任务必须独立于具体组件实例，否则切换页面导致组件卸载时会丢失主进程事件。
+const sharedIsRunningAudit = ref(false)
+const sharedIsSending = ref(false)
+const sharedIsProposalLoading = ref(false)
+let sharedStreamId: string | null = null
+let sharedStreamingMessageId: string | null = null
+let sharedRemoveStreamListener: (() => void) | null = null
+let sharedResolveStream: ((text: string) => void) | null = null
+let sharedRejectStream: ((error: Error) => void) | null = null
+
 const GLOBAL_ASSISTANT_MODE_OPTIONS: Array<{ id: AssistantMode; label: string; description: string }> = [
   { id: 'ingest', label: '录入', description: '整理长设定、粗大纲和项目草稿' },
   { id: 'correct', label: '修正', description: '纠正世界观、人设和大纲跑偏' },
@@ -222,22 +233,15 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
   const resolveViewLabel = (): string => toValue(options.activeViewLabel) ?? ''
 
-  // 实例级状态（绝不可提升到模块作用域，否则 dock + 整页双挂载会互相串扰）
+  // 纯展示/输入状态仍按实例隔离，避免 dock + 整页双挂载时互相串扰。
   const composerValue = ref('')
   const activeMode = ref<AssistantMode>('ingest')
   const worldviewTargetMap = ref<Record<string, string>>({})
   const characterTargetMap = ref<Record<string, string>>({})
   const outlineTargetMap = ref<Record<string, string>>({})
-  const isRunningAudit = ref(false)
-  const isSending = ref(false)
-  const isProposalLoading = ref(false)
-
-  // 实例级流式句柄
-  let streamId: string | null = null
-  let streamingMessageId: string | null = null
-  let removeStreamListener: (() => void) | null = null
-  let resolveStream: ((text: string) => void) | null = null
-  let rejectStream: ((error: Error) => void) | null = null
+  const isRunningAudit = sharedIsRunningAudit
+  const isSending = sharedIsSending
+  const isProposalLoading = sharedIsProposalLoading
   let proposalRequestToken = 0
 
   const modeOptions = GLOBAL_ASSISTANT_MODE_OPTIONS
@@ -319,31 +323,42 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
   )
 
   function clearStreamState(): void {
-    streamId = null
-    streamingMessageId = null
-    resolveStream = null
-    rejectStream = null
+    sharedStreamId = null
+    sharedStreamingMessageId = null
+    sharedResolveStream = null
+    sharedRejectStream = null
   }
 
   function finalizeStreamingMessage(payload?: { isError?: boolean; isCanceled?: boolean }): void {
-    if (!streamingMessageId) return
-    appStore.finalizeAssistantStreamingMessage(streamingMessageId, payload)
+    if (!sharedStreamingMessageId) return
+    appStore.finalizeAssistantStreamingMessage(sharedStreamingMessageId, payload)
+  }
+
+  function unregisterStreamListener(): void {
+    sharedRemoveStreamListener?.()
+    sharedRemoveStreamListener = null
+  }
+
+  function unregisterStreamListenerIfIdle(): void {
+    if (!sharedStreamId && !isSending.value) {
+      unregisterStreamListener()
+    }
   }
 
   // 流式事件处理：按 streamId 门控，仅发起本次发送的实例会通过，store 写入只发生一次。
   // 滚动已解耦——由各壳自行 watch messages 处理。
   function handleStreamEvent(payload: CharacterArcAiStreamEvent): void {
-    if (payload.streamId !== streamId || !streamingMessageId) {
+    if (payload.streamId !== sharedStreamId || !sharedStreamingMessageId) {
       return
     }
 
     if (payload.type === 'chunk') {
-      appStore.updateAssistantMessageContent(streamingMessageId, (content) => content + payload.delta)
+      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content + payload.delta)
       return
     }
 
     if (payload.type === 'tool_use_start') {
-      appStore.appendAssistantToolCall(streamingMessageId, {
+      appStore.appendAssistantToolCall(sharedStreamingMessageId, {
         toolUseId: payload.toolUseId,
         toolName: payload.toolName,
         args: payload.args,
@@ -353,7 +368,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     }
 
     if (payload.type === 'tool_result') {
-      appStore.updateAssistantToolCall(streamingMessageId, payload.toolUseId, (toolCall) => ({
+      appStore.updateAssistantToolCall(sharedStreamingMessageId, payload.toolUseId, (toolCall) => ({
         ...toolCall,
         status: payload.isError ? 'error' : 'done',
         result: payload.content,
@@ -364,7 +379,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     }
 
     if (payload.type === 'edit_applied') {
-      appStore.appendAssistantEditEvent(streamingMessageId, {
+      appStore.appendAssistantEditEvent(sharedStreamingMessageId, {
         chapterId: payload.chapterId,
         editType: payload.editType,
         preview: payload.preview,
@@ -376,43 +391,41 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     if (payload.type === 'done') {
       const finalText = String(payload.content ?? '').trim()
       if (finalText) {
-        appStore.updateAssistantMessageContent(streamingMessageId, () => finalText)
+        appStore.updateAssistantMessageContent(sharedStreamingMessageId, () => finalText)
       }
       finalizeStreamingMessage()
-      const resolve = resolveStream
+      const resolve = sharedResolveStream
       clearStreamState()
       resolve?.(finalText)
+      unregisterStreamListenerIfIdle()
       return
     }
 
     if (payload.type === 'canceled') {
       const fallbackText = String(payload.content ?? '').trim() || '已停止生成'
-      appStore.updateAssistantMessageContent(streamingMessageId, (content) => content.trim() ? content : fallbackText)
+      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : fallbackText)
       finalizeStreamingMessage({ isCanceled: true })
-      const reject = rejectStream
+      const reject = sharedRejectStream
       clearStreamState()
       reject?.(new Error('canceled'))
+      unregisterStreamListenerIfIdle()
       return
     }
 
     if (payload.type === 'error') {
       const errorMessage = payload.error || '全局助手生成失败'
-      appStore.updateAssistantMessageContent(streamingMessageId, (content) => content.trim() ? content : `处理失败：${errorMessage}`)
+      appStore.updateAssistantMessageContent(sharedStreamingMessageId, (content) => content.trim() ? content : `处理失败：${errorMessage}`)
       finalizeStreamingMessage({ isError: true })
-      const reject = rejectStream
+      const reject = sharedRejectStream
       clearStreamState()
       reject?.(new Error(errorMessage))
+      unregisterStreamListenerIfIdle()
     }
   }
 
   function registerStreamListener(): void {
-    if (removeStreamListener) return
-    removeStreamListener = window.characterArc.onAiStreamEvent(handleStreamEvent)
-  }
-
-  function unregisterStreamListener(): void {
-    removeStreamListener?.()
-    removeStreamListener = null
+    if (sharedRemoveStreamListener) return
+    sharedRemoveStreamListener = window.characterArc.onAiStreamEvent(handleStreamEvent)
   }
 
   onMounted(() => {
@@ -420,7 +433,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
   })
 
   onBeforeUnmount(() => {
-    unregisterStreamListener()
+    unregisterStreamListenerIfIdle()
   })
 
   function setMode(mode: AssistantMode): void {
@@ -948,8 +961,9 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     composerValue.value = ''
     appStore.pushUserMessage(prompt)
     const assistantMessageId = appStore.pushStreamingAssistantMessage()
-    streamingMessageId = assistantMessageId
+    sharedStreamingMessageId = assistantMessageId
     isSending.value = true
+    registerStreamListener()
 
     try {
       const response = await window.characterArc.startAiAgentStream(toIpcPayload({
@@ -987,11 +1001,11 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       if (!response.success || !sid) {
         throw new Error(response.error ?? '全局助手流式生成启动失败')
       }
-      streamId = sid
+      sharedStreamId = sid
 
       const assistantText = await new Promise<string>((resolve, reject) => {
-        resolveStream = resolve
-        rejectStream = reject
+        sharedResolveStream = resolve
+        sharedRejectStream = reject
       })
       const normalizedAssistantText = assistantText.trim() || '我暂时没有整理出可靠结论，建议你补充更多上下文后重试。'
       appStore.updateAssistantMessageContent(assistantMessageId, () => normalizedAssistantText)
@@ -1013,9 +1027,10 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       message.error(errorMessage)
     } finally {
       isSending.value = false
-      if (streamingMessageId === assistantMessageId) {
+      if (sharedStreamingMessageId === assistantMessageId) {
         clearStreamState()
       }
+      unregisterStreamListenerIfIdle()
     }
   }
 
@@ -1027,8 +1042,8 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
   }
 
   async function stopStreaming(): Promise<void> {
-    if (!streamId) return
-    await window.characterArc.stopAiStream(streamId)
+    if (!sharedStreamId) return
+    await window.characterArc.stopAiStream(sharedStreamId)
   }
 
   return {

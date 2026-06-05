@@ -1203,7 +1203,9 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
         'SELECT id, project_id, title, messages_json, created_at, updated_at FROM assistant_sessions WHERE id = ?'
       ).get(sessionId) as { id: string; project_id: string; title: string; messages_json: string; created_at: string; updated_at: string } | undefined
       if (!row) return { success: false, error: '会话不存在' }
-      return { success: true, result: { ...row, messages: JSON.parse(row.messages_json) } }
+      const parsed = JSON.parse(row.messages_json)
+      const messages = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.messages) ? parsed.messages : []
+      return { success: true, result: { ...row, ...(!Array.isArray(parsed) && parsed && typeof parsed === 'object' ? parsed : {}), messages } }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : '加载会话失败' }
     }
@@ -1213,7 +1215,7 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     try {
       const db = await deps.ensureWorkspaceDb()
       const now = new Date().toISOString()
-      const messagesJson = JSON.stringify(payload.messages)
+      const messagesJson = JSON.stringify({ messages: payload.messages })
       db.prepare(
         `INSERT INTO assistant_sessions (id, project_id, title, messages_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)
