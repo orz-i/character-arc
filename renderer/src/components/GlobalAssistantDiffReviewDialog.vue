@@ -129,6 +129,7 @@ watch(() => props.show, (val) => {
     preset="card"
     class="ga-diff-modal"
     :bordered="false"
+    :closable="false"
     :segmented="{ content: true }"
     @update:show="emit('update:show', $event)"
   >

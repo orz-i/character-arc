@@ -682,10 +682,10 @@ export function useChapterAi(): {
   }
 
   const proposalDiffFiles = computed<GlobalAssistantProposalDiffFile[]>(() =>
-    pendingEditProposals.value.map((p) => ({
+    pendingEditProposals.value.map((p, index) => ({
       id: p.proposalId,
-      title: p.preview,
-      path: `chapter/${p.chapterId}`,
+      title: `编辑 ${index + 1}: ${p.preview}`,
+      path: `chapter/${p.chapterId}/edit-${index + 1}`,
       kind: 'note' as const,
       action: 'update' as const,
       oldText: stripHtmlForDiff(p.oldContent),

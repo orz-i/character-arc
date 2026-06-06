@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { History, Plus, Sparkles, Trash2, X } from 'lucide-vue-next'
+import { GitCompare, History, Plus, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { NTooltip, useMessage } from 'naive-ui'
 import ChapterAiMessages from './ChapterAiMessages.vue'
 import ChapterAiInput from './ChapterAiInput.vue'
@@ -269,6 +269,13 @@ onBeforeUnmount(() => {
       <span>{{ agentStatus }}</span>
     </div>
 
+    <!-- 待审查编辑提示条 -->
+    <div v-if="pendingEditProposals.length > 0 && !showDiffReview" class="ai-pending-review-bar" @click="showDiffReview = true">
+      <GitCompare :size="13" />
+      <span>{{ pendingEditProposals.length }} 项编辑待审查</span>
+      <span class="ai-pending-review-action">点击查看</span>
+    </div>
+
     <!-- Composer 输入区 -->
     <ChapterAiInput
       :disabled="isResponding"
@@ -376,6 +383,32 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.ai-pending-review-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--arc-primary, #2563eb) 6%, var(--arc-bg-surface, #ffffff));
+  border: 1px solid color-mix(in srgb, var(--arc-primary, #2563eb) 20%, var(--arc-border, #e5e7eb));
+  color: var(--arc-primary, #2563eb);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ai-pending-review-bar:hover {
+  background: color-mix(in srgb, var(--arc-primary, #2563eb) 10%, var(--arc-bg-surface, #ffffff));
+}
+
+.ai-pending-review-action {
+  margin-left: auto;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
 .ai-panel {
   display: flex;
   flex-direction: column;
