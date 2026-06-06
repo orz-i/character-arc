@@ -31,6 +31,18 @@ export type KnowledgeSaveDestination = {
   canOpen: boolean
 }
 
+export type GlobalAssistantProposalDiffFile = {
+  id: string
+  title: string
+  path: string
+  kind: 'constraint' | 'worldview' | 'character' | 'outline' | 'note'
+  action: 'create' | 'update' | 'note'
+  oldText: string
+  newText: string
+  reason: string
+  canApply: boolean
+}
+
 export interface UseGlobalAssistantOptions {
   /** 当前视图标签，用于流式上下文 currentPanelLabel */
   activeViewLabel?: MaybeRefOrGetter<string>
@@ -236,6 +248,42 @@ function groupedToolCalls(message: ChatMessage): ToolGroup[] {
   }
 
   return groups
+}
+
+function normalizeDiffText(value: unknown): string {
+  return String(value ?? '').replace(/\r\n/g, '\n').trim()
+}
+
+function escapeDiffPath(value: string): string {
+  return value.replace(/\s+/g, '_').replace(/[\\]/g, '/')
+}
+
+function createUnifiedPatch(file: GlobalAssistantProposalDiffFile): string {
+  const oldLines = file.oldText ? normalizeDiffText(file.oldText).split('\n') : []
+  const newLines = file.newText ? normalizeDiffText(file.newText).split('\n') : []
+  const oldCount = Math.max(oldLines.length, file.action === 'create' ? 0 : 1)
+  const newCount = Math.max(newLines.length, 1)
+  const oldPath = file.action === 'create' ? '/dev/null' : `a/${file.path}`
+  const newPath = `b/${file.path}`
+  const header = [
+    `diff --git ${oldPath} ${newPath}`,
+    file.action === 'create' ? 'new file mode 100644' : `index ${file.id.slice(0, 7).padEnd(7, '0')}..proposal 100644`,
+    `--- ${oldPath}`,
+    `+++ ${newPath}`,
+    `@@ -1,${oldCount} +1,${newCount} @@`
+  ]
+  const removed = file.action === 'create' ? [] : oldLines.map((line) => `-${line}`)
+  const added = newLines.map((line) => `+${line}`)
+  return [...header, ...removed, ...added, ''].join('\n')
+}
+
+function parseProposalDiffIndex(fileId: string, prefix: string): number {
+  const match = fileId.match(new RegExp(`^${prefix}-(\\d+)-`))
+  return match ? Number(match[1]) : -1
+}
+
+function removeProposalItemAt<T>(items: T[], index: number): T[] {
+  return items.filter((_, itemIndex) => itemIndex !== index)
 }
 
 export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
@@ -652,6 +700,191 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     return current.outlineCreates.length > 0 || current.outlineUpdates.some((item, index) => Boolean(resolveOutlineTarget(item, index)))
   }
 
+  const proposalDiffFiles = computed<GlobalAssistantProposalDiffFile[]>(() => {
+    const current = proposal.value
+    if (!current) return []
+
+    const files: GlobalAssistantProposalDiffFile[] = []
+
+    for (const [index, item] of current.constraintCreates.entries()) {
+      files.push({
+        id: `constraint-create-${index}-${item.title}`,
+        title: item.title,
+        path: `constraints/${escapeDiffPath(item.title)}.rule`,
+        kind: 'constraint',
+        action: 'create',
+        oldText: '',
+        newText: [
+          `标题：${item.title}`,
+          `范围：${item.scope || 'project'}`,
+          `权重：${item.weight ?? 'core'}`,
+          `锁定：${item.locked ?? true}`,
+          `内容：${item.content}`,
+          item.keywords.length ? `关键词：${item.keywords.join('、')}` : ''
+        ].filter(Boolean).join('\n'),
+        reason: item.reason,
+        canApply: true
+      })
+    }
+
+    for (const [index, item] of current.worldviewCreates.entries()) {
+      files.push({
+        id: `worldview-create-${index}-${item.title}`,
+        title: item.title,
+        path: `worldview/${escapeDiffPath(item.title)}.entry`,
+        kind: 'worldview',
+        action: 'create',
+        oldText: '',
+        newText: [`分类：${item.type}`, `标题：${item.title}`, `内容：${item.content}`].join('\n'),
+        reason: '新增世界观条目',
+        canApply: true
+      })
+    }
+
+    for (const [index, item] of current.worldviewUpdates.entries()) {
+      const target = resolveWorldviewTarget(item, index)
+      files.push({
+        id: `worldview-update-${index}-${item.matchTitle}`,
+        title: item.title || item.matchTitle,
+        path: `worldview/${escapeDiffPath(item.matchTitle)}.entry`,
+        kind: 'worldview',
+        action: 'update',
+        oldText: target
+          ? [`分类：${target.type}`, `标题：${target.title}`, `内容：${target.content}`].join('\n')
+          : `未匹配到目标：${item.matchTitle}`,
+        newText: [
+          `分类：${item.type || target?.type || ''}`,
+          `标题：${item.title || target?.title || item.matchTitle}`,
+          `内容：${item.content || target?.content || ''}`
+        ].join('\n'),
+        reason: item.reason,
+        canApply: Boolean(target)
+      })
+    }
+
+    for (const [index, item] of current.characterCreates.entries()) {
+      files.push({
+        id: `character-create-${index}-${item.name}`,
+        title: item.name,
+        path: `characters/${escapeDiffPath(item.name)}.card`,
+        kind: 'character',
+        action: 'create',
+        oldText: '',
+        newText: [
+          `姓名：${item.name}`,
+          `定位：${item.role}`,
+          `简介：${item.description}`,
+          item.tags.length ? `标签：${item.tags.join('、')}` : ''
+        ].filter(Boolean).join('\n'),
+        reason: '新增人物卡',
+        canApply: true
+      })
+    }
+
+    for (const [index, item] of current.characterUpdates.entries()) {
+      const target = resolveCharacterTarget(item, index)
+      files.push({
+        id: `character-update-${index}-${item.matchName}`,
+        title: item.name || item.matchName,
+        path: `characters/${escapeDiffPath(item.matchName)}.card`,
+        kind: 'character',
+        action: 'update',
+        oldText: target
+          ? [
+              `姓名：${target.name}`,
+              `定位：${target.role}`,
+              `简介：${target.description}`,
+              target.tags.length ? `标签：${target.tags.map((tag) => tag.label).join('、')}` : ''
+            ].filter(Boolean).join('\n')
+          : `未匹配到目标：${item.matchName}`,
+        newText: [
+          `姓名：${item.name || target?.name || item.matchName}`,
+          `定位：${item.role || target?.role || ''}`,
+          `简介：${item.description || target?.description || ''}`,
+          item.tags?.length ? `标签：${item.tags.join('、')}` : (target?.tags.length ? `标签：${target.tags.map((tag) => tag.label).join('、')}` : '')
+        ].filter(Boolean).join('\n'),
+        reason: item.reason,
+        canApply: Boolean(target)
+      })
+    }
+
+    for (const [index, item] of current.outlineCreates.entries()) {
+      files.push({
+        id: `outline-create-${index}-${item.title}`,
+        title: item.title,
+        path: `outline/${escapeDiffPath(item.title)}.node`,
+        kind: 'outline',
+        action: 'create',
+        oldText: '',
+        newText: [
+          `标题：${item.title}`,
+          `目标字数：${item.wordTarget}`,
+          `冲突：${item.conflict}`,
+          `摘要：${item.summary}`
+        ].filter(Boolean).join('\n'),
+        reason: '新增大纲节点',
+        canApply: true
+      })
+    }
+
+    for (const [index, item] of current.outlineUpdates.entries()) {
+      const target = resolveOutlineTarget(item, index)
+      files.push({
+        id: `outline-update-${index}-${item.matchTitle}`,
+        title: item.title || item.matchTitle,
+        path: `outline/${escapeDiffPath(item.matchTitle)}.node`,
+        kind: 'outline',
+        action: 'update',
+        oldText: target
+          ? [
+              `标题：${target.title}`,
+              `目标字数：${target.wordTarget}`,
+              `冲突：${target.conflict}`,
+              `摘要：${target.summary}`
+            ].filter(Boolean).join('\n')
+          : `未匹配到目标：${item.matchTitle}`,
+        newText: [
+          `标题：${item.title || target?.title || item.matchTitle}`,
+          `目标字数：${item.wordTarget || target?.wordTarget || ''}`,
+          `冲突：${item.conflict || target?.conflict || ''}`,
+          `摘要：${item.summary || target?.summary || ''}`
+        ].filter(Boolean).join('\n'),
+        reason: item.reason,
+        canApply: Boolean(target)
+      })
+    }
+
+    for (const [index, note] of current.notes.entries()) {
+      files.push({
+        id: `note-${index}`,
+        title: `提醒 ${index + 1}`,
+        path: `notes/proposal-${index + 1}.md`,
+        kind: 'note',
+        action: 'note',
+        oldText: '',
+        newText: note,
+        reason: '需要人工确认',
+        canApply: false
+      })
+    }
+
+    return files
+  })
+
+  const proposalDiffPatch = computed(() =>
+    proposalDiffFiles.value.map((file) => createUnifiedPatch(file)).join('\n')
+  )
+
+  const proposalDiffStats = computed(() => {
+    const files = proposalDiffFiles.value
+    return {
+      total: files.length,
+      creatable: files.filter((file) => file.action === 'create').length,
+      updatable: files.filter((file) => file.action === 'update').length,
+      blocked: files.filter((file) => !file.canApply).length
+    }
+  })
+
   async function shouldGenerateProposal(userPrompt: string, assistantReply: string): Promise<boolean> {
     const project = appStore.currentProject
     if (!project) return false
@@ -706,15 +939,15 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
           assistantMode: activeMode.value,
           userPrompt: normalizedPrompt,
           assistantReply,
-          worldviewEntries: appStore.worldviewEntries.slice(0, 14),
-          characters: appStore.characters.slice(0, 14),
-          organizations: appStore.organizations.slice(0, 10),
-          characterRelationships: appStore.characterRelationships.slice(0, 18),
-          inspirationEntries: appStore.inspirationEntries.slice(0, 12),
-          outlineItems: appStore.outlineItems.slice(0, 18),
+          worldviewEntries: appStore.worldviewEntries.slice(0, 40),
+          characters: appStore.characters.slice(0, 40),
+          organizations: appStore.organizations.slice(0, 24),
+          characterRelationships: appStore.characterRelationships.slice(0, 60),
+          inspirationEntries: appStore.inspirationEntries.slice(0, 30),
+          outlineItems: appStore.outlineItems.slice(0, 80),
           workflowDocuments: appStore.workflowDocuments,
-          knowledgeDocuments: appStore.knowledgeDocuments.slice(0, 12),
-          projectConstraints: appStore.projectConstraints.slice(0, 8),
+          knowledgeDocuments: appStore.knowledgeDocuments.slice(0, 30),
+          projectConstraints: appStore.projectConstraints.slice(0, 24),
           projectSkills: project.projectSkills.filter((item) => item.enabled)
         }
       }))
@@ -757,7 +990,8 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
         summary: item.reason || item.content,
         keywords: item.keywords,
         scope: item.scope,
-        locked: true
+        weight: item.weight ?? 'core',
+        locked: item.locked ?? true
       })
       appliedCount += 1
     }
@@ -777,13 +1011,11 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
     let appliedCount = 0
     const appliedTitles: string[] = []
-    let focusTargetId = ''
 
     for (const item of current.worldviewCreates) {
-      const createdId = appStore.createWorldviewEntry({ type: item.type, title: item.title, content: item.content })
+      appStore.createWorldviewEntry({ type: item.type, title: item.title, content: item.content })
       appliedCount += 1
       appliedTitles.push(item.title)
-      focusTargetId = createdId
     }
 
     for (const [index, item] of current.worldviewUpdates.entries()) {
@@ -792,15 +1024,12 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       appStore.updateWorldviewEntry(target.id, { type: item.type, title: item.title, content: item.content })
       appliedCount += 1
       appliedTitles.push(item.title || target.title)
-      if (!focusTargetId) focusTargetId = target.id
     }
 
     worldviewTargetMap.value = {}
     setProposal(trimProposal({ ...current, worldviewCreates: [], worldviewUpdates: [] }))
 
     if (appliedCount > 0) {
-      appStore.setPanel('world')
-      if (focusTargetId) appStore.setAssistantFocusTarget('world', focusTargetId)
       const preview = appliedTitles.slice(0, 3).join('、')
       const suffix = appliedTitles.length > 3 ? ` 等 ${appliedTitles.length} 条` : ''
       message.success(`已写回世界观：${preview}${suffix}`)
@@ -815,10 +1044,9 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
     let appliedCount = 0
     const appliedNames: string[] = []
-    let focusTargetId = ''
 
     for (const item of current.characterCreates) {
-      const createdId = appStore.createCharacter({
+      appStore.createCharacter({
         name: item.name,
         role: item.role,
         description: item.description,
@@ -826,7 +1054,6 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       })
       appliedCount += 1
       appliedNames.push(item.name)
-      focusTargetId = createdId
     }
 
     for (const [index, item] of current.characterUpdates.entries()) {
@@ -840,15 +1067,12 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       })
       appliedCount += 1
       appliedNames.push(item.name || target.name)
-      if (!focusTargetId) focusTargetId = target.id
     }
 
     characterTargetMap.value = {}
     setProposal(trimProposal({ ...current, characterCreates: [], characterUpdates: [] }))
 
     if (appliedCount > 0) {
-      appStore.setPanel('characters')
-      if (focusTargetId) appStore.setAssistantFocusTarget('characters', focusTargetId)
       const preview = appliedNames.slice(0, 3).join('、')
       const suffix = appliedNames.length > 3 ? ` 等 ${appliedNames.length} 条` : ''
       message.success(`已写回人物：${preview}${suffix}`)
@@ -863,10 +1087,9 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
 
     let appliedCount = 0
     const appliedTitles: string[] = []
-    let focusTargetId = ''
 
     for (const item of current.outlineCreates) {
-      const createdId = appStore.createOutlineItem({
+      appStore.createOutlineItem({
         title: item.title,
         wordTarget: item.wordTarget,
         conflict: item.conflict,
@@ -875,7 +1098,6 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       })
       appliedCount += 1
       appliedTitles.push(item.title)
-      focusTargetId = createdId
     }
 
     for (const [index, item] of current.outlineUpdates.entries()) {
@@ -889,21 +1111,160 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       })
       appliedCount += 1
       appliedTitles.push(item.title || target.title)
-      if (!focusTargetId) focusTargetId = target.id
     }
 
     outlineTargetMap.value = {}
     setProposal(trimProposal({ ...current, outlineCreates: [], outlineUpdates: [] }))
 
     if (appliedCount > 0) {
-      appStore.setPanel('outline')
-      if (focusTargetId) appStore.setAssistantFocusTarget('outline', focusTargetId)
       const preview = appliedTitles.slice(0, 3).join('、')
       const suffix = appliedTitles.length > 3 ? ` 等 ${appliedTitles.length} 条` : ''
       message.success(`已写回大纲：${preview}${suffix}`)
     } else {
       message.warning('这组大纲提案暂时没有可匹配的写回目标')
     }
+  }
+
+  function applyProposalDiffFile(fileId: string): boolean {
+    const current = proposal.value
+    const file = proposalDiffFiles.value.find((item) => item.id === fileId)
+    if (!current || !file) return false
+
+    if (!file.canApply) {
+      message.warning('这条提案还不能写回，请先匹配目标或人工处理')
+      return false
+    }
+
+    if (file.kind === 'constraint' && file.action === 'create') {
+      const index = parseProposalDiffIndex(file.id, 'constraint-create')
+      const item = current.constraintCreates[index]
+      if (!item) return false
+      appStore.upsertProjectConstraint({
+        title: item.title,
+        content: item.content,
+        summary: item.reason || item.content,
+        keywords: item.keywords,
+        scope: item.scope,
+        weight: item.weight ?? 'core',
+        locked: item.locked ?? true
+      })
+      setProposal(trimProposal({
+        ...current,
+        constraintCreates: removeProposalItemAt(current.constraintCreates, index)
+      }))
+      message.success(`已写回：${item.title}`)
+      return true
+    }
+
+    if (file.kind === 'worldview' && file.action === 'create') {
+      const index = parseProposalDiffIndex(file.id, 'worldview-create')
+      const item = current.worldviewCreates[index]
+      if (!item) return false
+      appStore.createWorldviewEntry({ type: item.type, title: item.title, content: item.content })
+      setProposal(trimProposal({
+        ...current,
+        worldviewCreates: removeProposalItemAt(current.worldviewCreates, index)
+      }))
+      message.success(`已写回：${item.title}`)
+      return true
+    }
+
+    if (file.kind === 'worldview' && file.action === 'update') {
+      const index = parseProposalDiffIndex(file.id, 'worldview-update')
+      const item = current.worldviewUpdates[index]
+      const target = item ? resolveWorldviewTarget(item, index) : null
+      if (!item || !target) return false
+      appStore.updateWorldviewEntry(target.id, { type: item.type, title: item.title, content: item.content })
+      const { [worldviewUpdateKey(index, item.matchTitle)]: _removed, ...remainingTargets } = worldviewTargetMap.value
+      worldviewTargetMap.value = remainingTargets
+      setProposal(trimProposal({
+        ...current,
+        worldviewUpdates: removeProposalItemAt(current.worldviewUpdates, index)
+      }))
+      message.success(`已写回：${item.title || target.title}`)
+      return true
+    }
+
+    if (file.kind === 'character' && file.action === 'create') {
+      const index = parseProposalDiffIndex(file.id, 'character-create')
+      const item = current.characterCreates[index]
+      if (!item) return false
+      appStore.createCharacter({
+        name: item.name,
+        role: item.role,
+        description: item.description,
+        tags: item.tags.map((label) => ({ label }))
+      })
+      setProposal(trimProposal({
+        ...current,
+        characterCreates: removeProposalItemAt(current.characterCreates, index)
+      }))
+      message.success(`已写回：${item.name}`)
+      return true
+    }
+
+    if (file.kind === 'character' && file.action === 'update') {
+      const index = parseProposalDiffIndex(file.id, 'character-update')
+      const item = current.characterUpdates[index]
+      const target = item ? resolveCharacterTarget(item, index) : null
+      if (!item || !target) return false
+      appStore.updateCharacter(target.id, {
+        name: item.name,
+        role: item.role,
+        description: item.description,
+        tags: item.tags?.map((label) => ({ label }))
+      })
+      const { [characterUpdateKey(index, item.matchName)]: _removed, ...remainingTargets } = characterTargetMap.value
+      characterTargetMap.value = remainingTargets
+      setProposal(trimProposal({
+        ...current,
+        characterUpdates: removeProposalItemAt(current.characterUpdates, index)
+      }))
+      message.success(`已写回：${item.name || target.name}`)
+      return true
+    }
+
+    if (file.kind === 'outline' && file.action === 'create') {
+      const index = parseProposalDiffIndex(file.id, 'outline-create')
+      const item = current.outlineCreates[index]
+      if (!item) return false
+      appStore.createOutlineItem({
+        title: item.title,
+        wordTarget: item.wordTarget,
+        conflict: item.conflict,
+        summary: item.summary,
+        status: 'planned'
+      })
+      setProposal(trimProposal({
+        ...current,
+        outlineCreates: removeProposalItemAt(current.outlineCreates, index)
+      }))
+      message.success(`已写回：${item.title}`)
+      return true
+    }
+
+    if (file.kind === 'outline' && file.action === 'update') {
+      const index = parseProposalDiffIndex(file.id, 'outline-update')
+      const item = current.outlineUpdates[index]
+      const target = item ? resolveOutlineTarget(item, index) : null
+      if (!item || !target) return false
+      appStore.updateOutlineItem(target.id, {
+        title: item.title,
+        wordTarget: item.wordTarget,
+        conflict: item.conflict,
+        summary: item.summary
+      })
+      const { [outlineUpdateKey(index, item.matchTitle)]: _removed, ...remainingTargets } = outlineTargetMap.value
+      outlineTargetMap.value = remainingTargets
+      setProposal(trimProposal({
+        ...current,
+        outlineUpdates: removeProposalItemAt(current.outlineUpdates, index)
+      }))
+      message.success(`已写回：${item.title || target.title}`)
+      return true
+    }
+
+    return false
   }
 
   function applyAllProposal(): void {
@@ -1021,16 +1382,16 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
           userPrompt: prompt,
           enabledContextModules: ['worldview', 'characters', 'organizations', 'relationships', 'outline', 'plotThreads', 'inspiration', 'knowledge', 'workflowDocuments', 'projectConstraints'],
           recentMessages: appStore.messages.slice(0, -2).slice(-8).map((item) => ({ role: item.role, content: item.content })),
-          worldviewEntries: appStore.worldviewEntries.slice(0, 4),
-          characters: appStore.characters.slice(0, 4),
-          organizations: appStore.organizations.slice(0, 3),
-          characterRelationships: appStore.characterRelationships.slice(0, 6),
-          inspirationEntries: appStore.inspirationEntries.slice(0, 4),
-          outlineItems: appStore.outlineItems.slice(0, 6),
-          plotThreads: appStore.plotThreads.slice(0, 4),
-          workflowDocuments: appStore.workflowDocuments.slice(0, 2).map((item) => ({ title: item.title, content: item.content.slice(0, 160) })),
-          knowledgeDocuments: appStore.knowledgeDocuments.slice(0, 4).map((item) => ({ title: item.title, summary: item.summary, sourceLabel: item.sourceLabel })),
-          projectConstraints: appStore.projectConstraints.slice(0, 4).map((item) => ({ title: item.title, content: item.content, metadata: item.metadata })),
+          worldviewEntries: appStore.worldviewEntries.slice(0, 24),
+          characters: appStore.characters.slice(0, 24),
+          organizations: appStore.organizations.slice(0, 16),
+          characterRelationships: appStore.characterRelationships.slice(0, 36),
+          inspirationEntries: appStore.inspirationEntries.slice(0, 16),
+          outlineItems: appStore.outlineItems.slice(0, 48),
+          plotThreads: appStore.plotThreads.slice(0, 20),
+          workflowDocuments: appStore.workflowDocuments.slice(0, 6).map((item) => ({ title: item.title, content: item.content.slice(0, 1200) })),
+          knowledgeDocuments: appStore.knowledgeDocuments.slice(0, 24).map((item) => ({ title: item.title, summary: item.summary, content: item.content.slice(0, 800), sourceLabel: item.sourceLabel, metadata: item.metadata })),
+          projectConstraints: appStore.projectConstraints.slice(0, 24).map((item) => ({ title: item.title, content: item.content, summary: item.summary, keywords: item.keywords, metadata: item.metadata })),
           projectSkills: project.projectSkills.filter((item) => item.enabled)
         }
       }))
@@ -1095,6 +1456,9 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     outlineTargetMap,
     messages,
     proposal,
+    proposalDiffFiles,
+    proposalDiffPatch,
+    proposalDiffStats,
     lastProposalPrompt,
     lastAssistantReply,
     sessions,
@@ -1133,6 +1497,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     applyWorldviewProposal,
     applyCharacterProposal,
     applyOutlineProposal,
+    applyProposalDiffFile,
     applyAllProposal,
     clearProposal,
     setProposal,

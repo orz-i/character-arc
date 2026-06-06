@@ -57,8 +57,8 @@ function formatWorkflowDocuments(source: unknown): string {
   return source
     .map((item) => item as Record<string, unknown>)
     .filter((item) => String(item.content ?? '').trim())
-    .slice(0, 3)
-    .map((item) => `${truncateText(item.title, 40)}：${truncateText(item.content, 180)}`)
+    .slice(0, 6)
+    .map((item) => `${truncateText(item.title, 40)}：${truncateText(item.content, 1200)}`)
     .join('\n')
 }
 
@@ -69,12 +69,14 @@ function formatKnowledgeDocuments(source: unknown): string {
 
   return source
     .map((item) => item as Record<string, unknown>)
-    .slice(0, 5)
+    .slice(0, 12)
     .map((item, index) => {
       const title = String(item.title ?? '').trim() || `知识条目${index + 1}`
-      const summary = String(item.summary ?? '').trim() || String(item.content ?? '').trim().slice(0, 100)
+      const summary = String(item.summary ?? '').trim() || String(item.content ?? '').trim().slice(0, 300)
+      const content = String(item.content ?? '').trim()
       const sourceLabel = String(item.sourceLabel ?? '').trim()
-      return `${truncateText(title, 40)}${sourceLabel ? ` / ${truncateText(sourceLabel, 36)}` : ''}：${truncateText(summary, 120)}`
+      const body = content ? `${summary}\n${truncateText(content, 700)}` : summary
+      return `${truncateText(title, 40)}${sourceLabel ? ` / ${truncateText(sourceLabel, 36)}` : ''}：${truncateText(body, 900)}`
     })
     .join('\n')
 }
@@ -86,13 +88,16 @@ function formatProjectConstraints(source: unknown): string {
 
   return source
     .map((item) => item as Record<string, unknown>)
-    .slice(0, 8)
+    .slice(0, 24)
     .map((item) => {
       const title = truncateText(item.title, 40)
-      const content = truncateText(item.content, 160)
+      const content = truncateText(item.content, 420)
       const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata as Record<string, unknown> : {}
       const scope = truncateText(metadata.scope, 24)
-      return `${title}${scope ? ` / ${scope}` : ''}：${content}`
+      const weight = truncateText(metadata.weight, 16)
+      const locked = metadata.locked === false ? 'unlocked' : 'locked'
+      const meta = [scope, weight, locked].filter(Boolean).join(' / ')
+      return `${title}${meta ? ` / ${meta}` : ''}：${content}`
     })
     .filter(Boolean)
     .join('\n')
@@ -118,18 +123,18 @@ const handler: TaskHandler = {
   buildPrompt(input: PromptBuildInput) {
     const { context, capabilityPreamble, skillsBlock, knowledgeBlock } = input
     const mode = String(context.assistantMode ?? 'ingest')
-    const retrievalBlock = knowledgeBlock ? `\n\n检索到的项目记忆与参考资料：\n${truncateText(knowledgeBlock, 1200)}` : ''
+    const retrievalBlock = knowledgeBlock ? `\n\n检索到的项目记忆与参考资料：\n${truncateText(knowledgeBlock, 2400)}` : ''
     const skillsSummary = skillsBlock ? truncateText(skillsBlock, 1000) : ''
-    const worldviewEntries = takeRecords(context.worldviewEntries, 6, { content: 280, title: 60, type: 24 })
-    const characters = takeRecords(context.characters, 6, { description: 240, name: 40, role: 40 })
-    const organizations = takeRecords(context.organizations, 4, { description: 180, name: 40, type: 30, motto: 80 })
-    const characterRelationships = takeRecords(context.characterRelationships, 8, { description: 180, type: 40 })
-    const outlineItems = takeRecords(context.outlineItems, 8, { summary: 240, conflict: 120, title: 60 })
-    const plotThreads = takeRecords(context.plotThreads, 6, { description: 180, title: 60 })
-    const inspirationEntries = takeRecords(context.inspirationEntries, 5, { content: 160, title: 60, type: 24 })
+    const worldviewEntries = takeRecords(context.worldviewEntries, 24, { content: 900, title: 80, type: 32 })
+    const characters = takeRecords(context.characters, 24, { description: 700, name: 50, role: 60 })
+    const organizations = takeRecords(context.organizations, 16, { description: 500, name: 50, type: 40, motto: 120 })
+    const characterRelationships = takeRecords(context.characterRelationships, 36, { description: 360, type: 50 })
+    const outlineItems = takeRecords(context.outlineItems, 48, { summary: 650, conflict: 220, title: 80 })
+    const plotThreads = takeRecords(context.plotThreads, 20, { description: 420, title: 80 })
+    const inspirationEntries = takeRecords(context.inspirationEntries, 16, { content: 360, title: 80, type: 32 })
 
     return {
-      system: `${capabilityPreamble.system}\n\n${GLOBAL_ASSISTANT_SYSTEM}`,
+      system: `${capabilityPreamble.system}\n\n${GLOBAL_ASSISTANT_SYSTEM}\n\n补充约束：项目约束里标记为 locked 的规则、用户写明 [锁定] 的内容、以及 weight=core 的规则，均是最高优先级设定。你不能覆盖、反转、弱化它们；如果用户要求修改锁定项，只能先指出冲突并请求确认。`,
       user: `${capabilityPreamble.user}
 
 请处理当前项目级创作请求。
@@ -199,7 +204,7 @@ ${String(context.userPrompt ?? '')}
     return Boolean((result as GlobalAssistantResult).content?.trim())
   },
   resolveMaxTokens(): number {
-    return 1400
+    return 2400
   }
 }
 

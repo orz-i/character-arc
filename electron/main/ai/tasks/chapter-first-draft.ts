@@ -13,11 +13,16 @@ function formatProjectConstraints(source: unknown): string {
   if (!Array.isArray(source)) return ''
   return source
     .map((item) => item as Record<string, unknown>)
-    .slice(0, 8)
+    .slice(0, 24)
     .map((item) => {
       const title = String(item.title ?? '').trim()
-      const content = String(item.summary ?? '').trim() || String(item.content ?? '').trim()
-      return `${title}：${content}`
+      const content = String(item.content ?? '').trim() || String(item.summary ?? '').trim()
+      const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata as Record<string, unknown> : {}
+      const scope = String(metadata.scope ?? '').trim()
+      const weight = String(metadata.weight ?? '').trim()
+      const locked = metadata.locked === false ? 'unlocked' : 'locked'
+      const meta = [scope, weight, locked].filter(Boolean).join(' / ')
+      return `${title}${meta ? `（${meta}）` : ''}：${content}`
     })
     .filter(Boolean)
     .join('\n')
@@ -110,7 +115,7 @@ const handler: TaskHandler = {
     const endingsTrailBlock = formatRecentEndingsTrail(context.recentEndingsTrail)
 
     return {
-      system: `${capabilityPreamble.system}\n\n你是 CharacterArc 的章节初稿生成器。任务：基于项目设定、章节信息和上方已经规划好的写作备忘，一次性流式输出本章完整正文。
+      system: `${capabilityPreamble.system}\n\n你是 CharacterArc 的章节初稿生成器。任务：基于项目设定、章节信息和上方已经规划好的写作备忘，一次性流式输出本章完整正文。\n\n【全局设定最高优先级】\n项目级约束、locked 约束、weight=core 约束、用户标记 [锁定] 的设定，优先级高于本章灵感、临时补写和常规套路。不得覆盖、反转、弱化或绕开这些设定；人物锚点、世界规则红线和禁写项必须在生成时主动避让。
 
 【任务边界】
 - 这是"章节初稿生成"，不是润色，不是续写建议，不是分析。

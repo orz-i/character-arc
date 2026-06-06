@@ -1111,6 +1111,23 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     }
   })
 
+  // ── 提交章节编辑提案 ──
+  ipcMain.handle('characterarc:commit-chapter-edit', async (_event, payload: unknown) => {
+    try {
+      const { projectId, chapterId, oldContent, newContent } = payload as {
+        projectId: string
+        chapterId: string
+        oldContent: string
+        newContent: string
+      }
+      const { commitChapterEdit } = await import('./ai/agent/tools/chapter-data-access')
+      const result = await commitChapterEdit(projectId, chapterId, oldContent, newContent)
+      return { success: true, versionId: result.versionId }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '写回失败' }
+    }
+  })
+
   // ── 检查更新（GitHub Release API） ──
   ipcMain.handle('characterarc:check-update', async () => {
     try {
@@ -1211,11 +1228,24 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     }
   })
 
-  ipcMain.handle('characterarc:session-save', async (_event, payload: { id: string; projectId: string; title: string; messages: unknown[] }) => {
+  ipcMain.handle('characterarc:session-save', async (_event, payload: {
+    id: string
+    projectId: string
+    title: string
+    messages: unknown[]
+    proposal?: unknown | null
+    lastProposalPrompt?: string
+    lastAssistantReply?: string
+  }) => {
     try {
       const db = await deps.ensureWorkspaceDb()
       const now = new Date().toISOString()
-      const messagesJson = JSON.stringify({ messages: payload.messages })
+      const messagesJson = JSON.stringify({
+        messages: payload.messages,
+        proposal: payload.proposal ?? null,
+        lastProposalPrompt: payload.lastProposalPrompt ?? '',
+        lastAssistantReply: payload.lastAssistantReply ?? ''
+      })
       db.prepare(
         `INSERT INTO assistant_sessions (id, project_id, title, messages_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)

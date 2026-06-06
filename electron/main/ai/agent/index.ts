@@ -33,7 +33,8 @@ const NOOP_AGENT_HANDLERS: AiAgentStreamHandlers = {
   onToolUseStart: () => {},
   onToolResult: () => {},
   onAgentStatus: () => {},
-  onEditApplied: () => {}
+  onEditApplied: () => {},
+  onEditProposed: () => {}
 }
 
 export async function runAgentTask(

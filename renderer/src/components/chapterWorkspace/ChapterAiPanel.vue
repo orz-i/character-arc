@@ -6,6 +6,7 @@ import ChapterAiMessages from './ChapterAiMessages.vue'
 import ChapterAiInput from './ChapterAiInput.vue'
 import ChapterFirstDraftDialog from './ChapterFirstDraftDialog.vue'
 import ChapterThreadDetectDialog from './ChapterThreadDetectDialog.vue'
+import GlobalAssistantDiffReviewDialog from '@/components/GlobalAssistantDiffReviewDialog.vue'
 import { useChapterAi } from './useChapterAi'
 import { useChapterFirstDraft } from './useChapterFirstDraft'
 import { useChapterThreadDetect } from './useChapterThreadDetect'
@@ -28,7 +29,7 @@ const showSessionList = ref(false)
 const showCommandPanel = ref(false)
 const showContextPanel = ref(false)
 
-const { messages, isResponding, agentStatus, hasSelection, selectedText, enabledContextModules, toggleContextModule, currentSessionId, sessions, send, stop, resetMessages, newSession, saveCurrentSession, loadSession, deleteSession, refreshSessions, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream } = useChapterAi()
+const { messages, isResponding, agentStatus, hasSelection, selectedText, enabledContextModules, toggleContextModule, currentSessionId, sessions, send, stop, resetMessages, newSession, saveCurrentSession, loadSession, deleteSession, refreshSessions, applyToChapter, registerStreamListener: registerChatStream, unregisterStreamListener: unregisterChatStream, showDiffReview, pendingEditProposals, proposalDiffFiles, proposalDiffPatch, proposalDiffStats, acceptEditProposal, acceptAllEditProposals, rejectEditProposal, clearEditProposals } = useChapterAi()
 
 const draft = useChapterFirstDraft()
 const detect = useChapterThreadDetect()
@@ -358,6 +359,18 @@ onBeforeUnmount(() => {
       :detected="detect.detected.value"
       @update:show="(v) => (detect.modalVisible.value = v)"
       @confirm="() => { const count = detect.confirmAdd(); if (count === 0) message.warning('请至少选择一条线索'); else message.success(`已添加 ${count} 条剧情线索`) }"
+    />
+
+    <GlobalAssistantDiffReviewDialog
+      v-model:show="showDiffReview"
+      summary="AI 章节编辑审查"
+      :patch="proposalDiffPatch"
+      :files="proposalDiffFiles"
+      :stats="proposalDiffStats"
+      @apply-file="acceptEditProposal"
+      @apply-all="acceptAllEditProposals"
+      @regenerate="clearEditProposals"
+      @clear="clearEditProposals"
     />
   </aside>
 </template>

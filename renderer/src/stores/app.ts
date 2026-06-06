@@ -1116,6 +1116,7 @@ export const useAppStore = defineStore('app', () => {
     summary?: string
     keywords?: string[]
     scope?: string
+    weight?: 'core' | 'important' | 'supporting'
     locked?: boolean
   }): void {
     const title = String(payload.title ?? '').trim()
@@ -1143,7 +1144,9 @@ export const useAppStore = defineStore('app', () => {
       metadata: {
         ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
         scope: String(payload.scope ?? '').trim() || String(existing?.metadata?.scope ?? '').trim() || 'project',
-        locked: payload.locked ?? existing?.metadata?.locked ?? true
+        weight: payload.weight ?? existing?.metadata?.weight ?? 'core',
+        locked: payload.locked ?? existing?.metadata?.locked ?? true,
+        source: 'global-assistant'
       },
       createdAt: existing?.createdAt || now,
       updatedAt: now
@@ -2589,6 +2592,9 @@ export const useAppStore = defineStore('app', () => {
       updatedAt: new Date().toISOString()
     })))
     schedulePersist('fast')
+    if (payload.proposal !== undefined) {
+      void persistWorkspace()
+    }
   }
 
   function clearAssistantMessages(): void {
