@@ -4,6 +4,22 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.9.1] - 2026-06-10
+
+### Added
+
+- **实体编辑弹窗左右分栏**：角色、世界观、大纲、灵感和剧情线等实体编辑弹窗升级为左右分栏布局，左侧承载分组导航与上下文提示，右侧集中编辑核心字段，降低长表单滚动与定位成本
+
+### Changed
+
+- **安装包体积配置优化**：完善 Electron Builder 打包排除规则，过滤源码、文档、示例、测试、map、TypeScript 声明等发布无关文件，并补充 afterPack 清理流程，减少安装包冗余体积
+
+### Fixed
+
+- **智谱 GLM 接口兼容**：修复智谱官方 Base URL 被统一追加 `/v1` 后无法连接的问题；新增智谱 GLM 预设，默认使用 `https://open.bigmodel.cn/api/paas/v4` 和 `glm-5.1`，并兼容智谱模型列表 `/models` 路径
+
+[1.9.1]: https://github.com/zhouyeshan/character-arc/releases/tag/v1.9.1
+
 ## [1.9.0] - 2026-06-08
 
 ### Added
