@@ -628,6 +628,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
       cover_history_json AS coverHistoryJson,
       writing_style_preset_id AS writingStylePresetId,
       writing_style_prompt AS writingStylePrompt,
+      reference_works_json AS referenceWorksJson,
       novel_workflow_stages_json AS novelWorkflowStagesJson,
       project_skills_json AS projectSkillsJson,
       chapter_assistant_templates_json AS chapterAssistantTemplatesJson
@@ -636,6 +637,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   `).all() as Array<
     Omit<WorkspacePayload['projects'][number], 'chapterAssistantTemplates' | 'novelWorkflowStages' | 'projectSkills' | 'coverHistory' | 'selectedReferenceWorkIds'> & {
       coverHistoryJson?: string
+      referenceWorksJson?: string
       chapterAssistantTemplatesJson?: string
       novelWorkflowStagesJson?: string
       projectSkillsJson?: string
@@ -646,6 +648,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     normalizeProjectRecord({
       ...project,
       coverHistory: parseJson(project.coverHistoryJson, []),
+      selectedReferenceWorkIds: parseJson(project.referenceWorksJson, [] as string[]),
       novelWorkflowStages: parseJson(project.novelWorkflowStagesJson, []),
       projectSkills: parseJson(project.projectSkillsJson, []),
       chapterAssistantTemplates: parseJson(project.chapterAssistantTemplatesJson, [])
@@ -700,12 +703,13 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
     }>
 
     const knowledgeDocuments = db.prepare(`
-      SELECT id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
+      SELECT id, project_id AS projectId, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
         keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
       FROM knowledge_documents
       ORDER BY created_at DESC, rowid DESC
     `).all().map((row) => ({
       id: row.id as string,
+      projectId: row.projectId as string,
       title: row.title as string,
       sourceType: row.sourceType as KnowledgeDocumentSourceType,
       sourceLabel: row.sourceLabel as string,
@@ -896,12 +900,13 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   }>
 
   const knowledgeDocuments = db.prepare(`
-    SELECT id, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
+    SELECT id, project_id AS projectId, title, source_type AS sourceType, source_label AS sourceLabel, content, summary,
       keywords_json AS keywordsJson, metadata_json AS metadataJson, created_at AS createdAt, updated_at AS updatedAt
     FROM knowledge_documents
     ORDER BY created_at DESC, rowid DESC
   `).all().map((row) => ({
     id: row.id as string,
+    projectId: row.projectId as string,
     title: row.title as string,
     sourceType: row.sourceType as KnowledgeDocumentSourceType,
     sourceLabel: row.sourceLabel as string,
@@ -1218,7 +1223,7 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
         project.cover,
         project.targetPlatform,
         JSON.stringify(project.coverHistory ?? []),
-        '[]',
+        JSON.stringify(project.selectedReferenceWorkIds ?? []),
         project.writingStylePresetId,
         project.writingStylePrompt,
         JSON.stringify(project.novelWorkflowStages ?? []),

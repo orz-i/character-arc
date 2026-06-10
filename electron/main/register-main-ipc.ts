@@ -11,6 +11,15 @@ import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntr
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
 import { getWorkspaceDirPath } from './workspace-store'
+import {
+  exportProjectArchive,
+  getProjectArchiveDefaultName,
+  importProjectArchive,
+  inspectProjectArchive,
+  type ProjectArchiveImportMode,
+  type ProjectArchiveModule
+} from './archive/project-archive'
+import type { WorkspacePayload } from './workspace-types'
 import type { WindowManager } from './window-manager'
 
 type ReferenceNovelImportRequest = {
@@ -91,6 +100,13 @@ type ExportRequest = {
   defaultPath?: string
 }
 
+type ProjectArchiveImportRequest = {
+  filePath?: string
+  mode?: ProjectArchiveImportMode
+  targetProjectId?: string
+  modules?: ProjectArchiveModule[]
+}
+
 async function cleanupOrphanReferenceNovelFiles(payload: unknown): Promise<void> {
   const activeIds = new Set<string>()
   const works = (payload as { referenceWorks?: Array<{ id?: unknown }> })?.referenceWorks ?? []
@@ -140,6 +156,106 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       success: true,
       canceled: false,
       filePath: result.filePath
+    }
+  })
+
+  ipcMain.handle('characterarc:export-project-archive', async (_event, payload: unknown) => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const request = (payload ?? {}) as { projectId?: string; projectTitle?: string }
+    const projectId = String(request.projectId ?? '').trim()
+    if (!projectId) {
+      return { success: false, canceled: false, error: '缺少要导出的项目 ID。' }
+    }
+
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出项目归档包',
+      defaultPath: getProjectArchiveDefaultName(String(request.projectTitle ?? 'CharacterArc 项目')),
+      filters: [{ name: 'CharacterArc 项目归档', extensions: ['carc'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true }
+    }
+
+    try {
+      const db = await deps.ensureWorkspaceDb()
+      await exportProjectArchive({
+        db,
+        filePath: result.filePath,
+        projectId,
+        readWorkspaceSnapshot: deps.readWorkspaceSnapshot as (db: DatabaseSync) => WorkspacePayload | null
+      })
+      return { success: true, canceled: false, filePath: result.filePath }
+    } catch (error) {
+      return {
+        success: false,
+        canceled: false,
+        error: error instanceof Error ? error.message : '导出项目归档失败'
+      }
+    }
+  })
+
+  ipcMain.handle('characterarc:inspect-project-archive', async () => {
+    const window = deps.windowManager.getActiveWindow()
+    if (!window) {
+      return { success: false, canceled: true }
+    }
+
+    const result = await dialog.showOpenDialog(window, {
+      title: '选择项目归档包',
+      properties: ['openFile'],
+      filters: [{ name: 'CharacterArc 项目归档', extensions: ['carc'] }]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+
+    try {
+      const preview = await inspectProjectArchive(result.filePaths[0])
+      return { success: true, canceled: false, filePath: result.filePaths[0], preview }
+    } catch (error) {
+      return {
+        success: false,
+        canceled: false,
+        error: error instanceof Error ? error.message : '无法读取项目归档包'
+      }
+    }
+  })
+
+  ipcMain.handle('characterarc:import-project-archive', async (_event, payload: unknown) => {
+    const request = (payload ?? {}) as ProjectArchiveImportRequest
+    const filePath = String(request.filePath ?? '').trim()
+    if (!filePath) {
+      return { success: false, canceled: false, error: '缺少要导入的项目归档文件。' }
+    }
+
+    try {
+      const db = await deps.ensureWorkspaceDb()
+      const result = await importProjectArchive({
+        db,
+        filePath,
+        mode: request.mode ?? 'new-project',
+        targetProjectId: request.targetProjectId,
+        modules: request.modules,
+        readWorkspaceSnapshot: deps.readWorkspaceSnapshot as (db: DatabaseSync) => WorkspacePayload | null,
+        writeWorkspaceSnapshot: deps.writeWorkspaceSnapshot as (db: DatabaseSync, payload: WorkspacePayload) => void
+      })
+      const workspace = deps.readWorkspaceSnapshot(db)
+      if (workspace) {
+        deps.setLatestWorkspaceSnapshot(workspace)
+      }
+      return { success: true, canceled: false, selectedProjectId: result.selectedProjectId }
+    } catch (error) {
+      return {
+        success: false,
+        canceled: false,
+        error: error instanceof Error ? error.message : '导入项目归档失败'
+      }
     }
   })
 

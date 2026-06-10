@@ -5,6 +5,7 @@ import { createDefaultWorkflowDocuments } from '@/features/novelWorkflow/documen
 import { createDefaultNovelWorkflowStages } from '@/features/novelWorkflow/stages'
 import { DEFAULT_CHAPTER_WORD_TARGET, normalizeChapterWordTarget } from '@/features/chapters/wordTarget'
 import { formatProjectWordCount } from '@/features/projects/wordCount'
+import { createProjectEditedAt } from '@/features/projects/lastEdited'
 import {
   buildVolumeGroups,
   createOutlineVolume as createWorkspaceVolume
@@ -573,7 +574,7 @@ export const useAppStore = defineStore('app', () => {
       genre: payload.project?.genre?.trim() || '未分类',
       novelLength: payload.project?.novelLength === 'short' ? 'short' : 'long',
       wordCount: formatProjectWordCount(importedWorkspace.chapters),
-      lastEdited: '刚刚导入',
+      lastEdited: createProjectEditedAt(),
       cover: payload.project?.cover || 'linear-gradient(135deg, #9be15d 0%, #00e3ae 100%)',
       writingStylePresetId: payload.project?.writingStylePresetId?.trim() || 'cinematic-cool',
       writingStylePrompt: payload.project?.writingStylePrompt?.trim() || '',
@@ -935,7 +936,7 @@ export const useAppStore = defineStore('app', () => {
       genre: payload.project.genre,
       novelLength: payload.project.novelLength,
       wordCount: computedWordCount,
-      lastEdited: '刚刚创建',
+      lastEdited: createProjectEditedAt(),
       cover: payload.project.cover || 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)',
       writingStylePresetId: payload.project.writingStylePresetId?.trim() || 'cinematic-cool',
       writingStylePrompt: payload.project.writingStylePrompt?.trim() || '',
@@ -1014,7 +1015,7 @@ export const useAppStore = defineStore('app', () => {
             title: payload.title?.trim() || project.title,
             genre: payload.genre?.trim() || project.genre,
             novelLength: payload.novelLength !== undefined ? payload.novelLength : project.novelLength,
-            lastEdited: payload.lastEdited?.trim() || '刚刚更新',
+            lastEdited: payload.lastEdited?.trim() || createProjectEditedAt(),
             cover: payload.cover || project.cover,
             writingStylePresetId: payload.writingStylePresetId?.trim() || project.writingStylePresetId,
             writingStylePrompt:

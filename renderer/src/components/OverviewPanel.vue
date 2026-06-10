@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { BookCopy, Clock3, FileText, GitMerge, Lightbulb, Network, Sparkles, Users } from 'lucide-vue-next'
 import { getChapterCharacterCount, getChapterPreviewText } from '@/features/chapters/editorContent'
+import { formatProjectEditedAt } from '@/features/projects/lastEdited'
 import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import { useAppStore } from '@/stores/app'
 import type { PanelName } from '@/types/app'
@@ -198,7 +199,7 @@ function openEntry(type: string, title: string): void {
       </div>
       <div class="status-chip">
         <Clock3 :size="14" />
-        <span>{{ currentProject?.lastEdited ?? '刚刚更新' }}</span>
+        <span>{{ formatProjectEditedAt(currentProject?.lastEdited) }}</span>
       </div>
     </div>
 

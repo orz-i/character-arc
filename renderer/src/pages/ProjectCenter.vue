@@ -7,6 +7,7 @@ import HomepageAnnouncementModal from '@/components/home/HomepageAnnouncementMod
 import HomepageUpdateModal from '@/components/home/HomepageUpdateModal.vue'
 import HomepageProjectCollection from '@/components/home/HomepageProjectCollection.vue'
 import HomepageSettingsModal from '@/components/home/HomepageSettingsModal.vue'
+import ProjectArchiveImportModal from '@/components/ProjectArchiveImportModal.vue'
 import ProjectEditorModal from '@/components/home/ProjectEditorModal.vue'
 import { useAppStore } from '@/stores/app'
 import { useStartupCheck } from '@/composables/useStartupCheck'
@@ -22,6 +23,9 @@ const editorVisible = ref(false)
 const announcementVisible = ref(false)
 const updateVisible = ref(false)
 const editingProject = ref<ProjectSummary | null>(null)
+const archiveImportRef = ref<{
+  pickArchive: () => Promise<void>
+} | null>(null)
 
 const projectMenuOptions = computed(() => [
   {
@@ -151,6 +155,7 @@ function requestDeleteProject(projectId: string): void {
         :announcement-status="announcementStatus"
         :update-status="updateStatus"
         @create="appStore.openWizard()"
+        @import="archiveImportRef?.pickArchive()"
         @open-deconstruction="openDeconstructionLibrary"
         @open-cover-workbench="openCoverWorkbenchPage"
         @open-skills="openSkillsPage"
@@ -175,6 +180,7 @@ function requestDeleteProject(projectId: string): void {
     />
 
     <HomepageSettingsModal v-model:show="settingsVisible" />
+    <ProjectArchiveImportModal ref="archiveImportRef" />
     <HomepageAnnouncementModal v-model:show="announcementVisible" @loaded="markAnnouncementRead" />
     <HomepageUpdateModal v-model:show="updateVisible" />
   </section>

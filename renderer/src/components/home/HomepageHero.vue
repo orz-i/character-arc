@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, ImagePlus, LibraryBig, Plus, RefreshCw, Settings2, Wrench } from 'lucide-vue-next'
+import { Bell, ImagePlus, LibraryBig, Plus, RefreshCw, Settings2, Upload, Wrench } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 import type { StatusIndicator } from '@/composables/useStartupCheck'
 
@@ -10,6 +10,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'create'): void
+  (e: 'import'): void
   (e: 'openDeconstruction'): void
   (e: 'openCoverWorkbench'): void
   (e: 'openSkills'): void
@@ -54,6 +55,10 @@ const emit = defineEmits<{
       <n-button type="primary" size="large" class="create-btn" @click="emit('create')">
         <template #icon><Plus :size="20" /></template>
         新建作品
+      </n-button>
+      <n-button size="large" class="import-btn" @click="emit('import')">
+        <template #icon><Upload :size="19" /></template>
+        导入
       </n-button>
     </div>
   </header>
@@ -143,6 +148,12 @@ const emit = defineEmits<{
   box-shadow: 0 2px 8px color-mix(in srgb, var(--arc-primary) 18%, transparent);
 }
 
+.import-btn {
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  padding: 0 16px !important;
+}
+
 @media (max-width: 720px) {
   .homepage-hero {
     align-items: stretch;
@@ -159,7 +170,8 @@ const emit = defineEmits<{
     justify-content: center;
   }
 
-  .create-btn {
+  .create-btn,
+  .import-btn {
     flex: 1;
     justify-content: center;
   }

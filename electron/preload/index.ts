@@ -28,6 +28,12 @@ contextBridge.exposeInMainWorld('characterArc', {
   pickCoverImage: () => ipcRenderer.invoke('characterarc:pick-cover-image'),
   /** 将当前项目导出为 JSON 文件 */
   exportJson: (payload: unknown) => ipcRenderer.invoke('characterarc:export-json', toIpcPayload(payload)),
+  /** 将当前项目导出为 .carc 项目归档包 */
+  exportProjectArchive: (payload: unknown) => ipcRenderer.invoke('characterarc:export-project-archive', toIpcPayload(payload)),
+  /** 选择并预览 .carc 项目归档包 */
+  inspectProjectArchive: () => ipcRenderer.invoke('characterarc:inspect-project-archive'),
+  /** 按指定模式导入 .carc 项目归档包 */
+  importProjectArchive: (payload: unknown) => ipcRenderer.invoke('characterarc:import-project-archive', toIpcPayload(payload)),
   /** 将当前项目导出为纯文本文件 */
   exportText: (payload: unknown) => ipcRenderer.invoke('characterarc:export-text', toIpcPayload(payload)),
   /** 将单个章节导出为 TXT */

@@ -14,6 +14,35 @@ declare global {
     isLegacy: boolean
   }
 
+  type CharacterArcProjectArchiveModule =
+    | 'project'
+    | 'worldview'
+    | 'characters'
+    | 'relations'
+    | 'inspiration'
+    | 'outline'
+    | 'plotThreads'
+    | 'chapters'
+    | 'chapterVersions'
+    | 'workflowDocuments'
+    | 'knowledgeDocuments'
+    | 'referenceWorks'
+    | 'aiRuns'
+    | 'assistantSessions'
+    | 'referenceNovelAssets'
+
+  type CharacterArcProjectArchiveImportMode = 'new-project' | 'overwrite-project'
+
+  type CharacterArcProjectArchivePreview = {
+    filePath: string
+    archiveVersion: string
+    appVersion: string
+    projectId: string
+    projectTitle: string
+    exportedAt: string
+    modules: Record<string, { count: number }>
+  }
+
   type CharacterArcAiStreamEvent =
     | {
         streamId: string
@@ -333,6 +362,30 @@ declare global {
         success: boolean
         canceled: boolean
         filePath?: string
+      }>
+      exportProjectArchive: (payload: { projectId: string; projectTitle?: string }) => Promise<{
+        success: boolean
+        canceled: boolean
+        filePath?: string
+        error?: string
+      }>
+      inspectProjectArchive: () => Promise<{
+        success: boolean
+        canceled: boolean
+        filePath?: string
+        preview?: CharacterArcProjectArchivePreview
+        error?: string
+      }>
+      importProjectArchive: (payload: {
+        filePath: string
+        mode: CharacterArcProjectArchiveImportMode
+        targetProjectId?: string
+        modules?: CharacterArcProjectArchiveModule[]
+      }) => Promise<{
+        success: boolean
+        canceled: boolean
+        selectedProjectId?: string
+        error?: string
       }>
       exportText: (payload: CharacterArcExportRequest | unknown) => Promise<{
         success: boolean

@@ -3,6 +3,7 @@ import { Clock4, MoreHorizontal } from 'lucide-vue-next'
 import type { DropdownOption } from 'naive-ui'
 import { NDropdown } from 'naive-ui'
 import { isImageCover, resolveCoverStyle } from '@/features/cover/display'
+import { formatProjectEditedAt } from '@/features/projects/lastEdited'
 import { resolveNovelLengthLabel } from '@/features/wizard/projectGenres'
 import type { ProjectSummary } from '@/types/app'
 
@@ -36,7 +37,7 @@ const emit = defineEmits<{
           <span class="card-tag">{{ project.genre }}</span>
           <span class="card-tag">{{ resolveNovelLengthLabel(project.novelLength) }}</span>
         </div>
-        <p class="card-meta">最近编辑：{{ project.lastEdited }}</p>
+        <p class="card-meta">最近编辑：{{ formatProjectEditedAt(project.lastEdited) }}</p>
       </div>
 
       <n-dropdown

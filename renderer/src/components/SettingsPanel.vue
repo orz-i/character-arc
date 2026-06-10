@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Moon, Network, PenTool, Save, Users } from 'lucide-vue-next'
+import { Archive, Download, FileJson, FileStack, FileText, FolderOutput, Lightbulb, Moon, Network, PenTool, Save, Upload, Users } from 'lucide-vue-next'
 import { NButton, NCard, NFormItem, NInput, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
 import { getPlainTextFromEditorContent } from '@/features/chapters/editorContent'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { buildProjectWritingStyleContext, writingStylePresets } from '@/features/writingStyles/presets'
+import ProjectArchiveImportModal from '@/components/ProjectArchiveImportModal.vue'
 import { useAppStore } from '@/stores/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 import type {
@@ -20,6 +21,11 @@ const importConflictMode = ref<ImportConflictMode>('copy')
 const importModalVisible = ref(false)
 const pendingImportPayload = ref<ProjectImportPayload | null>(null)
 const pendingImportMeta = ref<CharacterArcImportMeta | null>(null)
+const archiveImportRef = ref<{
+  pickArchive: () => Promise<void>
+  isInspectingArchive: boolean
+} | null>(null)
+const isExportingArchive = ref(false)
 const draftWritingStylePresetId = ref('')
 const draftWritingStylePrompt = ref('')
 
@@ -92,6 +98,30 @@ function buildExportEnvelope(moduleType: ImportExportModuleType, data: ProjectIm
     compatibilityNote: '2.x 导出文件可直接导入当前版本；1.x 旧导出会按兼容模式解析，并默认按完整项目导入。',
     exportedAt: new Date().toISOString(),
     data
+  }
+}
+
+// 导出 .carc 归档：只传项目 ID，主进程直接从 SQLite 读取并打包，避免大项目数据走 IPC。
+async function handleExportProjectArchive(): Promise<void> {
+  const project = appStore.currentProject
+  if (!project?.id) {
+    message.warning('请先打开一个项目再导出归档')
+    return
+  }
+
+  isExportingArchive.value = true
+  try {
+    const result = await window.characterArc.exportProjectArchive({
+      projectId: project.id,
+      projectTitle: project.title
+    })
+    if (result.success) {
+      message.success('项目归档包已导出')
+    } else if (!result.canceled) {
+      message.error(result.error ?? '导出项目归档失败')
+    }
+  } finally {
+    isExportingArchive.value = false
   }
 }
 
@@ -387,17 +417,29 @@ watch(
           />
         </div>
         <div class="setting-actions">
+          <n-button type="primary" round strong :loading="isExportingArchive" @click="handleExportProjectArchive">
+            <template #icon>
+              <Archive :size="16" />
+            </template>
+            导出项目归档 .carc
+          </n-button>
+          <n-button round strong :loading="archiveImportRef?.isInspectingArchive" @click="archiveImportRef?.pickArchive()">
+            <template #icon>
+              <Upload :size="16" />
+            </template>
+            导入项目归档 .carc
+          </n-button>
           <n-button round strong @click="handleImportJson">
             <template #icon>
               <Download :size="16" />
             </template>
-            导入 JSON
+            导入 JSON（兼容）
           </n-button>
           <n-button round strong @click="handleExportJson">
             <template #icon>
               <FolderOutput :size="16" />
             </template>
-            导出项目为 JSON
+            导出 JSON（兼容）
           </n-button>
           <n-button round strong @click="handleExportText">
             <template #icon>
@@ -532,6 +574,8 @@ watch(
         </div>
       </template>
     </n-modal>
+
+    <ProjectArchiveImportModal ref="archiveImportRef" />
   </section>
 </template>
 
