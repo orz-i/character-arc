@@ -14,6 +14,8 @@ import { createChapterTools } from './tools/chapter-tools'
 import { createProjectDataTools } from './tools/project-data-tools'
 import { buildAgentBehaviorRules, buildSkillIndex } from './system-prompt'
 import { getRecentSkillUsage, formatSkillUsageHint, recordSkillUsage } from './skill-usage-memory'
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 /** 去掉 SKILL.md 开头的 YAML frontmatter 块（--- ... ---）。 */
 function stripSkillFrontmatter(content: string): string {
@@ -90,6 +92,28 @@ export async function runStreamingAgentTask(
         return `### ${s.name}\n${body}`
       }).join('\n\n')}`
     : ''
+
+  // 章节初稿：预加载得分最高的 2 个可选 skill 的核心参考文件，免去 AI 的工具调用
+  let preloadedSkillRefsBlock = ''
+  if (task.task === 'chapter-first-draft' && optionalSkillDefs.length > 0) {
+    const topSkills = optionalSkillDefs.slice(0, 2)
+    const refParts: string[] = []
+    for (const s of topSkills) {
+      if (s.referenceFiles.length === 0) continue
+      const firstRef = s.referenceFiles[0]
+      const refPath = join(s.rootDir, firstRef)
+      try {
+        if (!existsSync(refPath)) continue
+        const refContent = readFileSync(refPath, 'utf-8').slice(0, 3000)
+        refParts.push(`### ${s.name} — ${firstRef}\n${refContent}`)
+      } catch {
+        // skip
+      }
+    }
+    if (refParts.length > 0) {
+      preloadedSkillRefsBlock = `\n\n## 预加载的写作技法参考\n\n${refParts.join('\n\n')}`
+    }
+  }
 
   const skillUsageHints = task.task === 'chapter-first-draft'
     ? await getRecentSkillUsage(projectId).then(formatSkillUsageHint).catch(() => '')
@@ -190,7 +214,7 @@ export async function runStreamingAgentTask(
       ].join('\n')
     : ''
 
-  const systemPrompt = `${prompt.system}${requiredSkillBlock}${chapterToolsBlock}${contextModulesBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}${globalAssistantRules}${chapterDraftRules}${skillUsageHints}`
+  const systemPrompt = `${prompt.system}${requiredSkillBlock}${preloadedSkillRefsBlock}${chapterToolsBlock}${contextModulesBlock}\n${buildSkillIndex(optionalSkillDefs)}\n${buildAgentBehaviorRules()}${globalAssistantRules}${chapterDraftRules}${skillUsageHints}`
 
   const skillTools = createSkillTools({
     resolveSkill: (id) => getSkillById(id, projectId || undefined),
