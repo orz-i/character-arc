@@ -133,7 +133,7 @@ function buildKnowledgeSnippet(document: WorkspaceKnowledgeDocument): string {
  */
 export function retrieveKnowledgeContext(
   task: AiTaskPayload,
-  latestWorkspaceSnapshot: { knowledgeDocuments?: WorkspaceKnowledgeDocument[]; workspaces?: Record<string, unknown> } | null
+  latestWorkspaceSnapshot: { knowledgeDocuments?: WorkspaceKnowledgeDocument[] } | null
 ): { usedKnowledge: WorkspaceAiRunKnowledgeItem[] } {
   if (!KNOWLEDGE_RETRIEVAL_TASKS.has(task.task)) {
     return { usedKnowledge: [] }
@@ -144,6 +144,7 @@ export function retrieveKnowledgeContext(
     return { usedKnowledge: [] }
   }
 
+  // 知识文档（含跨项目拆书库）统一存放在快照顶层，而非 workspaces[projectId] 下。
   const allDocuments = Array.isArray(latestWorkspaceSnapshot.knowledgeDocuments) ? latestWorkspaceSnapshot.knowledgeDocuments : []
   // 排除拆书库文档（reference-summary / reference-chunk）——这些只在用户显式选择参考书时注入
   const documents = allDocuments.filter((d) => d.sourceType !== 'reference-summary' && d.sourceType !== 'reference-chunk')

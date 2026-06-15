@@ -76,6 +76,7 @@ export type AiTaskName =
   | 'worldview-enhance'
   | 'outline-enhance'
   | 'relation-enhance'
+  | 'cover-generate'
 
 /**
  * AI 运行时注入 prompt 的知识条目。
@@ -126,6 +127,8 @@ export type AiRunMeta = {
   agentIterations?: number
   /** 走 agent loop 时，agent 通过 knowledge_save_document 工具产生的待入库知识文档。 */
   producedKnowledgeDocuments?: AiKnowledgeDocumentDraft[]
+  /** 走 global-assistant agent loop 时，通过 propose_* 工具产生的结构化写回提案草稿。 */
+  producedSettingProposal?: Partial<GlobalAssistantProposalResult>
 }
 
 /** Agent loop 中单次工具调用的追踪记录 */

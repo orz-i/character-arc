@@ -68,6 +68,8 @@ const PROPOSAL_TASK_KEY = 'global-assistant-proposal'
 const sharedIsRunningAudit = ref(false)
 const sharedIsSending = ref(false)
 const sharedIsProposalLoading = ref(false)
+/** 已被用户忽略「生成提案」提示的助手消息 id；新回复到来后会重新提示。 */
+const sharedDismissedProposalSuggestionFor = ref('')
 let sharedStreamId: string | null = null
 let sharedStreamingMessageId: string | null = null
 let sharedRemoveStreamListener: (() => void) | null = null
@@ -374,6 +376,36 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       current.notes.length
     )
   })
+
+  /** 最近一条已完成的助手回复（用于「生成提案」提示的锚点）。 */
+  const lastAssistantMessage = computed(() => {
+    const list = messages.value
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const item = list[i]
+      if (item.role === 'assistant' && item.content.trim() && !item.isError && !item.isCanceled) {
+        return item
+      }
+    }
+    return null
+  })
+
+  /**
+   * 是否在回答下方提示用户「生成提案」：仅当有已完成的助手回复、当前空闲、非审计模式、
+   * 尚无可写回提案、且该条回复未被忽略时显示。提案改由用户按需触发，不再每轮自动生成。
+   */
+  const canSuggestProposal = computed(() => {
+    if (isSending.value || isRunningAudit.value || isProposalLoading.value) return false
+    if (isAuditMode.value) return false
+    if (hasActionableProposal.value) return false
+    const last = lastAssistantMessage.value
+    if (!last) return false
+    return sharedDismissedProposalSuggestionFor.value !== last.id
+  })
+
+  function dismissProposalSuggestion(): void {
+    const last = lastAssistantMessage.value
+    sharedDismissedProposalSuggestionFor.value = last?.id ?? ''
+  }
 
   const sessions = computed(() =>
     [...appStore.globalAssistantSessions].sort((left, right) =>
@@ -978,6 +1010,12 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     await generateProposal(lastProposalPrompt.value || fallbackUser, lastAssistantReply.value || fallbackAssistant, activeSessionId.value)
   }
 
+  /** 用户点击回答下方的「生成提案」提示：先收起提示，再按当前对话生成提案。 */
+  async function generateProposalFromSuggestion(): Promise<void> {
+    dismissProposalSuggestion()
+    await regenerateProposal()
+  }
+
   function applyConstraintProposal(): void {
     const current = proposal.value
     if (!current) return
@@ -1380,7 +1418,7 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
           assistantMode: activeMode.value,
           currentPanelLabel: resolveViewLabel(),
           userPrompt: prompt,
-          enabledContextModules: ['worldview', 'characters', 'organizations', 'relationships', 'outline', 'plotThreads', 'inspiration', 'knowledge', 'workflowDocuments', 'projectConstraints'],
+          enabledContextModules: ['worldview', 'characters', 'organizations', 'relationships', 'outline', 'plotThreads', 'inspiration', 'knowledge', 'deconstructionLibrary', 'workflowDocuments', 'projectConstraints'],
           recentMessages: appStore.messages.slice(0, -2).slice(-8).map((item) => ({ role: item.role, content: item.content })),
           worldviewEntries: appStore.worldviewEntries.slice(0, 24),
           characters: appStore.characters.slice(0, 24),
@@ -1408,14 +1446,8 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
       })
       const normalizedAssistantText = assistantText.trim() || '我暂时没有整理出可靠结论，建议你补充更多上下文后重试。'
       appStore.updateAssistantMessageContent(assistantMessageId, () => normalizedAssistantText, { persistMode: 'final' })
-      if (!isAuditMode.value) {
-        const shouldCreateProposal = await shouldGenerateProposal(prompt, normalizedAssistantText)
-        if (shouldCreateProposal) {
-          void generateProposal(prompt, normalizedAssistantText, sessionId)
-        } else if (proposal.value) {
-          clearProposal()
-        }
-      }
+      // 写回提案现在由 agent loop 内的 propose_* 工具直接产出（经 ai-run-event 合并进 session.proposal），
+      // 不再在此处另起一次意图猜测 + 提案生成调用。手动「重新生成提案」按钮(regenerateProposal)与审计流仍可用。
     } catch (error) {
       const isCanceled = error instanceof Error && error.message === 'canceled'
       if (isCanceled) {
@@ -1434,10 +1466,12 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
   }
 
   function handleComposerKeydown(event: KeyboardEvent): void {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault()
-      void sendPrompt()
-    }
+    // Enter 发送，Shift+Enter（及 Ctrl/Cmd+Enter）换行；输入法组字时的 Enter 不触发发送。
+    if (event.key !== 'Enter') return
+    if (event.isComposing || (event as KeyboardEvent & { keyCode?: number }).keyCode === 229) return
+    if (event.shiftKey || event.metaKey || event.ctrlKey) return
+    event.preventDefault()
+    void sendPrompt()
   }
 
   async function stopStreaming(): Promise<void> {
@@ -1466,6 +1500,9 @@ export function useGlobalAssistant(options: UseGlobalAssistantOptions = {}) {
     currentModeMeta,
     isAuditMode,
     assistantStatus,
+    canSuggestProposal,
+    dismissProposalSuggestion,
+    generateProposalFromSuggestion,
     hasActionableProposal,
     projectTitle,
     projectGenre,

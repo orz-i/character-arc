@@ -303,7 +303,6 @@ watch(
               @click="onSuggest(action)"
             >
               <strong><Sparkles :size="15" />{{ action.label }}</strong>
-              <span>{{ action.prompt }}</span>
             </button>
           </div>
         </div>
@@ -361,6 +360,18 @@ watch(
 
                 <div class="ga-msg__body" v-html="a.renderMarkdown(item.content)" />
               </template>
+            </div>
+
+            <!-- 生成提案提示：回答完成后，由用户决定是否把讨论整理成可写回提案 -->
+            <div v-if="a.canSuggestProposal.value" class="ga-suggest">
+              <div class="ga-suggest__text">
+                <Sparkles :size="15" />
+                <span>需要把这次讨论整理成世界观 / 角色 / 大纲的写回提案吗？</span>
+              </div>
+              <div class="ga-suggest__actions">
+                <NButton size="small" tertiary @click="a.dismissProposalSuggestion()">暂不</NButton>
+                <NButton size="small" type="primary" :loading="a.isProposalLoading.value" @click="a.generateProposalFromSuggestion()">生成提案</NButton>
+              </div>
             </div>
 
             <!-- 写回提案卡 -->
@@ -1016,18 +1027,17 @@ watch(
 
 /* 建议卡 */
 .ga-suggest {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   width: 100%;
 }
 .ga-suggest__card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
   border: 1px solid var(--arc-border, #e5e7eb);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--arc-bg-surface, #ffffff);
   text-align: left;
   cursor: pointer;
@@ -1036,28 +1046,20 @@ watch(
 }
 .ga-suggest__card:hover {
   border-color: color-mix(in srgb, var(--arc-primary, #2563eb) 30%, var(--arc-border, #e5e7eb));
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 .ga-suggest__card strong {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--arc-text-primary, #1f2937);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .ga-suggest__card strong svg {
   color: var(--arc-primary, #2563eb);
-}
-.ga-suggest__card span {
-  color: var(--arc-text-hint, #9ca3af);
-  font-size: 11px;
-  line-height: 1.5;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 /* 对话线程 */
@@ -1323,6 +1325,37 @@ watch(
 .ga-toolrow__status.error { color: var(--arc-danger, #ef4444); }
 .ga-spin { animation: ga-spin 1s linear infinite; }
 @keyframes ga-spin { to { transform: rotate(360deg); } }
+
+/* 生成提案提示条 */
+.ga-suggest {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px dashed color-mix(in srgb, var(--arc-primary, #2563eb) 32%, var(--arc-border, #e5e7eb));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--arc-bg-surface, #ffffff) 94%, var(--arc-primary-soft, #eff6ff));
+  padding: 12px 16px;
+}
+.ga-suggest__text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--arc-text-secondary, #475569);
+}
+.ga-suggest__text svg {
+  flex-shrink: 0;
+  color: var(--arc-primary, #2563eb);
+}
+.ga-suggest__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
 /* 写回提案卡 (IDE 变更风格) */
 .ga-proposal {

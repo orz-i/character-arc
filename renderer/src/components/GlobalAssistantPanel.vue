@@ -46,6 +46,9 @@ const {
   isAuditMode,
   assistantStatus,
   hasActionableProposal,
+  canSuggestProposal,
+  dismissProposalSuggestion,
+  generateProposalFromSuggestion,
   projectTitle,
   projectGenre,
   projectConstraintSummary,
@@ -374,6 +377,14 @@ watch(
             </div>
             <div v-if="item.role === 'assistant'" class="global-markdown-body" v-html="renderMarkdown(item.content)" />
             <template v-else>{{ item.content }}</template>
+          </div>
+        </div>
+
+        <div v-if="canSuggestProposal" class="global-suggest">
+          <span class="global-suggest__text">需要把这次讨论整理成写回提案吗？</span>
+          <div class="global-suggest__actions">
+            <NButton size="tiny" tertiary @click="dismissProposalSuggestion()">暂不</NButton>
+            <NButton size="tiny" type="primary" :loading="isProposalLoading" @click="generateProposalFromSuggestion()">生成提案</NButton>
           </div>
         </div>
 
@@ -1227,6 +1238,28 @@ watch(
 .global-markdown-body :deep(th) {
   background: var(--arc-bg-muted);
   font-weight: 700;
+}
+
+.global-suggest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px dashed color-mix(in srgb, var(--arc-primary, #2563eb) 32%, var(--arc-border, #e5e7eb));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--arc-bg-surface, #ffffff) 94%, var(--arc-primary-soft, #eff6ff));
+  padding: 10px 12px;
+}
+.global-suggest__text {
+  font-size: 12.5px;
+  color: var(--arc-text-secondary, #475569);
+}
+.global-suggest__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .global-proposal {
