@@ -80,6 +80,7 @@ export function useChapterFirstDraft(): {
   modalVisible: Ref<boolean>
   streamingContent: Ref<string>
   streamingCharCount: Ref<number>
+  reasoningContent: Ref<string>
   executionLabel: Ref<string>
   previewTitle: Ref<string>
   previewContent: Ref<string>
@@ -102,6 +103,7 @@ export function useChapterFirstDraft(): {
   const modalVisible = ref(false)
   const streamingContent = ref('')
   const streamingCharCount = ref(0)
+  const reasoningContent = ref('')
   const executionLabel = ref('')
   const previewTitle = ref('')
   const previewContent = ref('')
@@ -155,6 +157,11 @@ export function useChapterFirstDraft(): {
       return
     }
     if (!words) {
+      if (reasoningContent.value) {
+        progressPercent.value = 15
+        progressText.value = '模型正在构思本章（思考中）...'
+        return
+      }
       progressPercent.value = 12
       progressText.value = '正在整理大纲、文风和角色关系上下文...'
       return
@@ -230,6 +237,14 @@ export function useChapterFirstDraft(): {
       return
     }
 
+    if (payload.type === 'reasoning') {
+      isStreaming.value = true
+      reasoningContent.value += payload.delta
+      executionLabel.value = '正在构思本章（思考中）...'
+      recompute()
+      return
+    }
+
     if (payload.type === 'chunk') {
       isStreaming.value = true
       if (currentStreamTask.value === 'chapter-first-draft') {
@@ -274,6 +289,7 @@ export function useChapterFirstDraft(): {
 
   async function streamTask(task: StreamTaskName, context: Record<string, unknown>): Promise<StreamTaskResult> {
     currentStreamTask.value = task
+    reasoningContent.value = ''
     if (task === 'chapter-first-draft') {
       streamingContent.value = ''
       streamingCharCount.value = 0
@@ -286,6 +302,8 @@ export function useChapterFirstDraft(): {
       previewTitle.value = '章节审计进行中'
       previewContent.value = ''
     }
+    // 任务切换后立即刷新进度文案，避免 progressText 停留在上一个任务（如写作备忘）。
+    recompute()
 
     const result = await window.characterArc.startAiStream(toIpcPayload({
       task,
@@ -659,6 +677,7 @@ export function useChapterFirstDraft(): {
     modalVisible,
     streamingContent,
     streamingCharCount,
+    reasoningContent,
     executionLabel,
     previewTitle,
     previewContent,

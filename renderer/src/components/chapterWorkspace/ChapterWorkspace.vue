@@ -180,13 +180,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Transition>
-  </section>
 
-  <ChapterFirstDraftConfigDialog
-    :show="draftConfigVisible"
-    @confirm="handleDraftConfigConfirm"
-    @cancel="draftConfigVisible = false"
-  />
+    <ChapterFirstDraftConfigDialog
+      :show="draftConfigVisible"
+      @confirm="handleDraftConfigConfirm"
+      @cancel="draftConfigVisible = false"
+    />
+  </section>
 </template>
 
 <style scoped>

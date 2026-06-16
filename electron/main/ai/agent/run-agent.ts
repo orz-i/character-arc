@@ -84,12 +84,18 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
 
   let fullText = ''
   if (params.disableTools) {
-    for await (const chunk of result.textStream) {
-      fullText += chunk
-      params.handlers.onTextDelta(chunk)
+    // 推理模型（如 mimo、deepseek-r1）会先输出 reasoning，再输出正文。
+    // 走 fullStream 才能拿到 reasoning-delta，让思考过程实时可见，否则首字前界面长时间无反馈。
+    for await (const part of result.fullStream) {
+      if (part.type === 'reasoning-delta') {
+        params.handlers.onReasoningDelta?.(part.text)
+      } else if (part.type === 'text-delta') {
+        fullText += part.text
+        params.handlers.onTextDelta(part.text)
+      }
     }
     // 某些中转站对非 Claude 模型会把文本放在 reasoning/thinking blocks 里，
-    // textStream 拿不到。如果 textStream 为空但有 output tokens，从 fullStream 兜底。
+    // textStream 拿不到。如果流式正文为空但有 output tokens，从最终结果兜底。
     if (!fullText) {
       const finalText = await result.text
       if (finalText) {
@@ -99,7 +105,9 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     }
   } else {
     for await (const part of result.fullStream) {
-      if (part.type === 'text-delta') {
+      if (part.type === 'reasoning-delta') {
+        params.handlers.onReasoningDelta?.(part.text)
+      } else if (part.type === 'text-delta') {
         fullText += part.text
         params.handlers.onTextDelta(part.text)
       }

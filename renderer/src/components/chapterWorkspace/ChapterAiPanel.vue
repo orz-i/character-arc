@@ -352,6 +352,7 @@ onBeforeUnmount(() => {
       :is-auditing="draft.isAuditing.value"
       :is-streaming="draft.isStreaming.value"
       :execution-label="draft.executionLabel.value"
+      :reasoning-content="draft.reasoningContent.value"
       :preview-title="draft.previewTitle.value"
       :preview-content="draft.previewContent.value"
       :progress-percent="draft.progressPercent.value"

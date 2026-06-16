@@ -118,6 +118,11 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
                       event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
                     }
                   },
+                  onReasoningDelta: (delta) => {
+                    if (!event.sender.isDestroyed()) {
+                      event.sender.send('characterarc:ai-stream-event', { streamId, type: 'reasoning', delta })
+                    }
+                  },
                   onToolUseStart: (toolUseId, toolName, args) => {
                     if (!event.sender.isDestroyed()) {
                       event.sender.send('characterarc:ai-stream-event', { streamId, type: 'tool_use_start', toolUseId, toolName, args })
@@ -246,6 +251,11 @@ export function registerAiIpcHandlers(injectedDeps: AiIpcDeps): void {
                   streamedContent += delta
                   if (!event.sender.isDestroyed()) {
                     event.sender.send('characterarc:ai-stream-event', { streamId, type: 'chunk', delta, charCount: streamedContent.length })
+                  }
+                },
+                onReasoningDelta: (delta) => {
+                  if (!event.sender.isDestroyed()) {
+                    event.sender.send('characterarc:ai-stream-event', { streamId, type: 'reasoning', delta })
                   }
                 },
                 onToolUseStart: (toolUseId, toolName, args) => {
