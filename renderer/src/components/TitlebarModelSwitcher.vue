@@ -34,8 +34,17 @@ const activeModel = computed({
 })
 
 const hasProfiles = computed(() => appStore.appSettings.aiProfiles.length > 0)
-const aiRunLogs = computed(() => [...appStore.aiRuns].slice().reverse())
-const currentProjectTitle = computed(() => appStore.currentProject?.title?.trim() || '当前项目')
+const aiRunLogs = computed(() => appStore.allAiRuns)
+const projectTitleById = computed(() => {
+  const map = new Map<string, string>()
+  for (const project of appStore.projects) {
+    map.set(project.id, project.title?.trim() || '未命名项目')
+  }
+  return map
+})
+function projectTitleFor(run: AiRunRecord): string {
+  return projectTitleById.value.get(run.projectId) || '未知项目'
+}
 
 const statusMeta: Record<AiRunRecord['status'], { label: string; type: 'default' | 'info' | 'success' | 'error' | 'warning' }> = {
   running: { label: '运行中', type: 'info' },
@@ -206,11 +215,11 @@ function toolReadStats(run: AiRunRecord): { reads: number; hits: number } {
   >
     <div class="ai-log-modal__summary">
       <strong>AI 调用日志</strong>
-      <span>{{ currentProjectTitle }} · {{ aiRunLogs.length }} 条记录</span>
+      <span>全部项目 · {{ aiRunLogs.length }} 条记录</span>
     </div>
 
     <div v-if="!aiRunLogs.length" class="ai-log-empty">
-      当前项目还没有 AI 调用日志。
+      还没有任何 AI 调用日志。
     </div>
 
     <div v-else class="ai-log-list arc-scrollbar">
@@ -234,6 +243,7 @@ function toolReadStats(run: AiRunRecord): { reads: number; hits: number } {
         </div>
 
         <div class="ai-log-card__meta">
+          <span>项目：{{ projectTitleFor(run) }}</span>
           <span>开始：{{ formatTime(run.startedAt) }}</span>
           <span>耗时：{{ formatDuration(run.durationMs) }}</span>
           <span>{{ formatTokenUsage(run) }}</span>
