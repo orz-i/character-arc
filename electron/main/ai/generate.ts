@@ -95,6 +95,9 @@ export async function aiGenerateTextWithUsage(
 
   if (options?.schema && canUseNativeStructuredOutput) {
     if (useStreamFallback(settings)) {
+      // AI SDK v6 的 streamObject/streamText 默认不在流错误时抛异常：textStream 会静默结束，
+      // 错误只通过 onError 回调暴露。必须捕获并重抛，否则中转站 503 等错误会被吞掉、UI 无提示。
+      let streamError: unknown = null
       const result = streamObject({
         model: createModel(settings),
         system,
@@ -102,12 +105,14 @@ export async function aiGenerateTextWithUsage(
         schema: options.schema,
         maxOutputTokens: maxTokens,
         providerOptions,
-        abortSignal: signal
+        abortSignal: signal,
+        onError: ({ error }) => { streamError = error }
       })
       let full = ''
       for await (const chunk of result.textStream) {
         full += chunk
       }
+      if (streamError) throw streamError
       return {
         text: full || JSON.stringify(await result.object),
         usage: toAiRunUsage(await result.usage)
@@ -129,18 +134,21 @@ export async function aiGenerateTextWithUsage(
   }
 
   if (useStreamFallback(settings)) {
+    let streamError: unknown = null
     const result = streamText({
       model: createModel(settings),
       system,
       prompt: prompt.user,
       maxOutputTokens: maxTokens,
       providerOptions,
-      abortSignal: signal
+      abortSignal: signal,
+      onError: ({ error }) => { streamError = error }
     })
     let full = ''
     for await (const chunk of result.textStream) {
       full += chunk
     }
+    if (streamError) throw streamError
     if (!full) {
       full = await result.text
     }
@@ -183,19 +191,22 @@ export async function aiStreamTextWithUsage(
   maxTokens?: number
 ): Promise<AiTextGenerationResult> {
   const providerOptions = resolveProviderOptions(settings)
+  let streamError: unknown = null
   const result = streamText({
     model: createModel(settings),
     system: buildSystemPrompt(settings, prompt.system),
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
     providerOptions,
-    abortSignal: signal
+    abortSignal: signal,
+    onError: ({ error }) => { streamError = error }
   })
   let full = ''
   for await (const chunk of result.textStream) {
     full += chunk
     handlers.onTextDelta(chunk)
   }
+  if (streamError) throw streamError
   if (!full) {
     const fallbackText = await result.text
     if (fallbackText) {
@@ -221,6 +232,7 @@ export async function aiStreamObjectWithUsage(
     return aiStreamTextWithUsage(settings, prompt, handlers, signal, maxTokens)
   }
 
+  let streamError: unknown = null
   const result = streamObject({
     model: createModel(settings),
     system: buildSystemPrompt(settings, prompt.system),
@@ -228,7 +240,8 @@ export async function aiStreamObjectWithUsage(
     schema,
     maxOutputTokens: maxTokens,
     providerOptions: resolveProviderOptions(settings),
-    abortSignal: signal
+    abortSignal: signal,
+    onError: ({ error }) => { streamError = error }
   })
 
   let full = ''
@@ -236,6 +249,7 @@ export async function aiStreamObjectWithUsage(
     full += chunk
     handlers.onTextDelta(chunk)
   }
+  if (streamError) throw streamError
 
   return {
     text: full,

@@ -45,6 +45,8 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
 
   params.handlers.onAgentStatus('正在思考...', 1, maxSteps)
 
+  // streamText 默认不抛流错误，仅通过 onError 暴露；捕获后在消费流时重抛，确保错误能上报到 UI。
+  let streamError: unknown = null
   const result = streamText({
     model: createModel(params.settings),
     system: buildSystemPrompt(params.settings, params.systemPrompt),
@@ -52,6 +54,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     ...(params.disableTools ? {} : { tools: sdkTools, stopWhen: stepCountIs(maxSteps) }),
     maxOutputTokens: params.maxTokens,
     abortSignal: params.ctx.signal,
+    onError: ({ error }) => { streamError = error },
     experimental_onToolCallStart: ({ toolCall }) => {
       const id = toolCall.toolCallId
       toolStartTimes.set(id, Date.now())
@@ -92,6 +95,10 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
       } else if (part.type === 'text-delta') {
         fullText += part.text
         params.handlers.onTextDelta(part.text)
+      } else if (part.type === 'error') {
+        // fullStream 把流式错误作为 error part 发出而不抛异常，必须显式抛出，
+        // 否则错误会被静默吞掉、上层无法感知（如中转站 503「No available accounts」）。
+        throw part.error
       }
     }
     // 某些中转站对非 Claude 模型会把文本放在 reasoning/thinking blocks 里，
@@ -110,9 +117,14 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
       } else if (part.type === 'text-delta') {
         fullText += part.text
         params.handlers.onTextDelta(part.text)
+      } else if (part.type === 'error') {
+        throw part.error
       }
     }
   }
+
+  // 兜底：若错误未以 error part 形式出现而是走了 onError，这里重抛。
+  if (streamError) throw streamError
 
   const finishReason = await result.finishReason
 

@@ -9,6 +9,7 @@ import {
 import { formatChapterWordTargetLabel, parseChapterWordTarget } from '@/features/chapters/wordTarget'
 import { loadEnabledProjectSkillsContext } from '@/features/projectSkills/context'
 import { useAppStore } from '@/stores/app'
+import type { ReferenceStyleAnalysis } from '@/types/app'
 import { toIpcPayload } from '@/utils/ipcPayload'
 
 const TASK_KEY = 'chapter-first-draft'
@@ -29,29 +30,52 @@ function formatMemoForRepair(memo: Record<string, unknown>): string {
   return parts.join('\n')
 }
 
+/** 把单个参考作品的拆书分析整理成一段风格提示文本。优先用作品自带的 analysis，兜底用拆书总纲文档。 */
+function formatReferenceWorkStyle(
+  work: { title: string; analysis?: ReferenceStyleAnalysis },
+  summaryDoc?: { summary?: string; content: string }
+): string {
+  const a = work.analysis
+  const lines: string[] = []
+  if (a?.overview) lines.push(`风格总述：${a.overview}`)
+  if (a?.sentenceStyle) lines.push(`句式特征：${a.sentenceStyle}`)
+  if (a?.dialogueRatio) lines.push(`对白策略：${a.dialogueRatio}`)
+  if (a?.pacingControl) lines.push(`节奏控制：${a.pacingControl}`)
+  if (a?.emotionExpression) lines.push(`情绪表达：${a.emotionExpression}`)
+  if (a?.narrativePerspective) lines.push(`叙事视角：${a.narrativePerspective}`)
+  if (a?.styleRules?.length) lines.push(`风格规则：${a.styleRules.join('；')}`)
+  if (a?.reusableStylePrompt) lines.push(`仿写模板：${a.reusableStylePrompt}`)
+  if (a?.avoidRules?.length) lines.push(`避免照搬：${a.avoidRules.join('；')}`)
+  // analysis 为空时兜底用拆书总纲文档的摘要 / 正文
+  if (!lines.length && summaryDoc) {
+    const snippet = (summaryDoc.summary || summaryDoc.content || '').slice(0, 600).trim()
+    if (snippet) lines.push(snippet)
+  }
+  if (!lines.length) return ''
+  return `【${work.title}】\n${lines.join('\n')}`
+}
+
 function buildReferenceStyleContext(selectedRefIds: string[]): string {
   if (!selectedRefIds.length) return ''
   const { referenceWorks, knowledgeDocuments } = useAppStore()
-  const selectedTitles = new Set(
-    referenceWorks.filter((w) => selectedRefIds.includes(w.id)).map((w) => w.title)
-  )
-  if (!selectedTitles.size) return ''
-  // 只取 reference-summary（每本书 1 条整体风格摘要），不取碎片 chunk
-  const refDocs = knowledgeDocuments
-    .filter((d) =>
-      d.sourceType === 'reference-summary'
-      && selectedTitles.has(String(d.metadata?.sourceTitle ?? ''))
-    )
-    .slice(0, 3)
-  if (!refDocs.length) return ''
-  const MAX_TOTAL_CHARS = 1500
+  const selectedWorks = referenceWorks.filter((w) => selectedRefIds.includes(w.id))
+  if (!selectedWorks.length) return ''
+  // 拆书总纲文档按 sourceTitle 建索引，仅作为 analysis 缺失时的兜底数据源
+  const summaryByTitle = new Map<string, { summary?: string; content: string }>()
+  for (const d of knowledgeDocuments) {
+    if (d.sourceType !== 'reference-summary') continue
+    const title = String(d.metadata?.sourceTitle ?? '').trim()
+    if (title && !summaryByTitle.has(title)) summaryByTitle.set(title, d)
+  }
+  const MAX_TOTAL_CHARS = 1800
   let totalChars = 0
   const parts: string[] = []
-  for (const d of refDocs) {
-    const snippet = d.summary || d.content.slice(0, 500)
-    if (totalChars + snippet.length > MAX_TOTAL_CHARS) break
-    parts.push(`【${d.metadata?.sourceTitle ?? d.title}】${snippet}`)
-    totalChars += snippet.length
+  for (const work of selectedWorks.slice(0, 3)) {
+    const block = formatReferenceWorkStyle(work, summaryByTitle.get(work.title))
+    if (!block) continue
+    if (totalChars + block.length > MAX_TOTAL_CHARS) break
+    parts.push(block)
+    totalChars += block.length
   }
   return parts.join('\n\n')
 }
