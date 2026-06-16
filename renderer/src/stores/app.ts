@@ -273,8 +273,10 @@ export const useAppStore = defineStore('app', () => {
    */
   const allAiRuns = computed(() => {
     const runs: AiRunRecord[] = []
-    for (const workspace of Object.values(projectWorkspaces.value)) {
-      if (Array.isArray(workspace.aiRuns)) runs.push(...workspace.aiRuns)
+    for (const [projectId, workspace] of Object.entries(projectWorkspaces.value)) {
+      if (Array.isArray(workspace.aiRuns)) {
+        runs.push(...workspace.aiRuns.map(run => ({ ...run, projectId: run.projectId || projectId })))
+      }
     }
     return runs.sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))
   })
