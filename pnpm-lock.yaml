@@ -17,9 +17,6 @@ importers:
       '@node-rs/jieba':
         specifier: ^2.0.1
         version: 2.0.1
-      '@node-rs/jieba-win32-x64-msvc':
-        specifier: ^2.0.1
-        version: 2.0.1
       '@tiptap/core':
         specifier: ^3.22.5
         version: 3.22.5(@tiptap/pm@3.22.5)
@@ -93,6 +90,9 @@ importers:
       '@vitejs/plugin-vue':
         specifier: ^6.0.1
         version: 6.0.6(vite@7.3.2(@types/node@24.12.2)(jiti@2.6.1))(vue@3.5.33(typescript@5.9.3))
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
       electron:
         specifier: ^37.2.0
         version: 37.10.3
@@ -111,6 +111,16 @@ importers:
       vue-tsc:
         specifier: ^3.0.5
         version: 3.2.7(typescript@5.9.3)
+    optionalDependencies:
+      '@node-rs/jieba-darwin-arm64':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@node-rs/jieba-darwin-x64':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@node-rs/jieba-win32-x64-msvc':
+        specifier: 2.0.1
+        version: 2.0.1
 
 packages:
 
@@ -1401,6 +1411,11 @@ packages:
 
   cross-dirname@0.1.0:
     resolution: {integrity: sha512-+R08/oI0nl3vfPcqftZRpytksBXDzOUveBq/NBVx0sUp1axwzPQrKinNx5yd5sxPu8j1wIy8AfnVQ+5eFdha6Q==}
+
+  cross-env@7.0.3:
+    resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
+    engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -3079,7 +3094,8 @@ snapshots:
   '@node-rs/jieba-win32-ia32-msvc@2.0.1':
     optional: true
 
-  '@node-rs/jieba-win32-x64-msvc@2.0.1': {}
+  '@node-rs/jieba-win32-x64-msvc@2.0.1':
+    optional: true
 
   '@node-rs/jieba@2.0.1':
     optionalDependencies:
@@ -3799,6 +3815,10 @@ snapshots:
 
   cross-dirname@0.1.0:
     optional: true
+
+  cross-env@7.0.3:
+    dependencies:
+      cross-spawn: 7.0.6
 
   cross-spawn@7.0.6:
     dependencies:

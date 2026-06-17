@@ -7,16 +7,18 @@
   "author": "zhouyeshan",
   "license": "MIT",
   "scripts": {
-    "dev": "set ELECTRON_RUN_AS_NODE=&& electron-vite dev",
-    "build": "set ELECTRON_RUN_AS_NODE=&& vue-tsc --noEmit && electron-vite build",
-    "preview": "set ELECTRON_RUN_AS_NODE=&& electron-vite preview",
-    "dist": "set ELECTRON_RUN_AS_NODE=&& set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/&& vue-tsc --noEmit && electron-vite build && electron-builder"
+    "dev": "electron-vite dev",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "pnpm run typecheck && electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "pnpm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder",
+    "dist:win": "pnpm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win",
+    "dist:mac": "pnpm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
     "@ai-sdk/openai": "^3.0.64",
     "@node-rs/jieba": "^2.0.1",
-    "@node-rs/jieba-win32-x64-msvc": "^2.0.1",
     "@tiptap/core": "^3.22.5",
     "@tiptap/extension-character-count": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
@@ -43,6 +45,7 @@
     "@types/dompurify": "^3.2.0",
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "cross-env": "^7.0.3",
     "electron": "^37.2.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
@@ -81,6 +84,18 @@
       "node_modules/@node-rs/**"
     ],
     "afterPack": "build/afterPack.cjs",
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
     "win": {
       "icon": "resources/icon.ico",
       "target": [
@@ -100,6 +115,25 @@
       ],
       "language": "2052",
       "artifactName": "${productName}-${version}-setup.${ext}"
+    }
+  },
+  "optionalDependencies": {
+    "@node-rs/jieba-darwin-arm64": "2.0.1",
+    "@node-rs/jieba-darwin-x64": "2.0.1",
+    "@node-rs/jieba-win32-x64-msvc": "2.0.1"
+  },
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "darwin",
+        "win32"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
     }
   }
 }
