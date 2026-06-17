@@ -8,7 +8,7 @@ Package manager: `pnpm` (pinned to 10.33.2 in `package.json`). Scripts shell out
 
 ```powershell
 pnpm install          # install deps (uses npmmirror via .npmrc)
-pnpm run dev          # electron-vite dev: starts main + preload + renderer (Vite on 127.0.0.1:5173)
+pnpm run dev          # electron-vite dev: starts main + preload + renderer (Vite on 127.0.0.1, port auto-selected)
 pnpm run build        # vue-tsc --noEmit (full type check) then electron-vite build
 pnpm run preview      # run the production build locally
 pnpm run dist         # type check + build + electron-builder (Windows NSIS installer)
