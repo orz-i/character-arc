@@ -19,6 +19,13 @@ function useOpenAIChatCompatibility(settings: AppSettings): boolean {
 
 type AiProviderOptions = Parameters<typeof generateText>[0]['providerOptions']
 
+function resolveSamplingOptions(settings: AppSettings): { temperature?: number; topP?: number } {
+  return {
+    temperature: typeof settings.temperature === 'number' && Number.isFinite(settings.temperature) ? settings.temperature : undefined,
+    topP: typeof settings.topP === 'number' && Number.isFinite(settings.topP) ? settings.topP : undefined
+  }
+}
+
 function resolveProviderOptions(settings: AppSettings): AiProviderOptions | undefined {
   if (!useOpenAIChatCompatibility(settings)) {
     return undefined
@@ -92,6 +99,7 @@ export async function aiGenerateTextWithUsage(
   const system = buildSystemPrompt(settings, prompt.system)
   const canUseNativeStructuredOutput = providerSupportsNativeStructuredOutput(settings)
   const providerOptions = resolveProviderOptions(settings)
+  const samplingOptions = resolveSamplingOptions(settings)
 
   if (options?.schema && canUseNativeStructuredOutput) {
     if (useStreamFallback(settings)) {
@@ -104,6 +112,7 @@ export async function aiGenerateTextWithUsage(
         prompt: prompt.user,
         schema: options.schema,
         maxOutputTokens: maxTokens,
+        ...samplingOptions,
         providerOptions,
         abortSignal: signal,
         onError: ({ error }) => { streamError = error }
@@ -124,6 +133,7 @@ export async function aiGenerateTextWithUsage(
       prompt: prompt.user,
       schema: options.schema,
       maxOutputTokens: maxTokens,
+      ...samplingOptions,
       providerOptions,
       abortSignal: signal
     })
@@ -140,6 +150,7 @@ export async function aiGenerateTextWithUsage(
       system,
       prompt: prompt.user,
       maxOutputTokens: maxTokens,
+      ...samplingOptions,
       providerOptions,
       abortSignal: signal,
       onError: ({ error }) => { streamError = error }
@@ -163,6 +174,7 @@ export async function aiGenerateTextWithUsage(
     system,
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
+    ...samplingOptions,
     providerOptions,
     abortSignal: signal
   })
@@ -191,6 +203,7 @@ export async function aiStreamTextWithUsage(
   maxTokens?: number
 ): Promise<AiTextGenerationResult> {
   const providerOptions = resolveProviderOptions(settings)
+  const samplingOptions = resolveSamplingOptions(settings)
   let streamError: unknown = null
   // 推理模型（mimo / deepseek-r1 / 智谱 GLM-Z1 等）通过非标准 reasoning_content 字段
   // 返回思考内容，AI SDK 不解析。这里把回调注入到自定义 fetch，由其在 SSE 流中拦截。
@@ -199,6 +212,7 @@ export async function aiStreamTextWithUsage(
     system: buildSystemPrompt(settings, prompt.system),
     prompt: prompt.user,
     maxOutputTokens: maxTokens,
+    ...samplingOptions,
     providerOptions,
     abortSignal: signal,
     onError: ({ error }) => { streamError = error }
@@ -246,12 +260,14 @@ export async function aiStreamObjectWithUsage(
   }
 
   let streamError: unknown = null
+  const samplingOptions = resolveSamplingOptions(settings)
   const result = streamObject({
     model: createModel(settings, handlers.onReasoningDelta),
     system: buildSystemPrompt(settings, prompt.system),
     prompt: prompt.user,
     schema,
     maxOutputTokens: maxTokens,
+    ...samplingOptions,
     providerOptions: resolveProviderOptions(settings),
     abortSignal: signal,
     onError: ({ error }) => { streamError = error }

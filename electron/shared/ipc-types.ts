@@ -15,7 +15,9 @@ export interface AppSettingsPayload {
   model: string
   apiKey: string
   baseUrl: string
-  aiProfiles: Array<{ id: string; name: string; provider: string; baseUrl: string; apiKey: string; model: string }>
+  temperature?: number
+  topP?: number
+  aiProfiles: Array<{ id: string; name: string; provider: string; baseUrl: string; apiKey: string; model: string; temperature?: number; topP?: number }>
   activeAiProfileId: string
   imageProvider: string
   imageModel: string

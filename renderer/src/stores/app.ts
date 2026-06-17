@@ -2302,6 +2302,8 @@ export const useAppStore = defineStore('app', () => {
     appSettings.value.model = profile.model
     appSettings.value.apiKey = profile.apiKey
     appSettings.value.baseUrl = profile.baseUrl
+    appSettings.value.temperature = profile.temperature
+    appSettings.value.topP = profile.topP
     scheduleSettingsPersist()
   }
 
@@ -2332,6 +2334,8 @@ export const useAppStore = defineStore('app', () => {
       if (updates.model !== undefined) appSettings.value.model = updates.model
       if (updates.apiKey !== undefined) appSettings.value.apiKey = updates.apiKey
       if (updates.baseUrl !== undefined) appSettings.value.baseUrl = updates.baseUrl
+      if ('temperature' in updates) appSettings.value.temperature = updates.temperature
+      if ('topP' in updates) appSettings.value.topP = updates.topP
     }
     scheduleSettingsPersist()
   }

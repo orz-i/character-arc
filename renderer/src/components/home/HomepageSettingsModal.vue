@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { Copy, Cpu, Download, Image, MonitorCog, Moon, Palette, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-vue-next'
-import { NButton, NFormItem, NInput, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
+import { NButton, NFormItem, NInput, NInputNumber, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
 import { autoSaveOptions } from '@/features/settings/autoSave'
 import { getProviderPreset, providerOptions, resolveProviderDefaults } from '@/features/settings/providerPresets'
 import { imageProviderOptions, resolveImageProviderDefaults } from '@/features/settings/imageProviderPresets'
@@ -49,6 +49,8 @@ const draftSettings = reactive<AppSettings>({
   model: '',
   apiKey: '',
   baseUrl: '',
+  temperature: undefined,
+  topP: undefined,
   aiProfiles: [],
   activeAiProfileId: '',
   imageProvider: '',
@@ -126,6 +128,8 @@ function syncDraftFromStore(): void {
   draftSettings.model = appStore.appSettings.model
   draftSettings.apiKey = appStore.appSettings.apiKey
   draftSettings.baseUrl = appStore.appSettings.baseUrl
+  draftSettings.temperature = appStore.appSettings.temperature
+  draftSettings.topP = appStore.appSettings.topP
   draftSettings.aiProfiles = appStore.appSettings.aiProfiles.map((profile) => ({ ...profile }))
   draftSettings.activeAiProfileId = appStore.appSettings.activeAiProfileId
   draftSettings.imageProvider = appStore.appSettings.imageProvider
@@ -174,6 +178,10 @@ function generateUniqueName(base: string): string {
   return `${base} ${i}`
 }
 
+function toOptionalNumber(value: number | null): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function handleAddProfile(): void {
   const id = generateProfileId()
   const newProfile: AiProfile = {
@@ -182,7 +190,9 @@ function handleAddProfile(): void {
     provider: 'openai-compatible',
     baseUrl: '',
     apiKey: '',
-    model: ''
+    model: '',
+    temperature: undefined,
+    topP: undefined
   }
   draftSettings.aiProfiles.push(newProfile)
   editingProfileId.value = id
@@ -199,7 +209,9 @@ function handleCopyProfile(): void {
     provider: source.provider,
     baseUrl: source.baseUrl,
     apiKey: source.apiKey,
-    model: source.model
+    model: source.model,
+    temperature: source.temperature,
+    topP: source.topP
   }
   draftSettings.aiProfiles.push(copy)
   editingProfileId.value = id
@@ -231,6 +243,8 @@ function updateEditingProfile(updates: Partial<AiProfile>): void {
     if (updates.model !== undefined) draftSettings.model = updates.model
     if (updates.apiKey !== undefined) draftSettings.apiKey = updates.apiKey
     if (updates.baseUrl !== undefined) draftSettings.baseUrl = updates.baseUrl
+    if ('temperature' in updates) draftSettings.temperature = updates.temperature
+    if ('topP' in updates) draftSettings.topP = updates.topP
   }
 }
 
@@ -280,7 +294,9 @@ function buildProfilePayload(): AppSettings {
     provider: profile.provider,
     model: profile.model,
     apiKey: profile.apiKey,
-    baseUrl: profile.baseUrl
+    baseUrl: profile.baseUrl,
+    temperature: profile.temperature,
+    topP: profile.topP
   }
 }
 
@@ -330,6 +346,8 @@ async function saveSettings(): Promise<void> {
     appStore.updateAppSetting('model', activeProfile.model)
     appStore.updateAppSetting('apiKey', activeProfile.apiKey)
     appStore.updateAppSetting('baseUrl', activeProfile.baseUrl)
+    appStore.updateAppSetting('temperature', activeProfile.temperature)
+    appStore.updateAppSetting('topP', activeProfile.topP)
   }
 
   appStore.updateAppSetting('imageProvider', draftSettings.imageProvider)
@@ -495,6 +513,36 @@ async function saveSettings(): Promise<void> {
             <div class="provider-hint-block">
               <p>{{ activeProviderPreset.hint }}</p>
             </div>
+            <details class="advanced-settings">
+              <summary>API 高级设置</summary>
+              <div class="advanced-settings-body">
+                <div class="settings-grid">
+                  <n-form-item label="Temperature">
+                    <n-input-number
+                      :value="editingProfile.temperature"
+                      :min="0"
+                      :max="2"
+                      :step="0.1"
+                      clearable
+                      placeholder="默认"
+                      @update:value="(value) => updateEditingProfile({ temperature: toOptionalNumber(value) })"
+                    />
+                  </n-form-item>
+                  <n-form-item label="Top P">
+                    <n-input-number
+                      :value="editingProfile.topP"
+                      :min="0"
+                      :max="1"
+                      :step="0.05"
+                      clearable
+                      placeholder="默认"
+                      @update:value="(value) => updateEditingProfile({ topP: toOptionalNumber(value) })"
+                    />
+                  </n-form-item>
+                </div>
+                <p class="advanced-settings-hint">留空时使用模型默认值；温度越高表达越发散，Top P 越低输出越保守。</p>
+              </div>
+            </details>
             <div class="section-actions">
               <n-button round strong secondary :disabled="isTestingAiConnection" @click="handleTestAiConnection">
                 <template #icon>
@@ -824,6 +872,40 @@ async function saveSettings(): Promise<void> {
 
 .provider-hint-block p {
   margin: 0;
+}
+
+.advanced-settings {
+  margin: 0 0 16px;
+  border: 1px solid var(--arc-border);
+  border-radius: 8px;
+  background: var(--arc-bg-surface);
+}
+
+.advanced-settings summary {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 14px;
+  color: var(--arc-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  user-select: none;
+}
+
+.advanced-settings-body {
+  padding: 0 14px 14px;
+}
+
+.advanced-settings :deep(.n-input-number) {
+  width: 100%;
+}
+
+.advanced-settings-hint {
+  margin: -2px 0 0;
+  color: var(--arc-text-hint);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .section-actions {

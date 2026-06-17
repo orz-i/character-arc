@@ -322,19 +322,41 @@ function sanitizeSettingString(value: unknown, fallback: string): string {
   return trimmed || fallback
 }
 
+function normalizeOptionalNumber(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(max, Math.max(min, value))
+}
+
+function normalizeAiProfile(profile: AiProfile): AiProfile {
+  return {
+    id: String(profile.id ?? '').trim(),
+    name: String(profile.name ?? '').trim(),
+    provider: String(profile.provider ?? '').trim(),
+    baseUrl: String(profile.baseUrl ?? '').trim(),
+    apiKey: String(profile.apiKey ?? '').trim(),
+    model: String(profile.model ?? '').trim(),
+    temperature: normalizeOptionalNumber(profile.temperature, 0, 2),
+    topP: normalizeOptionalNumber(profile.topP, 0, 1)
+  }
+}
+
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
   const source = settings ?? {}
   const provider = sanitizeSettingString(source.provider, defaultAppSettings.provider)
   const model = sanitizeSettingString(source.model, defaultAppSettings.model)
   const apiKey = sanitizeSettingString(source.apiKey, defaultAppSettings.apiKey)
   const baseUrl = sanitizeSettingString(source.baseUrl, defaultAppSettings.baseUrl)
+  const temperature = normalizeOptionalNumber(source.temperature, 0, 2)
+  const topP = normalizeOptionalNumber(source.topP, 0, 1)
 
-  let aiProfiles = Array.isArray(source.aiProfiles) ? source.aiProfiles : []
+  let aiProfiles = Array.isArray(source.aiProfiles)
+    ? source.aiProfiles.map(normalizeAiProfile).filter((profile) => profile.id)
+    : []
   let activeAiProfileId = sanitizeSettingString(source.activeAiProfileId, '')
 
   if (aiProfiles.length === 0 && (apiKey || model !== defaultAppSettings.model)) {
     const migratedId = `profile-${Date.now()}`
-    aiProfiles = [{ id: migratedId, name: provider || 'Default', provider, baseUrl, apiKey, model }]
+    aiProfiles = [{ id: migratedId, name: provider || 'Default', provider, baseUrl, apiKey, model, temperature, topP }]
     activeAiProfileId = migratedId
   }
 
@@ -347,6 +369,8 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
     model,
     apiKey,
     baseUrl,
+    temperature,
+    topP,
     aiProfiles,
     activeAiProfileId,
     imageProvider: sanitizeSettingString(source.imageProvider, defaultAppSettings.imageProvider),

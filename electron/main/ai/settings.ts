@@ -65,6 +65,11 @@ function normalizeBaseUrl(provider: string, rawBaseUrl: string): string {
   return baseUrl
 }
 
+function normalizeOptionalNumber(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(max, Math.max(min, value))
+}
+
 /**
  * 规范化用户设置：trim、转小写、缺失字段回退到供应商默认值。
  *
@@ -80,6 +85,8 @@ export function normalizeSettings(settings: AppSettings): AppSettings {
     model: settings.model?.trim() || defaults.model,
     apiKey: settings.apiKey?.trim() || '',
     baseUrl,
+    temperature: normalizeOptionalNumber(settings.temperature, 0, 2),
+    topP: normalizeOptionalNumber(settings.topP, 0, 1),
     embeddingModel: settings.embeddingModel?.trim() || '',
     imageModel: settings.imageModel?.trim() || '',
     imageApiKey: settings.imageApiKey?.trim() || '',

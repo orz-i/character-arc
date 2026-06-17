@@ -823,6 +823,8 @@ export interface AiProfile {
   baseUrl: string
   apiKey: string
   model: string
+  temperature?: number
+  topP?: number
 }
 
 export interface AppSettings {
@@ -834,6 +836,10 @@ export interface AppSettings {
   apiKey: string
   /** API 基础地址 */
   baseUrl: string
+  /** 可选：模型采样温度，留空时使用服务端默认值 */
+  temperature?: number
+  /** 可选：模型 nucleus sampling 参数，留空时使用服务端默认值 */
+  topP?: number
   /** 已保存的 AI 接口配置列表 */
   aiProfiles: AiProfile[]
   /** 当前激活的 AI 接口配置 ID */

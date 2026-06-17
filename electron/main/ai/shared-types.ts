@@ -28,6 +28,10 @@ export type AppSettings = {
   model: string
   apiKey: string
   baseUrl: string
+  /** 可选：模型采样温度，留空时使用服务端默认值 */
+  temperature?: number
+  /** 可选：模型 nucleus sampling 参数，留空时使用服务端默认值 */
+  topP?: number
   /** 可选：embedding 专用模型，为空时从 model 推断 */
   embeddingModel: string
   /** 可选：图片生成模型 */

@@ -311,6 +311,8 @@ export type WorkspacePayload = {
     model: string
     apiKey: string
     baseUrl: string
+    temperature?: number
+    topP?: number
     aiProfiles: Array<{
       id: string
       name: string
@@ -318,6 +320,8 @@ export type WorkspacePayload = {
       baseUrl: string
       apiKey: string
       model: string
+      temperature?: number
+      topP?: number
     }>
     activeAiProfileId: string
     imageProvider: string
@@ -453,12 +457,22 @@ export function normalizeAppSettings(
     settings?.uiScale !== undefined && Number.isFinite(settings.uiScale)
       ? Math.min(1.75, Math.max(0.75, settings.uiScale))
       : 1
+  const temperature =
+    typeof settings?.temperature === 'number' && Number.isFinite(settings.temperature)
+      ? Math.min(2, Math.max(0, settings.temperature))
+      : undefined
+  const topP =
+    typeof settings?.topP === 'number' && Number.isFinite(settings.topP)
+      ? Math.min(1, Math.max(0, settings.topP))
+      : undefined
 
   return {
     provider: settings?.provider || 'openai-compatible',
     model: settings?.model || '',
     apiKey: settings?.apiKey || '',
     baseUrl: settings?.baseUrl || '',
+    temperature,
+    topP,
     aiProfiles: Array.isArray(settings?.aiProfiles)
       ? settings.aiProfiles
           .filter((item): item is NonNullable<typeof settings.aiProfiles>[number] => !!item && typeof item === 'object')
@@ -468,7 +482,15 @@ export function normalizeAppSettings(
             provider: String(item.provider ?? '').trim(),
             baseUrl: String(item.baseUrl ?? '').trim(),
             apiKey: String(item.apiKey ?? '').trim(),
-            model: String(item.model ?? '').trim()
+            model: String(item.model ?? '').trim(),
+            temperature:
+              typeof item.temperature === 'number' && Number.isFinite(item.temperature)
+                ? Math.min(2, Math.max(0, item.temperature))
+                : undefined,
+            topP:
+              typeof item.topP === 'number' && Number.isFinite(item.topP)
+                ? Math.min(1, Math.max(0, item.topP))
+                : undefined
           }))
           .filter((item) => item.id)
       : [],

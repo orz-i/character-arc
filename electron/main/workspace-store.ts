@@ -288,6 +288,8 @@ export async function ensureWorkspaceDb(): Promise<DatabaseSync> {
       model TEXT NOT NULL,
       api_key TEXT NOT NULL,
       base_url TEXT NOT NULL,
+      temperature REAL,
+      top_p REAL,
       ai_profiles_json TEXT NOT NULL DEFAULT '[]',
       active_ai_profile_id TEXT NOT NULL DEFAULT '',
       image_provider TEXT NOT NULL DEFAULT '',
@@ -384,6 +386,14 @@ function ensureAppSettingsColumns(db: DatabaseSync): void {
 
   if (!columnNames.has('dark_mode_style')) {
     db.exec(`ALTER TABLE app_settings ADD COLUMN dark_mode_style TEXT NOT NULL DEFAULT 'standard';`)
+  }
+
+  if (!columnNames.has('temperature')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN temperature REAL;`)
+  }
+
+  if (!columnNames.has('top_p')) {
+    db.exec(`ALTER TABLE app_settings ADD COLUMN top_p REAL;`)
   }
 
   if (!columnNames.has('image_provider')) {
@@ -662,7 +672,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
 
   if (projects.length === 0) {
     const settings = db.prepare(`
-      SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
+      SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, temperature, top_p AS topP, auto_save_interval AS autoSaveInterval
       , model, ai_profiles_json AS aiProfilesJson, active_ai_profile_id AS activeAiProfileId, image_provider AS imageProvider, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode, dark_mode_style AS darkModeStyle
       FROM app_settings
       WHERE id = 1
@@ -674,6 +684,8 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
           model: string
           apiKey: string
           baseUrl: string
+          temperature: number | null
+          topP: number | null
           aiProfilesJson: string
           activeAiProfileId: string
           imageProvider: string
@@ -756,6 +768,8 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
               model: settings.model,
               apiKey: settings.apiKey,
               baseUrl: settings.baseUrl,
+              temperature: settings.temperature === null ? undefined : settings.temperature,
+              topP: settings.topP === null ? undefined : settings.topP,
               aiProfiles: parseJson(settings.aiProfilesJson, []),
               activeAiProfileId: settings.activeAiProfileId,
               imageProvider: settings.imageProvider,
@@ -1018,7 +1032,7 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
   }>
 
   const settings = db.prepare(`
-    SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, auto_save_interval AS autoSaveInterval
+    SELECT theme, selected_project_id AS selectedProjectId, provider, api_key AS apiKey, base_url AS baseUrl, temperature, top_p AS topP, auto_save_interval AS autoSaveInterval
     , model, ai_profiles_json AS aiProfilesJson, active_ai_profile_id AS activeAiProfileId, image_provider AS imageProvider, image_model AS imageModel, image_api_key AS imageApiKey, image_base_url AS imageBaseUrl, ui_scale AS uiScale, dark_mode AS darkMode, dark_mode_style AS darkModeStyle
     FROM app_settings
     WHERE id = 1
@@ -1030,6 +1044,8 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: string
         apiKey: string
         baseUrl: string
+        temperature: number | null
+        topP: number | null
         aiProfilesJson: string
         activeAiProfileId: string
         imageProvider: string
@@ -1146,6 +1162,8 @@ export function readWorkspaceSnapshot(db: DatabaseSync): WorkspacePayload | null
         model: settings.model,
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl,
+        temperature: settings.temperature === null ? undefined : settings.temperature,
+        topP: settings.topP === null ? undefined : settings.topP,
         aiProfiles: parseJson(settings.aiProfilesJson, []),
         activeAiProfileId: settings.activeAiProfileId,
         imageProvider: settings.imageProvider,
@@ -1657,8 +1675,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
     }
 
     db.prepare(`
-      INSERT OR REPLACE INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, ai_profiles_json, active_ai_profile_id, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, temperature, top_p, ai_profiles_json, active_ai_profile_id, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.theme,
       payload.selectedProjectId,
@@ -1666,6 +1684,8 @@ export function writeWorkspaceSnapshot(db: DatabaseSync, payload: WorkspacePaylo
       normalizedAppSettings.model,
       normalizedAppSettings.apiKey,
       normalizedAppSettings.baseUrl,
+      normalizedAppSettings.temperature ?? null,
+      normalizedAppSettings.topP ?? null,
       JSON.stringify(normalizedAppSettings.aiProfiles ?? []),
       normalizedAppSettings.activeAiProfileId,
       normalizedAppSettings.imageProvider,
@@ -1731,8 +1751,8 @@ export function writeAppSettingsRow(
 ): void {
   const normalized = normalizeAppSettings(settings)
   db.prepare(`
-    INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, ai_profiles_json, active_ai_profile_id, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
-    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO app_settings (id, theme, selected_project_id, provider, model, api_key, base_url, temperature, top_p, ai_profiles_json, active_ai_profile_id, image_provider, image_model, image_api_key, image_base_url, auto_save_interval, ui_scale, dark_mode, dark_mode_style)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       theme = excluded.theme,
       selected_project_id = excluded.selected_project_id,
@@ -1740,6 +1760,8 @@ export function writeAppSettingsRow(
       model = excluded.model,
       api_key = excluded.api_key,
       base_url = excluded.base_url,
+      temperature = excluded.temperature,
+      top_p = excluded.top_p,
       ai_profiles_json = excluded.ai_profiles_json,
       active_ai_profile_id = excluded.active_ai_profile_id,
       image_provider = excluded.image_provider,
@@ -1757,6 +1779,8 @@ export function writeAppSettingsRow(
     normalized.model,
     normalized.apiKey,
     normalized.baseUrl,
+    normalized.temperature ?? null,
+    normalized.topP ?? null,
     JSON.stringify(normalized.aiProfiles ?? []),
     normalized.activeAiProfileId,
     normalized.imageProvider,
