@@ -1,4 +1,4 @@
-name: Build macOS installers
+name: Release
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
       - 'v*'
   pull_request:
     paths:
-      - '.github/workflows/build-macos.yml'
+      - '.github/workflows/release.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'electron.vite.config.ts'
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-macos-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,9 +30,9 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-15
+            runner: macos-26
           - arch: x64
-            runner: macos-15-intel
+            runner: macos-26-intel
 
     env:
       ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
