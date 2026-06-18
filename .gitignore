@@ -14,6 +14,7 @@ dist/
 build/*
 !build/installer.nsh
 !build/afterPack.cjs
+!build/entitlements.mac.plist
 out/
 dist-electron/
 
