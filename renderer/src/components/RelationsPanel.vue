@@ -407,6 +407,38 @@ function openGraphNodeEditor(payload: { kind: 'character' | 'organization'; enti
 
 const writingStyle = computed(() => buildProjectWritingStyleContext(appStore.currentProject))
 
+/** 组织头像颜色池 */
+const ORG_PALETTE = [
+  '#4f46e5', '#7c3aed', '#c026d3', '#db2777', '#e11d48',
+  '#dc2626', '#ea580c', '#b45309', '#0d9488', '#0891b2',
+  '#2563eb', '#475569', '#6d28d9', '#be185d', '#0369a1',
+]
+
+function orgNameHash(name: string): number {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function orgBadgeColor(org: { name: string; color?: string }): string {
+  return org.color?.trim() || ORG_PALETTE[orgNameHash(org.name) % ORG_PALETTE.length]
+}
+
+/** 浅色底 + 原色文字，保证对比度 */
+function orgBadgeBgLight(bg: string): string {
+  const hex = bg.replace('#', '')
+  if (hex.length < 6) return 'rgba(241,245,249,0.95)'
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},0.12)`
+}
+
+function orgInitial(name: string): string {
+  const ch = name.trim()[0]
+  return ch ? ch.toUpperCase() : '?'
+}
+
 const AI_GEN_ORG_KEY = 'relation-generate-org'
 const AI_GEN_REL_KEY = 'relation-generate-rel'
 const AI_GEN_MEM_KEY = 'relation-generate-mem'
@@ -839,7 +871,7 @@ function handleEnhanceMemApply(accepted: Record<string, string | string[]>): voi
         <div v-if="filteredOrganizations.length > 0" class="card-list">
           <article v-for="organization in filteredOrganizations" :key="organization.id" class="entity-card">
             <div class="entity-card-top">
-              <div class="entity-badge" :style="{ background: organization.color }"></div>
+              <div class="entity-badge" :style="{ background: orgBadgeBgLight(orgBadgeColor(organization)), color: orgBadgeColor(organization) }">{{ orgInitial(organization.name) }}</div>
               <div class="entity-head-copy">
                 <h4>{{ organization.name }}</h4>
                 <span>{{ organization.type }}</span>
@@ -1010,12 +1042,6 @@ function handleEnhanceMemApply(accepted: Record<string, string | string[]>): voi
         </n-form-item>
         <n-form-item label="口号或精神标识">
           <n-input v-model:value="organizationForm.motto" placeholder="例如：活下来，比体面更重要。" />
-        </n-form-item>
-        <n-form-item label="卡片背景">
-          <n-input
-            v-model:value="organizationForm.color"
-            placeholder="支持颜色或渐变，例如：linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)"
-          />
         </n-form-item>
       </n-form>
 
@@ -1440,6 +1466,13 @@ function handleEnhanceMemApply(accepted: Record<string, string | string[]>): voi
   border-radius: 14px;
   flex-shrink: 0;
   border: 1px solid var(--arc-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  user-select: none;
 }
 
 .entity-head-copy {
@@ -1625,6 +1658,7 @@ function handleEnhanceMemApply(accepted: Record<string, string | string[]>): voi
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
 }
 
 .slider-block span {
