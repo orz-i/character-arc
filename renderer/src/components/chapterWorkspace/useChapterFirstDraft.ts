@@ -400,8 +400,21 @@ export function useChapterFirstDraft(): {
               ? { title: firstChapter.title, summary: firstChapter.summary }
               : undefined
 
-          const recentEndingsTrail = precedingChapters
-            .filter((c) => Boolean(c.content?.trim()))
+          // L2 接续契约：取最近一个有正文的前序章节的「结尾」原文，让本章自然承接。
+          // 注意取的是末尾 ~800 字（结尾），与 relatedChapters 的开头预览方向相反。
+          const chaptersWithContent = precedingChapters.filter((c) => Boolean(getPlainTextFromEditorContent(c.content ?? '').trim()))
+          const handoffChapter = chaptersWithContent.at(-1)
+          const previousChapterHandoff = handoffChapter
+            ? {
+                title: handoffChapter.title,
+                endingText: getPlainTextFromEditorContent(handoffChapter.content ?? '').trim().slice(-800)
+              }
+            : undefined
+
+          // recentEndingsTrail 仅用于「避免连续相同收尾形式」；紧邻上一章已交给接续契约独占，从这里剔除，
+          // 避免「请承接上一章结尾」与「避免与该结尾雷同」的指令冲突。
+          const recentEndingsTrail = chaptersWithContent
+            .slice(0, handoffChapter ? -1 : undefined)
             .slice(-3)
             .map((c) => {
               const plain = getPlainTextFromEditorContent(c.content ?? '').trim()
@@ -547,6 +560,7 @@ export function useChapterFirstDraft(): {
               .filter((s) => config.enabledSkillIds.includes(s.id)),
             chapterMemo,
             recentEndingsTrail,
+            previousChapterHandoff,
             referenceStyleContext: buildReferenceStyleContext(config.selectedReferenceWorkIds)
           })
 

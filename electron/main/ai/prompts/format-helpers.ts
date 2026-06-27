@@ -198,6 +198,32 @@ export function formatOutlineChapterSplit(source: unknown): string {
 }
 
 /**
+ * 将上一章结尾原文格式化为「接续契约」块，要求本章从该结尾自然承接。
+ * 这是 L2 跨章连贯的核心：给模型上一章「结尾」（而非开头），并给出显式接续要求，
+ * 杜绝「后章场景在前章未交代的情况下凭空出现」。
+ *
+ * @param source 形如 { title, endingText } 的上一章结尾数据
+ * @returns 格式化后的接续契约文本，无数据时返回空串
+ */
+export function formatPreviousChapterHandoff(source: unknown): string {
+  if (!source || typeof source !== 'object') return ''
+  const record = source as Record<string, unknown>
+  const title = String(record.title ?? '').trim()
+  const endingText = String(record.endingText ?? '').trim()
+  if (!endingText) return ''
+  return [
+    '== 上一章结尾（本章必须从这里自然接续） ==',
+    `上一章《${title}》结尾原文：`,
+    endingText,
+    '',
+    '接续要求：',
+    '- 本章开头需与上述结尾在时间、地点、在场人物、情绪上自然衔接，让读者感到剧情连续。',
+    '- 若要切换到新的场景 / 时间 / 地点，必须在正文里显式交代过渡（如转场、时间推移、场景切换的引导），不得让新场景、新人物或新事件在毫无铺垫的情况下凭空出现。',
+    '- 上一章结尾悬而未决的动作、对话或张力，需在本章开头予以回应或推进。'
+  ].join('\n')
+}
+
+/**
  * 将关联章节数据格式化为可读文本，最多取前 4 条。
  *
  * @param source 关联章节数组数据
