@@ -20,6 +20,7 @@ import type { ContextModule } from './useChapterAi'
 
 defineEmits<{
   close: []
+  'generate-draft': []
 }>()
 
 const message = useMessage()
@@ -262,6 +263,7 @@ onBeforeUnmount(() => {
       @regenerate="send"
       @undo="handleUndoEdit"
       @send="send"
+      @generate-draft="$emit('generate-draft')"
     />
 
     <!-- Agent 状态条 -->
@@ -288,6 +290,7 @@ onBeforeUnmount(() => {
       @open-commands="toggleCommands"
       @open-context="toggleContext"
       @clear-selection="appStore.currentChapterSelection = null"
+      @generate-draft="$emit('generate-draft')"
     />
 
     <!-- 指令面板 popover -->

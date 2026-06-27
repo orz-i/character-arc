@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
       @mousedown="startPanelDrag"
       @dblclick="handlePanelDblClick"
     />
-    <ChapterAiPanel v-if="aiOpen" ref="aiPanelRef" class="ws-ai" @close="aiOpen = false" />
+    <ChapterAiPanel v-if="aiOpen" ref="aiPanelRef" class="ws-ai" @close="aiOpen = false" @generate-draft="handleGenerateDraft" />
     <button v-if="focusMode" class="focus-exit" @click="toggleFocus">
       <Minimize :size="13" />
       <span>退出专注 (Esc)</span>

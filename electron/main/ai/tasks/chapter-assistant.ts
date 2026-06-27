@@ -109,10 +109,11 @@ const handler: TaskHandler = {
     return Boolean((result as ChapterAssistantResult).content?.trim())
   },
   resolveMaxTokens(input: PromptBuildInput): number {
+    // 不对输出做字数级限制，maxTokens 仅作为防失控的安全上限。
+    // 篇幅由请求内容和长度倾向决定（见 chapter-assistant-modifiers.ts）。
     switch (String(input.context.responseLength ?? 'medium')) {
-      case 'short': return 500
-      case 'long': return 1400
-      default: return 900
+      case 'short': return 5000
+      default: return 9000
     }
   }
 }

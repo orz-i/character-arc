@@ -15,6 +15,7 @@ const emit = defineEmits<{
   'open-commands': []
   'open-context': []
   'clear-selection': []
+  'generate-draft': []
 }>()
 
 const text = ref('')
@@ -136,6 +137,10 @@ function handleKey(event: KeyboardEvent): void {
         :style="{ height: inputHeight + 'px' }"
         @keydown="handleKey"
       />
+      <div v-if="activeMode === '续写' && !disabled" class="composer-mode-hint">
+        续写适合接着写一小段。要按大纲生成整章正文，请用
+        <button class="composer-mode-hint-link" @click="emit('generate-draft')">生成初稿</button>。
+      </div>
       <div class="composer-input-footer">
         <button v-if="disabled" class="composer-send stop" @click="$emit('stop')">
           <Square :size="12" />
@@ -342,6 +347,27 @@ function handleKey(event: KeyboardEvent): void {
   color: var(--arc-text-primary);
   user-select: text;
   min-height: 48px;
+}
+
+.composer-mode-hint {
+  padding: 0 12px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--arc-text-hint);
+}
+
+.composer-mode-hint-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--arc-primary);
+  cursor: pointer;
+}
+
+.composer-mode-hint-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Footer ── */

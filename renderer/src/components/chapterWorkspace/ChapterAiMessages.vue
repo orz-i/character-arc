@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { ArrowDown, Check, ChevronDown as ChevronDownIcon, Copy, Edit3, Replace, RotateCw, Sparkles, Undo2 } from 'lucide-vue-next'
+import { ArrowDown, Check, ChevronDown as ChevronDownIcon, Copy, Edit3, Replace, RotateCw, Sparkles, Undo2, Wand2 } from 'lucide-vue-next'
 import { useMessage } from 'naive-ui'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -68,6 +68,7 @@ const emit = defineEmits<{
   regenerate: [prompt: string]
   undo: [versionId: string]
   send: [prompt: string]
+  'generate-draft': []
 }>()
 
 const message = useMessage()
@@ -167,7 +168,12 @@ onBeforeUnmount(() => {
       <!-- Empty state -->
       <div v-if="!messages.length && !isResponding" class="empty">
         <Sparkles :size="28" class="empty-icon" />
-        <p class="empty-text">问问 AI 怎么写下一段、改写当前段落，或基于大纲给建议。</p>
+        <p class="empty-text">创作助理擅长讨论思路、改写段落、续写片段和审校。</p>
+        <p class="empty-hint">想要按大纲生成整章正文，请用工具栏的「生成初稿」，它会带上写作备忘、参考文笔和完整上下文一次写满。</p>
+        <button class="empty-cta" @click="emit('generate-draft')">
+          <Wand2 :size="13" />
+          <span>生成整章初稿</span>
+        </button>
         <div class="empty-suggestions">
           <button
             v-for="suggestion in quickSuggestions"
@@ -348,6 +354,35 @@ onBeforeUnmount(() => {
   color: var(--arc-text-hint);
   max-width: 240px;
   line-height: 1.7;
+}
+
+.empty-hint {
+  font-size: 11.5px;
+  color: var(--arc-text-hint);
+  max-width: 260px;
+  line-height: 1.6;
+  opacity: 0.75;
+  margin-top: -4px;
+}
+
+.empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--arc-primary) 30%, var(--arc-border));
+  border-radius: 8px;
+  background: var(--arc-primary-soft);
+  color: var(--arc-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.empty-cta:hover {
+  background: color-mix(in srgb, var(--arc-primary) 14%, var(--arc-bg-surface));
+  border-color: var(--arc-primary);
 }
 
 .empty-suggestions {

@@ -15,17 +15,21 @@ export function resolveChapterAssistantModeInstruction(mode: string): string {
 }
 
 /**
- * 根据期望输出长度返回字数控制指令。
+ * 根据期望输出长度返回篇幅倾向指令。
+ *
+ * 不再施加硬性字数上限——具体写多长由请求内容和上下文决定，
+ * 真正的天花板是任务的 maxTokens。这里只给出篇幅倾向，避免模型
+ * 既不草草收尾、也不无谓注水。
  *
  * @param length 长度偏好：short / medium / long
- * @returns 对应的字数范围和要求说明
+ * @returns 对应的篇幅倾向说明
  */
 export function resolveChapterAssistantLengthInstruction(length: string): string {
   switch (length) {
-    case 'short': return '控制在 80 到 180 字，结论优先，避免铺垫过长。'
-    case 'long': return '控制在 350 到 800 字，可以展开完整段落或多条具体建议。'
+    case 'short': return '篇幅偏好：精简。结论优先，只保留最关键的内容，不展开铺垫。'
+    case 'long': return '篇幅偏好：充分展开。该写多长由内容决定，需要多少篇幅就写多少，把场景、段落或建议写完整，不要因长度顾虑而草草收尾。'
     case 'medium':
-    default: return '控制在 160 到 360 字，兼顾可读性和可执行性。'
+    default: return '篇幅根据请求和内容自然决定，不必刻意压缩或拉长；续写、润色、描写类请求该写多长就写多长，把内容写完整，不要中途收尾或省略。'
   }
 }
 
