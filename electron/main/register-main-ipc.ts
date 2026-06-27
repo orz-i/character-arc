@@ -10,6 +10,7 @@ import { indexReferenceNovel } from './ai/knowledge-retrieval'
 import { refreshRegistry as refreshSkillRegistry, toScanEntries as skillScanEntries, toContextEntries as skillContextEntries } from './ai/skills'
 import { getProjectSkillsDirPath as getSkillsDirPath } from './ai/skills/discovery'
 import { extractReferenceNovelContext, type ReferenceNovelLocalContext } from './referenceAnalysis'
+import { fetchFanqieTrends } from './fanqie-trends'
 import { getWorkspaceDirPath } from './workspace-store'
 import {
   exportProjectArchive,
@@ -1313,6 +1314,13 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
     if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
       shell.openExternal(url)
     }
+  })
+
+  // ── 番茄风向标：抓取榜单数据（主进程缓存，避免每次请求） ──
+  ipcMain.handle('characterarc:fanqie-trends-fetch', async (_event, payload: { path?: string; force?: boolean }) => {
+    const remotePath = typeof payload?.path === 'string' ? payload.path : ''
+    const force = payload?.force === true
+    return fetchFanqieTrends(remotePath, force)
   })
 
   // ── AI 助手会话持久化 ──

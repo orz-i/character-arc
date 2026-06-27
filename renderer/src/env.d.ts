@@ -542,6 +542,14 @@ declare global {
         success: boolean
         error?: string
       }>
+      fetchFanqieTrends: (path: string, force?: boolean) => Promise<{
+        success: boolean
+        data?: unknown
+        fromCache?: boolean
+        fetchedAt?: number
+        mirror?: string
+        error?: string
+      }>
     }
   }
 }

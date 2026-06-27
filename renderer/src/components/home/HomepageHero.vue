@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Bell, ImagePlus, LibraryBig, Plus, RefreshCw, Settings2, Upload, Wrench } from 'lucide-vue-next'
+import { Bell, Flame, ImagePlus, LibraryBig, Plus, RefreshCw, Settings2, Upload, Wrench } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 import type { StatusIndicator } from '@/composables/useStartupCheck'
 
@@ -12,6 +12,7 @@ const emit = defineEmits<{
   (e: 'create'): void
   (e: 'import'): void
   (e: 'openDeconstruction'): void
+  (e: 'openFanqieTrends'): void
   (e: 'openCoverWorkbench'): void
   (e: 'openSkills'): void
   (e: 'openSettings'): void
@@ -35,6 +36,9 @@ const emit = defineEmits<{
       <button class="hero-icon-btn" title="检查更新" @click="emit('checkUpdate')">
         <RefreshCw :size="18" />
         <span v-if="updateStatus && updateStatus !== 'none'" class="status-dot" :class="`status-dot--${updateStatus}`" />
+      </button>
+      <button class="hero-icon-btn" title="番茄风向标" @click="emit('openFanqieTrends')">
+        <Flame :size="18" />
       </button>
 
       <div class="action-group secondary-actions">

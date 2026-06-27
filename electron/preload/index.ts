@@ -192,5 +192,10 @@ contextBridge.exposeInMainWorld('characterArc', {
   // ── 检查更新 & 公告 ──
   checkUpdate: () => ipcRenderer.invoke('characterarc:check-update'),
   fetchAnnouncements: () => ipcRenderer.invoke('characterarc:fetch-announcements'),
-  openExternalUrl: (url: string) => ipcRenderer.invoke('characterarc:open-external-url', url)
+  openExternalUrl: (url: string) => ipcRenderer.invoke('characterarc:open-external-url', url),
+
+  // ── 番茄风向标 ──
+  /** 抓取番茄风向标榜单数据（主进程带本地缓存，force=true 时强制刷新） */
+  fetchFanqieTrends: (path: string, force = false) =>
+    ipcRenderer.invoke('characterarc:fanqie-trends-fetch', { path, force })
 })
