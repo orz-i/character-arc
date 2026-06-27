@@ -1,5 +1,4 @@
 import type { AiAgentStreamHandlers, AiKnowledgeDocumentDraft, AiTaskKnowledgeContext, AiTaskPayload, AiTaskResponse } from '../shared-types'
-import { AGENT_STREAM_MAX_ITERATIONS } from '../shared-types'
 import { normalizeSettings, validateSettings, resolveMaxTokens } from '../settings'
 import { getTaskHandler } from '../tasks'
 import { resolveTaskSkills, getSkillById } from '../skills'
@@ -25,7 +24,7 @@ function stripSkillFrontmatter(content: string): string {
   return content.slice(match[0].length)
 }
 
-function resolveStreamingAgentMaxSteps(taskName: AiTaskPayload['task'], optionalSkillCount: number): number | undefined {
+function resolveStreamingAgentMaxSteps(taskName: AiTaskPayload['task']): number | undefined {
   if (taskName === 'chapter-first-draft') {
     // skills 已直接注入 prompt，无需工具加载；仅保留少量步数用于偶尔确认设定
     return 4
@@ -90,7 +89,7 @@ export async function runStreamingAgentTask(
 
   const requiredSkillDefs = candidateSkillDefs.filter((s) => s.manifest.required)
   const optionalSkillDefs = candidateSkillDefs.filter((s) => !s.manifest.required)
-  const maxSteps = resolveStreamingAgentMaxSteps(task.task, optionalSkillDefs.length)
+  const maxSteps = resolveStreamingAgentMaxSteps(task.task)
 
   const requiredSkillBlock = requiredSkillDefs.length
     ? `\n\n## 强制生效的 SKILLS\n\n${requiredSkillDefs.map((s) => {

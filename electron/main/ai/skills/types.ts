@@ -60,6 +60,16 @@ export type SkillSelection = {
   content: string
   referenceContents: Array<{ file: string; content: string }>
   score: number
+  /** 评分分项明细，用于选择日志排查与调参。可选——仅 matcher 产出时携带。 */
+  scoreBreakdown?: {
+    total: number
+    task: number
+    stage: number
+    trigger: number
+    narrative: number
+    length: number
+    priority: number
+  }
 }
 
 /** Skill 扫描摘要条目：用于前端展示 skill 列表 */
