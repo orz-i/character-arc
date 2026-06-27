@@ -268,3 +268,11 @@ jobs:
           draft: true
           generate_release_notes: true
           files: release/*
+
+      - name: Purge jsDelivr CDN cache
+        if: success()
+        run: |
+          curl -sS "https://purge.jsdelivr.net/gh/uu201/character-arc@main/announcements.json"
+          echo ""
+          curl -sS "https://purge.jsdelivr.net/gh/uu201/character-arc@main/CHANGELOG.md"
+          echo ""

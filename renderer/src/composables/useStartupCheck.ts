@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { LOCAL_ANNOUNCEMENTS, normalizeAnnouncements, resolveLatestAnnouncementDate } from '@/features/announcements/announcements'
+import { LOCAL_ANNOUNCEMENTS, resolveFreshAnnouncements, resolveLatestAnnouncementDate } from '@/features/announcements/announcements'
 
 export type StatusIndicator = 'none' | 'new' | 'error'
 
@@ -10,21 +10,25 @@ const updateStatus = ref<StatusIndicator>('none')
 let latestAnnouncementDate = ''
 let checked = false
 
+function resolveFallbackAnnouncementStatus(): void {
+  latestAnnouncementDate = resolveLatestAnnouncementDate(LOCAL_ANNOUNCEMENTS)
+  const lastViewed = localStorage.getItem(STORAGE_KEY) ?? ''
+  announcementStatus.value = latestAnnouncementDate > lastViewed ? 'new' : 'error'
+}
+
 async function checkAnnouncements(): Promise<void> {
   try {
     const res = await window.characterArc.fetchAnnouncements()
-    const announcements = res.success ? normalizeAnnouncements(res.data) : []
-    if (!announcements.length) {
-      latestAnnouncementDate = resolveLatestAnnouncementDate(LOCAL_ANNOUNCEMENTS)
-      announcementStatus.value = 'error'
+    if (!res.success) {
+      resolveFallbackAnnouncementStatus()
       return
     }
-    latestAnnouncementDate = resolveLatestAnnouncementDate(announcements)
+    const resolution = resolveFreshAnnouncements(res.data, LOCAL_ANNOUNCEMENTS)
+    latestAnnouncementDate = resolution.latestDate
     const lastViewed = localStorage.getItem(STORAGE_KEY) ?? ''
     announcementStatus.value = latestAnnouncementDate > lastViewed ? 'new' : 'none'
   } catch {
-    latestAnnouncementDate = resolveLatestAnnouncementDate(LOCAL_ANNOUNCEMENTS)
-    announcementStatus.value = 'error'
+    resolveFallbackAnnouncementStatus()
   }
 }
 

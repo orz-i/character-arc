@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { NButton, NModal, NSpin, NTimeline, NTimelineItem } from 'naive-ui'
 import {
   LOCAL_ANNOUNCEMENTS as SHARED_LOCAL_ANNOUNCEMENTS,
-  normalizeAnnouncements,
+  resolveFreshAnnouncements,
   resolveLatestAnnouncementDate,
   type AnnouncementItem
 } from '@/features/announcements/announcements'
@@ -21,29 +21,42 @@ const currentVersion = computed(() => window.characterArc.version)
 const announcements = ref<AnnouncementItem[]>(SHARED_LOCAL_ANNOUNCEMENTS)
 const loading = ref(false)
 const isRemote = ref(false)
-const fetchError = ref(false)
+const fetchIssue = ref<'none' | 'failed' | 'stale'>('none')
+
+function emitLoaded(items: AnnouncementItem[]): void {
+  const latestDate = resolveLatestAnnouncementDate(items)
+  if (latestDate) {
+    emit('loaded', latestDate)
+  }
+}
 
 async function fetchRemote(): Promise<void> {
   loading.value = true
-  fetchError.value = false
+  fetchIssue.value = 'none'
   try {
     const res = await window.characterArc.fetchAnnouncements()
-    const nextAnnouncements = res.success ? normalizeAnnouncements(res.data) : []
-    if (nextAnnouncements.length) {
-      announcements.value = nextAnnouncements
-      isRemote.value = true
-      emit('loaded', resolveLatestAnnouncementDate(nextAnnouncements))
+    const resolution = res.success ? resolveFreshAnnouncements(res.data, SHARED_LOCAL_ANNOUNCEMENTS) : null
+    if (resolution) {
+      announcements.value = resolution.items
+      isRemote.value = !resolution.stale
+      fetchIssue.value = resolution.stale ? 'stale' : 'none'
+      emitLoaded(resolution.items)
     } else {
-      fetchError.value = true
+      fetchIssue.value = 'failed'
+      announcements.value = SHARED_LOCAL_ANNOUNCEMENTS
+      emitLoaded(announcements.value)
     }
   } catch {
-    fetchError.value = true
+    fetchIssue.value = 'failed'
+    announcements.value = SHARED_LOCAL_ANNOUNCEMENTS
+    emitLoaded(announcements.value)
   } finally {
     loading.value = false
   }
 }
 
 function handleAfterEnter(): void {
+  emitLoaded(announcements.value)
   if (!isRemote.value) {
     fetchRemote()
   }
@@ -66,8 +79,8 @@ function handleAfterEnter(): void {
         <n-spin v-if="loading" :size="14" class="announcement-spin" />
       </div>
 
-      <div v-if="fetchError" class="announcement-error">
-        公告拉取失败，当前显示本地公告。
+      <div v-if="fetchIssue !== 'none'" class="announcement-error">
+        {{ fetchIssue === 'stale' ? '远程公告不是最新，当前显示本地公告。' : '公告拉取失败，当前显示本地公告。' }}
       </div>
 
       <n-timeline>

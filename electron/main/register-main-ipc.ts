@@ -1299,8 +1299,10 @@ export function registerMainIpcHandlers(deps: RegisterMainIpcHandlersDeps): void
       branch: 'main',
       filePath: 'announcements.json',
       cacheDir: 'announcements-cache',
-      ttlMs: 1 * 60 * 60 * 1000,
+      ttlMs: 0,
       timeoutMs: 8000,
+      preferActiveMirror: false,
+      allowStaleFallback: false,
     })
   })
 

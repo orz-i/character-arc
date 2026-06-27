@@ -7,6 +7,12 @@ export type AnnouncementItem = {
   items: string[]
 }
 
+export type AnnouncementResolution = {
+  items: AnnouncementItem[]
+  stale: boolean
+  latestDate: string
+}
+
 const ANNOUNCEMENT_TYPES = new Set<AnnouncementItem['type']>(['success', 'info', 'warning', 'error'])
 
 function normalizeAnnouncementItem(value: unknown): AnnouncementItem | null {
@@ -34,3 +40,23 @@ export function resolveLatestAnnouncementDate(items: AnnouncementItem[]): string
 }
 
 export const LOCAL_ANNOUNCEMENTS = normalizeAnnouncements(rawAnnouncements)
+
+export function resolveFreshAnnouncements(value: unknown, fallback = LOCAL_ANNOUNCEMENTS): AnnouncementResolution {
+  const remoteItems = normalizeAnnouncements(value)
+  const localLatestDate = resolveLatestAnnouncementDate(fallback)
+  const remoteLatestDate = resolveLatestAnnouncementDate(remoteItems)
+
+  if (!remoteItems.length || !remoteLatestDate || remoteLatestDate < localLatestDate) {
+    return {
+      items: fallback,
+      stale: remoteItems.length > 0,
+      latestDate: localLatestDate
+    }
+  }
+
+  return {
+    items: remoteItems,
+    stale: false,
+    latestDate: remoteLatestDate
+  }
+}

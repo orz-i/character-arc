@@ -85,11 +85,15 @@ async function fetchJsonFromMirrors(
   repo: string,
   branch: string,
   filePath: string,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  preferActiveMirror = true
 ): Promise<FetchResult> {
   let lastErr: unknown
   const cur = getActiveMirror(repo)
-  const order = [cur, ...MIRROR_BUILDERS.map((_, i) => i).filter((i) => i !== cur)]
+  const defaultOrder = MIRROR_BUILDERS.map((_, i) => i)
+  const order = preferActiveMirror
+    ? [cur, ...defaultOrder.filter((i) => i !== cur)]
+    : defaultOrder
 
   for (const idx of order) {
     const controller = new AbortController()
@@ -133,6 +137,10 @@ export type FetchWithCacheOptions = {
   timeoutMs?: number
   /** 为 true 时跳过缓存强制走网络 */
   force?: boolean
+  /** 为 false 时按默认镜像顺序抓取，不优先复用上次命中的镜像 */
+  preferActiveMirror?: boolean
+  /** 网络失败时是否允许返回过期缓存，默认允许 */
+  allowStaleFallback?: boolean
 }
 
 export type FetchWithCacheResult = {
@@ -152,7 +160,9 @@ export async function fetchWithCache(opts: FetchWithCacheOptions): Promise<Fetch
     cacheDir,
     ttlMs = 6 * 60 * 60 * 1000,
     timeoutMs = DEFAULT_TIMEOUT_MS,
-    force = false
+    force = false,
+    preferActiveMirror = true,
+    allowStaleFallback = true
   } = opts
 
   const path = String(filePath ?? '').replace(/^\/+/, '').trim()
@@ -172,13 +182,13 @@ export async function fetchWithCache(opts: FetchWithCacheOptions): Promise<Fetch
   }
 
   try {
-    const { data, mirror } = await fetchJsonFromMirrors(repo, branch, path, timeoutMs)
+    const { data, mirror } = await fetchJsonFromMirrors(repo, branch, path, timeoutMs, preferActiveMirror)
     const fetchedAt = Date.now()
     await writeCache(cacheDir, path, { fetchedAt, mirror, data })
     return { success: true, data, fromCache: false, fetchedAt, mirror }
   } catch (error) {
     // 网络失败：能回退到旧缓存就回退（哪怕已过期）
-    if (cached) {
+    if (allowStaleFallback && cached) {
       return {
         success: true,
         data: cached.data,
@@ -187,6 +197,10 @@ export async function fetchWithCache(opts: FetchWithCacheOptions): Promise<Fetch
         mirror: cached.mirror
       }
     }
-    return { success: false, error: error instanceof Error ? error.message : '抓取失败' }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '抓取失败',
+      ...(cached ? { fromCache: true, fetchedAt: cached.fetchedAt, mirror: cached.mirror } : {})
+    }
   }
 }
